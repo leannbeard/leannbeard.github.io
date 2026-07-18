@@ -263,10 +263,30 @@
       </div>
     </div>
     <div class="header-right">
-      <div class="who-picker"><select id="whoAmI"><option value="">— Who are you? —</option></select></div>
-      <div class="role-toggle">
-        <button id="roleTeamBtn" class="active">Team</button>
-        <button id="roleDirBtn">Teacher/Director</button>
+      <div id="signedOutWrap" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex-direction:column; align-items:flex-end;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+          <button class="btn" id="googleSignInBtn">Sign in with Google</button>
+          <button class="btn ghost small" id="toggleEmailPwBtn">Email &amp; password</button>
+          <button class="btn ghost small" id="toggleManualBtn">Can't sign in?</button>
+        </div>
+        <div id="emailPwWrap" style="display:none; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+          <input type="email" id="epEmail" placeholder="email" style="background:rgba(0,0,0,0.25); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:14px; font-size:12px; width:140px;">
+          <input type="password" id="epPassword" placeholder="password" style="background:rgba(0,0,0,0.25); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:14px; font-size:12px; width:120px;">
+          <button class="btn small" id="epSignInBtn">Sign In</button>
+          <button class="btn ghost small" id="epSignUpBtn">Create Account</button>
+        </div>
+        <div id="manualWrap" style="display:none; gap:6px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
+          <span style="font-size:10.5px; color:var(--paper-dim); max-width:220px; text-align:right;">Not verified — only use if sign-in truly doesn't work for you:</span>
+          <input type="text" id="manualEmailInput" placeholder="your email" style="background:rgba(0,0,0,0.25); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:14px; font-size:12px; width:140px;">
+          <button class="btn ghost small" id="manualEmailBtn">Continue</button>
+        </div>
+      </div>
+      <div id="signedInWrap" style="display:none; align-items:center; gap:10px;">
+        <div style="text-align:right; line-height:1.3;">
+          <div id="authUserName" style="font-size:13px; font-weight:600;"></div>
+          <div id="authUserRole" class="mono" style="font-size:11px; color:var(--paper-dim);"></div>
+        </div>
+        <button class="btn ghost small" id="signOutBtn">Sign out</button>
       </div>
     </div>
   </div>
@@ -367,6 +387,8 @@
       <h2>Report a Conflict</h2>
       <div id="conflictNoCrewMsg" class="empty-state" style="display:none;">No crew on the roster yet — add crew members in <b>Roster / Setup</b> first, then come back here to submit a conflict.</div>
       <div id="conflictNoEventMsg" class="empty-state" style="display:none;">No upcoming calls on the calendar yet — add one in the <b>Calendar</b> tab first.</div>
+      <div id="conflictNotSignedInMsg" class="empty-state" style="display:none;">Sign in with Google, or enter your email (top right), to submit a conflict.</div>
+      <div id="conflictNotOnRosterMsg" class="empty-state" style="display:none;">You're identified, but that email isn't on the roster yet — ask the Director to add it in Roster / Setup.</div>
       <div id="conflictFormWrap">
         <div class="form-grid">
           <select id="conflictWho"></select>
@@ -456,13 +478,18 @@
   </section>
 
   <section class="view" id="view-setup">
+    <div class="card" id="claimDirectorCard" style="display:none;">
+      <h2>No Director Assigned Yet</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Nobody has Director access on this production yet. If that's you, claim it now — after that, only existing Directors can add or remove Director access for others.</p>
+      <button class="btn" id="claimDirectorBtn">Make me the Director</button>
+    </div>
     <div class="card" id="dirAccessCard" style="display:none;">
       <h2>Director Access</h2>
-      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">A PIN adds a light speed bump before switching to Director mode. It's stored in this file's shared data, so it's a deterrent for casual/accidental access — not real security. Anyone with technical know-how could still view it.</p>
-      <p id="dirPinStatus" style="font-size:12px;color:var(--paper-dim);"></p>
-      <div id="dirPinControls" class="form-grid" style="max-width:320px;">
-        <input type="password" id="dirPinInput" placeholder="Set a PIN (e.g. 4+ digits)">
-        <button class="btn small" id="dirPinSaveBtn">Save PIN</button>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Anyone signed in with one of these Google accounts gets Director access. Real Google sign-in enforces this — it isn't just a UI toggle.</p>
+      <div id="directorEmailsList" style="margin-bottom:10px;"></div>
+      <div class="form-grid" style="max-width:320px;">
+        <input type="text" id="newDirectorEmail" placeholder="name@school.edu">
+        <button class="btn small" id="addDirectorEmailBtn">Add Director</button>
       </div>
       <h2 style="margin-top:22px;">Attendance Alerts</h2>
       <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Flags a student on the Dashboard (and logs a private notification) once their recorded <b>unexcused absences</b> reach this number. Take attendance in the Attendance tab — marking someone "Excused" never counts toward this.</p>
@@ -481,6 +508,7 @@
         </div>
         <div class="checkbox-row" id="rosterDeptChecks" style="margin-bottom:10px;"></div>
         <div class="form-grid">
+          <input type="text" id="rosterEmail" placeholder="Their sign-in email (for Google login)">
           <input type="text" id="rosterParentEmail" placeholder="Parent email (optional)">
           <input type="text" id="rosterParentPhone" placeholder="Parent phone (optional)">
         </div>
@@ -491,8 +519,8 @@
     </div>
     <div class="card" id="bulkImportCard">
       <h2>Bulk Import Roster</h2>
-      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">No live Google Classroom connection is possible from a standalone file, but you can paste a roster copied from Classroom (or anywhere) — one student per line — and add them all at once. Assign teams to each afterward using "Edit Teams" below.</p>
-      <textarea id="bulkImportText" class="full-width" style="min-height:110px;" placeholder="Jane Smith&#10;John Doe&#10;Alex Rivera, jane@school.edu"></textarea>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">No live Google Classroom connection is possible from a standalone file, but you can paste a roster copied from Classroom (or anywhere) — one student per line — and add them all at once. Assign teams to each afterward using "Edit Teams" below. Include their sign-in email so Google sign-in can match them automatically.</p>
+      <textarea id="bulkImportText" class="full-width" style="min-height:110px;" placeholder="Jane Smith, jane@school.edu&#10;John Doe, john@school.edu"></textarea>
       <button class="btn ghost small" id="bulkImportBtn">Import as Students</button>
     </div>
     <div class="card" id="resetCard">
@@ -509,6 +537,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDbK6aryhE8wBUJ54Hq3_shhSOsJzSP-bY",
@@ -522,8 +551,10 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const auth = getAuth(app);
+  const googleProvider = new GoogleAuthProvider();
 
-  window.__fb = { db, doc, getDoc, setDoc };
+  window.__fb = { db, doc, getDoc, setDoc, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword };
   window.__firebaseReady = true;
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
@@ -602,12 +633,12 @@ function defaultProductionState(name, seeded){
 }
 // Production defaults are created via defaultProductionState(name, seeded) above.
 
-const DEFAULT_GLOBAL = { directorPin:'', attendanceAlertThreshold:3, productions:[], activeProductionId:null };
+const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null };
 
 let state = null;
 let globalState = null;
 let currentProductionId = null;
-let device = { currentUserId:'', lastSeenChangelog:null, role:'team' };
+let device = { lastSeenChangelog:null };
 const GLOBAL_DOC = ['config','main'];              // Firestore: collection 'config', doc 'main'
 const PROD_COLLECTION = 'productions';             // Firestore: collection 'productions', doc <id>
 const LEGACY_KEY = 'setdesk-production-state-v1';  // old single-production version (Claude.ai artifact only)
@@ -698,7 +729,8 @@ async function loadOrMigrateGlobalState(){
       departments: legacy.departments || freshDepartments(true),
     };
     await saveProductionStateFor(prodId, prodState);
-    newGlobal.directorPin = legacy.directorPin || '';
+    // Note: the old PIN system is gone — directorEmails starts empty here.
+    // Whoever signs in first after migration can claim Director access.
     newGlobal.attendanceAlertThreshold = legacy.attendanceAlertThreshold || 3;
     newGlobal.productions.push({ id:prodId, name:prodState.productionName, createdAt:new Date().toISOString() });
     newGlobal.activeProductionId = prodId;
@@ -738,14 +770,13 @@ async function switchToProduction(id){
   renderAll();
 }
 
-// Device prefs (who you are, role toggle, notification read-state) are personal to this
-// browser only — a normal localStorage key is the right tool here, not shared cloud storage.
+// Device prefs (notification read-state) are personal to this browser only — a normal localStorage key is the right tool here, not shared cloud storage.
 function loadDevice(){
   try{
     const raw = localStorage.getItem(DEVICE_STORAGE_KEY);
-    if(raw) return { role:'team', currentUserId:'', lastSeenChangelog:null, ...JSON.parse(raw) };
+    if(raw) return { lastSeenChangelog:null, manualEmail:'', ...JSON.parse(raw) };
   }catch(e){}
-  return { currentUserId:'', lastSeenChangelog:null, role:'team' };
+  return { lastSeenChangelog:null, manualEmail:'' };
 }
 function saveDevice(){
   try{ localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(device)); }
@@ -759,8 +790,79 @@ function toast(msg){
 }
 
 let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set() };
-function currentUser(){ return state.crew.find(c=>c.id===device.currentUserId) || null; }
-function isDirector(){ return device.role === 'director'; }
+let authUser = null; // { email, displayName } once signed in via Google, else null
+
+// Identity resolves two ways: real Google sign-in (authUser) is verified;
+// device.manualEmail is a self-typed fallback for accounts Google blocks
+// (e.g. locked-down school Workspace accounts) and is NOT verified.
+function activeEmail(){ return authUser ? authUser.email : (device.manualEmail || null); }
+function isVerified(){ return !!authUser; }
+function currentUser(){
+  const email = activeEmail();
+  if(!email) return null;
+  const lower = email.toLowerCase();
+  return state.crew.find(c=>(c.email||'').toLowerCase()===lower) || null;
+}
+function isDirector(){
+  // Director access requires real, verified Google sign-in — never the manual fallback.
+  if(!authUser) return false;
+  const email = authUser.email.toLowerCase();
+  return (globalState.directorEmails||[]).map(e=>e.toLowerCase()).includes(email);
+}
+async function signInWithGoogle(){
+  try{
+    await waitForFirebase();
+    if(!window.__fb) { toast('Sign-in is still loading, try again in a moment'); return; }
+    await window.__fb.signInWithPopup(window.__fb.auth, window.__fb.googleProvider);
+  }catch(e){
+    console.warn('Sign-in failed', e);
+    toast('Sign-in failed or was cancelled — try email & password instead if your school blocks this');
+  }
+}
+function friendlyAuthError(e){
+  const code = e && e.code || '';
+  if(code.includes('wrong-password') || code.includes('invalid-credential')) return 'Incorrect email or password';
+  if(code.includes('user-not-found')) return 'No account with that email — try "Create Account" instead';
+  if(code.includes('email-already-in-use')) return 'An account already exists for that email — try "Sign In" instead';
+  if(code.includes('weak-password')) return 'Password needs to be at least 6 characters';
+  if(code.includes('invalid-email')) return 'Enter a valid email address';
+  return 'Something went wrong — try again';
+}
+async function signInWithEmailPassword(email, password){
+  try{
+    await waitForFirebase();
+    if(!window.__fb){ toast('Sign-in is still loading, try again in a moment'); return; }
+    await window.__fb.signInWithEmailAndPassword(window.__fb.auth, email, password);
+  }catch(e){
+    console.warn('Email sign-in failed', e);
+    toast(friendlyAuthError(e));
+  }
+}
+async function signUpWithEmailPassword(email, password){
+  try{
+    await waitForFirebase();
+    if(!window.__fb){ toast('Sign-in is still loading, try again in a moment'); return; }
+    if(password.length < 6){ toast('Password needs to be at least 6 characters'); return; }
+    await window.__fb.createUserWithEmailAndPassword(window.__fb.auth, email, password);
+    toast('Account created — remember your password for next time!');
+  }catch(e){
+    console.warn('Account creation failed', e);
+    toast(friendlyAuthError(e));
+  }
+}
+async function signOutUser(){
+  try{ if(window.__fb && authUser) await window.__fb.signOut(window.__fb.auth); }catch(e){ console.warn('Sign-out failed', e); }
+  device.manualEmail = '';
+  saveDevice();
+  renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
+  renderConflicts(); renderAttendanceView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+}
+function setManualEmail(email){
+  device.manualEmail = email.trim();
+  saveDevice();
+  renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
+  renderConflicts(); renderAttendanceView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+}
 function canViewDept(deptKey){
   if(isDirector()) return true;
   const u = currentUser();
@@ -831,11 +933,19 @@ function renderHeader(){
   document.getElementById('prodName').disabled = !isDirector();
   document.getElementById('todayDate').textContent = new Date().toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
   document.getElementById('crewCount').textContent = state.crew.length;
-  document.getElementById('roleTeamBtn').classList.toggle('active', device.role!=='director');
-  document.getElementById('roleDirBtn').classList.toggle('active', device.role==='director');
-  const sel = document.getElementById('whoAmI');
-  sel.innerHTML = '<option value="">— Who are you? —</option>' + state.crew.map(c=>`<option value="${c.id}">${c.name}${c.role==='teacher'?' (Teacher)':''}</option>`).join('');
-  sel.value = device.currentUserId || '';
+
+  const email = activeEmail();
+  document.getElementById('signedOutWrap').style.display = email ? 'none' : 'flex';
+  document.getElementById('signedInWrap').style.display = email ? 'flex' : 'none';
+  if(email){
+    const u = currentUser();
+    document.getElementById('authUserName').textContent = authUser ? (authUser.displayName || authUser.email) : email;
+    let roleLabel;
+    if(isDirector()) roleLabel = 'Director (verified)';
+    else if(u) roleLabel = `${u.name} · ${deptInfo((u.departments||[])[0]||'').label || 'No team yet'}${isVerified()?'':' · unverified'}`;
+    else roleLabel = `Not on the roster yet${isVerified()?'':' · unverified'}`;
+    document.getElementById('authUserRole').textContent = roleLabel;
+  }
 }
 
 // ---------------- DASHBOARD ----------------
@@ -1123,16 +1233,26 @@ function renderConflictForm(){
   const hasCrew = state.crew.length > 0;
   const future = [...state.calendar].filter(e=>e.date>=todayISO()).sort((a,b)=>a.date.localeCompare(b.date));
   const hasEvents = future.length > 0;
+  const director = isDirector();
+  const cu = currentUser();
 
   document.getElementById('conflictNoCrewMsg').style.display = hasCrew ? 'none' : 'block';
   document.getElementById('conflictNoEventMsg').style.display = (hasCrew && !hasEvents) ? 'block' : 'none';
-  document.getElementById('conflictFormWrap').style.display = (hasCrew && hasEvents) ? 'block' : 'none';
-  if(!hasCrew || !hasEvents) return;
+  document.getElementById('conflictNotSignedInMsg').style.display = (hasCrew && hasEvents && !director && !activeEmail()) ? 'block' : 'none';
+  document.getElementById('conflictNotOnRosterMsg').style.display = (hasCrew && hasEvents && !director && activeEmail() && !cu) ? 'block' : 'none';
+  const canShowForm = hasCrew && hasEvents && (director || cu);
+  document.getElementById('conflictFormWrap').style.display = canShowForm ? 'block' : 'none';
+  if(!canShowForm) return;
 
   const whoSel = document.getElementById('conflictWho');
-  whoSel.innerHTML = state.crew.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  const cu = currentUser();
-  if(cu) whoSel.value = cu.id;
+  if(director){
+    whoSel.disabled = false;
+    whoSel.innerHTML = state.crew.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    if(cu) whoSel.value = cu.id;
+  } else {
+    whoSel.disabled = true;
+    whoSel.innerHTML = `<option value="${cu.id}">${cu.name} (you)</option>`;
+  }
 
   const sel = document.getElementById('conflictEvent');
   sel.innerHTML = future.map(e=>`<option value="${e.id}">${e.title} — ${fmtDate(e.date)}</option>`).join('');
@@ -1544,7 +1664,7 @@ function renderTemplatesSub(content, dep, depState){
 function renderReportFormSub(content, dep, depState){
   const u = currentUser();
   if(!isDirector() && !u){
-    content.innerHTML = `<div class="empty-state">Select who you are up top first — reports and attendance are tied to your class period, so we need to know who's submitting.</div>`;
+    content.innerHTML = `<div class="empty-state">Sign in with Google, or enter your email (top right), to submit a report — reports and attendance are tied to your class period, so we need to know who's submitting. If you've done that and still see this, ask the Director to add your email to the roster.</div>`;
     return;
   }
   const classOptions = ['Class A','Class B','Class C','Class D'];
@@ -1780,10 +1900,21 @@ function renderNotifications(){
 
 // ---------------- SETUP ----------------
 function renderSetup(){
+  const noDirectorsYet = !(globalState.directorEmails||[]).length;
+  document.getElementById('claimDirectorCard').style.display = (noDirectorsYet && authUser) ? 'block' : 'none';
   document.getElementById('dirAccessCard').style.display = isDirector() ? 'block' : 'none';
-  document.getElementById('dirPinStatus').textContent = globalState.directorPin ? 'A Director PIN is set.' : 'No PIN set yet — set one now before sharing this board with your team.';
   document.getElementById('attendanceThreshold').value = globalState.attendanceAlertThreshold || 3;
-  document.getElementById('dirPinControls').style.display = 'grid';
+
+  const dirList = document.getElementById('directorEmailsList');
+  dirList.innerHTML = (globalState.directorEmails||[]).map(email=>`
+    <div class="roster-row"><span class="rname">${email}</span><button class="task-del" data-remove-director="${email}">✕</button></div>
+  `).join('') || `<div class="empty-state">No Directors yet.</div>`;
+  dirList.querySelectorAll('[data-remove-director]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if((globalState.directorEmails||[]).length<=1){ toast("Can't remove the last Director — add another first"); return; }
+    globalState.directorEmails = globalState.directorEmails.filter(e=>e!==btn.dataset.removeDirector);
+    await saveGlobalState(); renderSetup();
+    toast('Director access removed');
+  }));
 
   document.getElementById('rosterAddFormWrap').style.display = isDirector() ? 'block' : 'none';
   document.getElementById('rosterLockedMsg').style.display = isDirector() ? 'none' : 'block';
@@ -1798,18 +1929,25 @@ function renderSetup(){
     const wrap = document.createElement('div');
     const row = document.createElement('div'); row.className = 'roster-row';
     row.innerHTML = `<span class="dot" style="background:${c.role==='teacher'?'var(--gold)':'var(--amber)'}"></span>
-      <span class="rname">${c.name}${c.role==='teacher'?' <span class="mono" style="font-size:10px;color:var(--gold)">TEACHER</span>':''}</span>
+      <span class="rname">${c.name}${c.role==='teacher'?' <span class="mono" style="font-size:10px;color:var(--gold)">TEACHER</span>':''}<br><span class="mono" style="font-size:10px;color:var(--paper-dim);">${c.email||'no sign-in email set'}</span></span>
       <span class="rmeta">${(c.departments||[]).map(k=>deptInfo(k).label).join(', ')||'No team yet'}</span>
       ${isDirector() ? `<select class="mono" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:4px 7px; font-size:11.5px;" data-classperiod="${c.id}">
         ${['Class A','Class B','Class C','Class D'].map(cp=>`<option ${cp===c.classPeriod?'selected':''}>${cp}</option>`).join('')}
       </select>` : `<span class="rmeta">${c.classPeriod||''}</span>`}
-      ${isDirector() ? `<button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
+      ${isDirector() ? `<button class="btn ghost small" data-editemail="${c.id}">Edit Email</button><button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
     wrap.appendChild(row);
     if(isDirector()){
       row.querySelector('[data-classperiod]').addEventListener('change', async (e)=>{
         c.classPeriod = e.target.value;
         await saveState(); renderSetup();
         toast(`${c.name} moved to ${c.classPeriod}`);
+      });
+      row.querySelector('[data-editemail]').addEventListener('click', async ()=>{
+        const val = prompt(`Sign-in email for ${c.name}:`, c.email||'');
+        if(val===null) return;
+        c.email = val.trim();
+        await saveState(); renderSetup();
+        toast('Email updated');
       });
       const editRow = document.createElement('div');
       editRow.className = 'checkbox-row';
@@ -1830,7 +1968,6 @@ function renderSetup(){
   list.querySelectorAll('.task-del').forEach(btn=>btn.addEventListener('click', async ()=>{
     if(!isDirector()) return;
     state.crew = state.crew.filter(c=>c.id!==btn.dataset.id);
-    if(device.currentUserId===btn.dataset.id){ device.currentUserId=''; await saveDevice(); }
     await saveState(); renderSetup(); renderHeader();
   }));
 }
@@ -1844,8 +1981,8 @@ async function bulkImportCrew(){
     const parts = line.split(',').map(p=>p.trim());
     const name = parts[0];
     if(!name) return;
-    const parentEmail = parts[1] && parts[1].includes('@') ? parts[1] : '';
-    state.crew.push({ id:cryptoId(), name, role:'student', classPeriod:'Class A', departments:[], parentEmail, parentPhone:'' });
+    const email = parts[1] && parts[1].includes('@') ? parts[1] : '';
+    state.crew.push({ id:cryptoId(), name, role:'student', classPeriod:'Class A', departments:[], email, parentEmail:'', parentPhone:'' });
     count++;
   });
   await saveState();
@@ -1860,11 +1997,12 @@ async function addCrew(){
   const role = document.getElementById('rosterRole').value;
   const classPeriod = document.getElementById('rosterClassPeriod').value;
   const departments = Array.from(document.querySelectorAll('#rosterDeptChecks input:checked')).map(i=>i.value);
+  const email = document.getElementById('rosterEmail').value.trim();
   const parentEmail = document.getElementById('rosterParentEmail').value.trim();
   const parentPhone = document.getElementById('rosterParentPhone').value.trim();
-  state.crew.push({ id:cryptoId(), name, role, classPeriod, departments, parentEmail, parentPhone });
+  state.crew.push({ id:cryptoId(), name, role, classPeriod, departments, email, parentEmail, parentPhone });
   await saveState();
-  document.getElementById('rosterName').value=''; document.getElementById('rosterParentEmail').value=''; document.getElementById('rosterParentPhone').value='';
+  document.getElementById('rosterName').value=''; document.getElementById('rosterEmail').value=''; document.getElementById('rosterParentEmail').value=''; document.getElementById('rosterParentPhone').value='';
   document.querySelectorAll('#rosterDeptChecks input').forEach(i=>i.checked=false);
   renderSetup(); renderHeader();
   toast('Crew member added');
@@ -1891,13 +2029,71 @@ function renderAll(){
 
 async function init(){
   globalState = await loadOrMigrateGlobalState();
-  device = await loadDevice();
+  device = loadDevice();
   if(!globalState.activeProductionId && globalState.productions.length){ globalState.activeProductionId = globalState.productions[0].id; }
   currentProductionId = globalState.activeProductionId;
   state = await loadProductionState(currentProductionId);
   if(!state.costumeRecords) state.costumeRecords = [];
   renderAll();
   renderCostumeMeasureGrid(); renderCostumePieces();
+
+  await waitForFirebase();
+  if(window.__fb){
+    window.__fb.onAuthStateChanged(window.__fb.auth, (user)=>{
+      authUser = user ? { email:user.email, displayName:user.displayName } : null;
+      if(authUser && device.manualEmail){ device.manualEmail = ''; saveDevice(); } // real sign-in takes over
+      renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
+      renderConflicts(); renderAttendanceView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+    });
+  }
+  document.getElementById('googleSignInBtn').addEventListener('click', signInWithGoogle);
+  document.getElementById('toggleEmailPwBtn').addEventListener('click', ()=>{
+    const wrap = document.getElementById('emailPwWrap');
+    wrap.style.display = wrap.style.display==='none' ? 'flex' : 'none';
+    document.getElementById('manualWrap').style.display = 'none';
+  });
+  document.getElementById('toggleManualBtn').addEventListener('click', ()=>{
+    const wrap = document.getElementById('manualWrap');
+    wrap.style.display = wrap.style.display==='none' ? 'flex' : 'none';
+    document.getElementById('emailPwWrap').style.display = 'none';
+  });
+  document.getElementById('epSignInBtn').addEventListener('click', ()=>{
+    const email = document.getElementById('epEmail').value.trim();
+    const password = document.getElementById('epPassword').value;
+    if(!email || !password){ toast('Enter both email and password'); return; }
+    signInWithEmailPassword(email, password);
+  });
+  document.getElementById('epSignUpBtn').addEventListener('click', ()=>{
+    const email = document.getElementById('epEmail').value.trim();
+    const password = document.getElementById('epPassword').value;
+    if(!email || !password){ toast('Enter both email and password'); return; }
+    signUpWithEmailPassword(email, password);
+  });
+  document.getElementById('manualEmailBtn').addEventListener('click', ()=>{
+    const val = document.getElementById('manualEmailInput').value.trim();
+    if(!val || !val.includes('@')){ toast('Enter a valid email'); return; }
+    setManualEmail(val);
+    document.getElementById('manualEmailInput').value = '';
+    toast("Continuing as " + val + " (unverified)");
+  });
+  document.getElementById('signOutBtn').addEventListener('click', signOutUser);
+  document.getElementById('claimDirectorBtn').addEventListener('click', async ()=>{
+    if(!authUser) return;
+    globalState.directorEmails = [authUser.email];
+    await saveGlobalState();
+    renderHeader(); renderSetup(); renderDashboard();
+    toast('You are now the Director');
+  });
+  document.getElementById('addDirectorEmailBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only an existing Director can add another'); return; }
+    const email = document.getElementById('newDirectorEmail').value.trim().toLowerCase();
+    if(!email || !email.includes('@')){ toast('Enter a valid email'); return; }
+    if(!globalState.directorEmails.includes(email)) globalState.directorEmails.push(email);
+    await saveGlobalState();
+    document.getElementById('newDirectorEmail').value = '';
+    renderSetup();
+    toast('Director added');
+  });
 
   document.getElementById('prodName').addEventListener('change', async e=>{
     if(!isDirector()){ renderHeader(); return; }
@@ -1906,16 +2102,6 @@ async function init(){
     const entry = globalState.productions.find(p=>p.id===currentProductionId);
     if(entry) entry.name = newName;
     await saveState(); await saveGlobalState();
-  });
-  document.getElementById('whoAmI').addEventListener('change', async e=>{ device.currentUserId = e.target.value; await saveDevice(); renderConflicts(); });
-  document.getElementById('roleTeamBtn').addEventListener('click', async ()=>{ device.role='team'; await saveDevice(); renderHeader(); renderCalendarForm(); renderCalMonth(); renderCalendar(); renderConflicts(); renderDepartments(); renderProductionsView(); });
-  document.getElementById('roleDirBtn').addEventListener('click', async ()=>{
-    if(globalState.directorPin){
-      const entered = prompt('Enter Director PIN:');
-      if(entered === null) return;
-      if(entered !== globalState.directorPin){ toast('Incorrect PIN'); return; }
-    }
-    device.role='director'; await saveDevice(); renderHeader(); renderCalendarForm(); renderCalMonth(); renderCalendar(); renderConflicts(); renderDepartments(); renderProductionsView();
   });
 
   document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click', ()=>switchView(b.dataset.view)));
@@ -1929,24 +2115,15 @@ async function init(){
   document.getElementById('calTodayBtn').addEventListener('click', ()=>{ const n=new Date(); ui.calMonthCursor = new Date(n.getFullYear(), n.getMonth(), 1); ui.calSelectedDate = todayISO(); renderCalMonth(); });
   document.getElementById('conflictAddBtn').addEventListener('click', submitConflict);
   document.getElementById('rosterAddBtn').addEventListener('click', addCrew);
-  document.getElementById('dirPinSaveBtn').addEventListener('click', async ()=>{
-    if(!isDirector()){ toast('Switch to Director mode first'); return; }
-    const val = document.getElementById('dirPinInput').value.trim();
-    globalState.directorPin = val;
-    await saveGlobalState();
-    document.getElementById('dirPinInput').value = '';
-    renderSetup();
-    toast(val ? 'Director PIN set' : 'Director PIN cleared');
-  });
   document.getElementById('attendanceThresholdSaveBtn').addEventListener('click', async ()=>{
-    if(!isDirector()){ toast('Switch to Director mode first'); return; }
+    if(!isDirector()){ toast('Only the Director can change this'); return; }
     const val = parseInt(document.getElementById('attendanceThreshold').value) || 3;
     globalState.attendanceAlertThreshold = val;
     await saveGlobalState(); renderSetup(); renderDashboard();
     toast(`Attendance alert threshold set to ${val}`);
   });
   document.getElementById('bulkImportBtn').addEventListener('click', bulkImportCrew);
-  document.getElementById('markReadBtn').addEventListener('click', async ()=>{ device.lastSeenChangelog = new Date().toISOString(); await saveDevice(); renderNotifications(); toast('Marked read'); });
+  document.getElementById('markReadBtn').addEventListener('click', ()=>{ device.lastSeenChangelog = new Date().toISOString(); saveDevice(); renderNotifications(); toast('Marked read'); });
   document.getElementById('resetAllBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can reset production data'); return; }
     if(confirm('This clears all data for the CURRENT production only (tasks, calendar, conflicts, costumes, crew). Other productions are unaffected. Continue?')){
