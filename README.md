@@ -387,6 +387,14 @@
         <textarea id="calNotes" class="full-width" style="min-height:50px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:9px 10px; border-radius:3px;" placeholder="Notes (optional)"></textarea>
         <button class="btn" id="calAddBtn">Add to Calendar</button>
       </div>
+      <div class="card" id="groupmeAnnounceCard" style="display:none;">
+        <h2>Post to GroupMe</h2>
+        <textarea id="groupmeAnnounceText" class="full-width" style="min-height:60px;" placeholder="Write an announcement for the group..."></textarea>
+        <div class="cal-actions">
+          <button class="btn small" id="groupmeSendAnnounceBtn">Send Announcement</button>
+          <button class="btn ghost small" id="groupmeSendScheduleBtn">Send This Week's Schedule</button>
+        </div>
+      </div>
       <div id="calList"></div>
     </div>
   </section>
@@ -584,6 +592,15 @@
       <p style="font-size:11.5px;color:var(--paper-dim);">Suggested template variables — Absence: <code>to_email, student_name, event_title, event_date, production_name</code>. Deadline: <code>to_email, student_name, task_title, due_date, department</code>.</p>
       <button class="btn small" id="ejsConfigSaveBtn">Save</button>
     </div>
+    <div class="card" id="groupmeCard">
+      <h2>GroupMe Announcements</h2>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Posts to GroupMe using your bot — new calls, reschedules, cancellations, day-before reminders, plus manual announcements and schedule posts (Calendar tab). Specific calls include which departments/students were called, so parents can see who's needed. Grades, absences, and behavior stay out of GroupMe entirely — those go through private email alerts instead. Paste your Bot ID below.</p>
+      <div class="form-grid" style="max-width:320px;">
+        <input type="text" id="groupmeBotId" placeholder="Bot ID">
+        <button class="btn small" id="groupmeConfigSaveBtn">Save</button>
+      </div>
+      <p style="font-size:11px;color:var(--paper-dim);">If posts don't show up in the group, check the browser console for a "GroupMe post failed" warning — some networks or GroupMe's own policies can block direct browser calls.</p>
+    </div>
     <div class="card">
       <h2>Cast &amp; Crew Roster</h2>
       <div id="rosterAddFormWrap">
@@ -731,7 +748,7 @@ function defaultProductionState(name, seeded){
 }
 // Production defaults are created via defaultProductionState(name, seeded) above.
 
-const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null, emailjs:{ publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' } };
+const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null, emailjs:{ publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' }, groupme:{ botId:'' } };
 
 let state = null;
 let globalState = null;
@@ -1037,6 +1054,48 @@ async function checkAndSendDeadlineAlerts(){
   if(anySent) await saveState();
 }
 
+// ---------------- GROUPME ANNOUNCEMENTS (no server required) ----------------
+// GroupMe's bot-post endpoint is called directly from the browser. If your school
+// network or GroupMe itself ever blocks this cross-origin call, posts will just
+// silently fail — check the browser console for a "GroupMe post failed" warning.
+// Describes who a specific call was targeted at, so GroupMe posts (which parents see)
+// make clear which team/group is actually needed — e.g. " (Called: Costumes, Sam Lee)".
+function groupMeCallInfo(ev){
+  if(!ev || !ev.isSpecificCall) return '';
+  const depts = (ev.calledDepartments||[]).map(k=>deptInfo(k).label);
+  const students = (ev.calledStudentIds||[]).map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:null; }).filter(Boolean);
+  const parts = [...depts, ...students];
+  return parts.length ? ` (Called: ${parts.join(', ')})` : '';
+}
+async function sendGroupMe(text){
+  const cfg = globalState && globalState.groupme;
+  if(!cfg || !cfg.botId) return;
+  try{
+    await fetch('https://api.groupme.com/v3/bots/post', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ bot_id: cfg.botId, text })
+    });
+  }catch(e){ console.warn('GroupMe post failed', e); }
+}
+let groupMeReminderCheckRanThisSession = false;
+async function checkAndSendGroupMeReminders(){
+  const cfg = globalState && globalState.groupme;
+  if(!cfg || !cfg.botId) return;
+  if(groupMeReminderCheckRanThisSession) return;
+  groupMeReminderCheckRanThisSession = true;
+  const tomorrow = new Date(todayISO()+'T00:00'); tomorrow.setDate(tomorrow.getDate()+1);
+  const tomorrowISO = tomorrow.toISOString().slice(0,10);
+  let anySent = false;
+  for(const ev of state.calendar){
+    if(ev.reminderSent || ev.date !== tomorrowISO) continue;
+    await sendGroupMe(`📢 Reminder: "${ev.title}" is tomorrow${ev.startTime?' at '+ev.startTime:''}${ev.location?' — '+ev.location:''}${groupMeCallInfo(ev)}.`);
+    ev.reminderSent = true;
+    anySent = true;
+  }
+  if(anySent) await saveState();
+}
+
 async function setAttendance(ev, crewId, status){
   if(!ev.attendance) ev.attendance = {};
   const before = absentCount(crewId);
@@ -1188,6 +1247,7 @@ function renderDashboard(){
 // ---------------- CALENDAR ----------------
 function renderCalendarForm(){
   document.getElementById('calAddCard').style.display = isDirector() ? 'block' : 'none';
+  document.getElementById('groupmeAnnounceCard').style.display = isDirector() ? 'block' : 'none';
   const wrap = document.getElementById('calDeptChecks');
   wrap.innerHTML = DEPARTMENTS.map(d=>`<label><input type="checkbox" value="${d.key}"> ${d.label}</label>`).join('');
   const specific = document.getElementById('calSpecific');
@@ -1335,9 +1395,11 @@ function buildEventCardEl(ev){
       ev.calledDepartments = Array.from(card.querySelectorAll('.edit-dept-checks input:checked')).map(i=>i.value);
       ev.calledStudentIds = Array.from(card.querySelectorAll('.edit-student-checks input:checked')).map(i=>i.value);
       const moved = before.date!==ev.date || before.startTime!==ev.startTime;
+      if(moved) ev.reminderSent = false;
       logChange(`Edited: "${before.title}"${moved ? ` — moved from ${fmtDate(before.date)} ${before.startTime||''} to ${fmtDate(ev.date)} ${ev.startTime||''}` : ` (${fmtDate(ev.date)})`}.`, eventScope(ev));
       ui.editingEventId = null;
       await saveState(); renderCalMonth(); renderCalendar(); renderNotifications(); renderDashboard();
+      if(moved) sendGroupMe(`🔄 "${ev.title}" has been rescheduled to ${fmtDate(ev.date)}${ev.startTime?' at '+ev.startTime:''}${ev.location?' — '+ev.location:''}${groupMeCallInfo(ev)}.`);
       toast('Call updated — crew notified');
     });
     return card;
@@ -1367,6 +1429,7 @@ function buildEventCardEl(ev){
       state.calendar = state.calendar.filter(e=>e.id!==ev.id);
       logChange(`Cancelled: "${ev.title}" originally set for ${fmtDate(ev.date)}.`, eventScope(ev));
       await saveState(); renderCalMonth(); renderCalendar(); renderNotifications(); renderDashboard();
+      sendGroupMe(`❌ "${ev.title}" originally set for ${fmtDate(ev.date)} has been cancelled${groupMeCallInfo(ev)}.`);
       toast('Call cancelled — crew notified');
     });
   }
@@ -1410,7 +1473,7 @@ async function addCalendarEvent(){
   const isSpecificCall = document.getElementById('calSpecific').checked;
   const calledDepartments = Array.from(document.querySelectorAll('#calDeptChecks input:checked')).map(i=>i.value);
   const calledStudentIds = Array.from(document.querySelectorAll('#calStudentChecks input:checked')).map(i=>i.value);
-  state.calendar.push({ id:cryptoId(), title, date, startTime, endTime, location, notes, isSpecificCall, calledDepartments, calledStudentIds });
+  state.calendar.push({ id:cryptoId(), title, date, startTime, endTime, location, notes, isSpecificCall, calledDepartments, calledStudentIds, reminderSent:false });
   logChange(`New call added: "${title}" on ${fmtDate(date)}${startTime?' at '+startTime:''}.`, eventScope({isSpecificCall, calledDepartments, calledStudentIds}));
   await saveState();
   ['calTitle','calLocation','calNotes','calStart','calEnd'].forEach(id=>document.getElementById(id).value='');
@@ -1418,6 +1481,7 @@ async function addCalendarEvent(){
   document.querySelectorAll('#calDeptChecks input, #calStudentChecks input').forEach(i=>i.checked=false);
   renderCalendarForm(); renderCalendar(); renderNotifications(); renderDashboard();
   if(ui.calSub==='month') renderCalMonth();
+  sendGroupMe(`🗓️ New call added: "${title}" on ${fmtDate(date)}${startTime?' at '+startTime:''}${location?' — '+location:''}${groupMeCallInfo({isSpecificCall, calledDepartments, calledStudentIds})}.`);
   toast('Added to calendar');
 }
 
@@ -2334,6 +2398,9 @@ function renderSetup(){
   document.getElementById('ejsTemplateAbsence').value = ejs.templateAbsence;
   document.getElementById('ejsTemplateDeadline').value = ejs.templateDeadline;
 
+  document.getElementById('groupmeCard').style.display = isDirector() ? 'block' : 'none';
+  document.getElementById('groupmeBotId').value = (globalState.groupme && globalState.groupme.botId) || '';
+
   const dirList = document.getElementById('directorEmailsList');
   dirList.innerHTML = (globalState.directorEmails||[]).map(email=>`
     <div class="roster-row"><span class="rname">${email}</span><button class="task-del" data-remove-director="${email}">✕</button></div>
@@ -2479,6 +2546,7 @@ async function init(){
   if(!state.behaviorIncidents) state.behaviorIncidents = [];
   if(!state.behaviorConfig) state.behaviorConfig = { pointsPerDay:20, daysPerWeek:5 };
   if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' };
+  if(!globalState.groupme) globalState.groupme = { botId:'' };
   renderAll();
   renderCostumeMeasureGrid(); renderCostumePieces();
   initEmailJs();
@@ -2490,7 +2558,7 @@ async function init(){
       if(authUser && device.manualEmail){ device.manualEmail = ''; saveDevice(); } // real sign-in takes over
       renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
       renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
-      if(isDirector()) checkAndSendDeadlineAlerts();
+      if(isDirector()){ checkAndSendDeadlineAlerts(); checkAndSendGroupMeReminders(); }
     });
   }
   document.getElementById('googleSignInBtn').addEventListener('click', signInWithGoogle);
@@ -2557,6 +2625,27 @@ async function init(){
   document.querySelectorAll('#behaviorSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchBehaviorSub(b.dataset.behSub)));
 
   document.getElementById('calAddBtn').addEventListener('click', addCalendarEvent);
+  document.getElementById('groupmeSendAnnounceBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can post to GroupMe'); return; }
+    if(!globalState.groupme || !globalState.groupme.botId){ toast('Add your GroupMe Bot ID in Setup first'); return; }
+    const text = document.getElementById('groupmeAnnounceText').value.trim();
+    if(!text){ toast('Write something first'); return; }
+    await sendGroupMe(`📣 ${text}`);
+    document.getElementById('groupmeAnnounceText').value = '';
+    toast('Announcement sent to GroupMe');
+  });
+  document.getElementById('groupmeSendScheduleBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can post to GroupMe'); return; }
+    if(!globalState.groupme || !globalState.groupme.botId){ toast('Add your GroupMe Bot ID in Setup first'); return; }
+    const today = todayISO();
+    const weekOut = new Date(today+'T00:00'); weekOut.setDate(weekOut.getDate()+7);
+    const weekOutISO = weekOut.toISOString().slice(0,10);
+    const upcoming = [...state.calendar].filter(e=>e.date>=today && e.date<=weekOutISO).sort((a,b)=>a.date.localeCompare(b.date));
+    if(!upcoming.length){ toast('No calls in the next 7 days'); return; }
+    const lines = upcoming.map(e=>`• ${fmtDate(e.date)}${e.startTime?' '+e.startTime:''} — ${e.title}${e.location?' @ '+e.location:''}${groupMeCallInfo(e)}`);
+    await sendGroupMe(`🗓️ Upcoming Rehearsal Schedule:\n${lines.join('\n')}`);
+    toast('Schedule sent to GroupMe');
+  });
   document.querySelectorAll('#calSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchCalSub(b.dataset.calSub)));
   document.getElementById('calPrevBtn').addEventListener('click', ()=>{ ui.calMonthCursor = new Date(ui.calMonthCursor.getFullYear(), ui.calMonthCursor.getMonth()-1, 1); renderCalMonth(); });
   document.getElementById('calNextBtn').addEventListener('click', ()=>{ ui.calMonthCursor = new Date(ui.calMonthCursor.getFullYear(), ui.calMonthCursor.getMonth()+1, 1); renderCalMonth(); });
@@ -2602,6 +2691,12 @@ async function init(){
     await saveGlobalState();
     initEmailJs();
     toast('Email alert settings saved');
+  });
+  document.getElementById('groupmeConfigSaveBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can change this'); return; }
+    globalState.groupme = { botId: document.getElementById('groupmeBotId').value.trim() };
+    await saveGlobalState();
+    toast('GroupMe bot saved');
   });
   document.getElementById('bulkImportBtn').addEventListener('click', bulkImportCrew);
   document.getElementById('markReadBtn').addEventListener('click', ()=>{ device.lastSeenChangelog = new Date().toISOString(); saveDevice(); renderNotifications(); toast('Marked read'); });
@@ -2660,3 +2755,4 @@ init();
 </script>
 </body>
 </html>
+    
