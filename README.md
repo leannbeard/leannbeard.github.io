@@ -2,7 +2,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SetDesk — Production Manager</title>
+<title>StageDesk — Production Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -246,6 +246,10 @@
   .att-legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--paper-dim); margin-bottom:12px; }
 
   .incident-card{ background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--red); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; }
+  .announcement-item{ background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--amber); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; }
+  .announcement-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .announcement-text{ font-size:14px; white-space:pre-wrap; }
+  .announcement-meta{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--paper-dim); margin-top:6px; }
   .incident-top{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
   .incident-meta{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--paper-dim); margin-top:3px; }
   .incident-note{ font-size:13px; margin-top:6px; color:var(--paper-dim); }
@@ -263,7 +267,7 @@
 <div class="callsheet-header">
   <div class="header-row">
     <div class="header-left">
-      <div class="eyebrow">SetDesk // Full Production Manager</div>
+      <div class="eyebrow">StageDesk // Full Production Manager</div>
       <h1><input class="prod-input" id="prodName" value="Untitled Production" spellcheck="false"></h1>
       <div class="header-meta">
         <span id="todayDate">—</span>
@@ -316,6 +320,14 @@
 <main>
 
   <section class="view active" id="view-dashboard">
+    <div class="card" id="announcementsCard">
+      <h2>Announcements</h2>
+      <div id="announcementPostWrap" style="display:none; margin-bottom:14px;">
+        <textarea id="announcementText" class="full-width" style="min-height:60px;" placeholder="Post something everyone will see when they open the app..."></textarea>
+        <button class="btn small" id="announcementPostBtn">Post Announcement</button>
+      </div>
+      <div id="announcementList"></div>
+    </div>
     <div class="card"><h2>Department Progress — Today</h2><div class="dash-grid" id="dashDeptTiles"></div></div>
     <div class="grid-2">
       <div class="card"><h2>Upcoming Calls</h2><div id="dashUpcoming"></div></div>
@@ -743,6 +755,7 @@ function defaultProductionState(name, seeded){
     costumeRecords:[],
     behaviorIncidents:[],
     behaviorConfig: { pointsPerDay:20, daysPerWeek:5 },
+    announcements:[],
     departments: freshDepartments(seeded)
   };
 }
@@ -1211,7 +1224,44 @@ function renderProductionsView(){
   }));
 }
 
+function renderAnnouncements(){
+  document.getElementById('announcementPostWrap').style.display = isDirector() ? 'block' : 'none';
+  const list = document.getElementById('announcementList');
+  const items = [...(state.announcements||[])].sort((a,b)=>b.postedAt.localeCompare(a.postedAt));
+  if(!items.length){
+    list.innerHTML = isDirector() ? `<div class="empty-state">Nothing posted yet — write something above.</div>` : `<div class="empty-state">No announcements right now.</div>`;
+    return;
+  }
+  list.innerHTML = items.map(a=>`
+    <div class="announcement-item">
+      <div class="announcement-top">
+        <div class="announcement-text">${escapeHtml(a.text).replace(/\n/g,'<br>')}</div>
+        ${isDirector()?`<button class="task-del" data-del-announcement="${a.id}">✕</button>`:''}
+      </div>
+      <div class="announcement-meta">${a.postedBy} · ${fmtDateTime(a.postedAt)}</div>
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-del-announcement]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if(!confirm('Delete this announcement?')) return;
+    state.announcements = state.announcements.filter(a=>a.id!==btn.dataset.delAnnouncement);
+    await saveState(); renderAnnouncements();
+    toast('Announcement deleted');
+  }));
+}
+async function postAnnouncement(){
+  if(!isDirector()){ toast('Only the Director can post announcements'); return; }
+  const text = document.getElementById('announcementText').value.trim();
+  if(!text){ toast('Write something first'); return; }
+  const postedBy = currentUser()?.name || authUser?.displayName || 'Director';
+  state.announcements.push({ id:cryptoId(), text, postedBy, postedAt:new Date().toISOString() });
+  await saveState();
+  document.getElementById('announcementText').value = '';
+  renderAnnouncements();
+  toast('Announcement posted');
+}
+
 function renderDashboard(){
+  renderAnnouncements();
   const tiles = document.getElementById('dashDeptTiles');
   tiles.innerHTML = '';
   DEPARTMENTS.forEach(dep=>{
@@ -1339,6 +1389,7 @@ function renderCalMonth(){
 }
 
 function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // Builds one calendar event card as a DOM element — either its normal display,
 // or (if the Director has clicked Edit on it) a full inline edit form.
@@ -2545,6 +2596,7 @@ async function init(){
   if(!state.costumeRecords) state.costumeRecords = [];
   if(!state.behaviorIncidents) state.behaviorIncidents = [];
   if(!state.behaviorConfig) state.behaviorConfig = { pointsPerDay:20, daysPerWeek:5 };
+  if(!state.announcements) state.announcements = [];
   if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' };
   if(!globalState.groupme) globalState.groupme = { botId:'' };
   renderAll();
@@ -2646,6 +2698,7 @@ async function init(){
     await sendGroupMe(`🗓️ Upcoming Rehearsal Schedule:\n${lines.join('\n')}`);
     toast('Schedule sent to GroupMe');
   });
+  document.getElementById('announcementPostBtn').addEventListener('click', postAnnouncement);
   document.querySelectorAll('#calSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchCalSub(b.dataset.calSub)));
   document.getElementById('calPrevBtn').addEventListener('click', ()=>{ ui.calMonthCursor = new Date(ui.calMonthCursor.getFullYear(), ui.calMonthCursor.getMonth()-1, 1); renderCalMonth(); });
   document.getElementById('calNextBtn').addEventListener('click', ()=>{ ui.calMonthCursor = new Date(ui.calMonthCursor.getFullYear(), ui.calMonthCursor.getMonth()+1, 1); renderCalMonth(); });
