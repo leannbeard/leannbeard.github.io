@@ -155,7 +155,7 @@
   .task-title{ font-weight:600; font-size:14.5px; margin-bottom:4px; }
   .task-desc{ font-size:12.5px; color:var(--paper-dim); margin-bottom:6px; }
   .task-meta-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-  .task-meta-row input.assignee{ width:120px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper-dim); font-family:'IBM Plex Mono',monospace; font-size:11.5px; border-radius:3px; padding:4px 7px; }
+  .task-meta-row .assignee{ width:120px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper-dim); font-family:'IBM Plex Mono',monospace; font-size:11.5px; border-radius:3px; padding:4px 7px; }
   .tag{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; border-radius:3px; padding:2px 7px; border:1px solid var(--line); color:var(--paper-dim); }
   .tag.priority-high{ border-color:var(--red); color:var(--red); }
   .tag.priority-medium{ border-color:var(--amber); color:var(--amber); }
@@ -244,6 +244,14 @@
   .att-cell-e{ color:var(--amber); font-weight:700; }
   .att-cell-blank{ color:var(--paper-dim); opacity:0.35; }
   .att-legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--paper-dim); margin-bottom:12px; }
+
+  .incident-card{ background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--red); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; }
+  .incident-top{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
+  .incident-meta{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--paper-dim); margin-top:3px; }
+  .incident-note{ font-size:13px; margin-top:6px; color:var(--paper-dim); }
+  .behavior-score-good{ color:var(--sage); }
+  .behavior-score-bad{ color:var(--red); }
+  .behavior-score-mid{ color:var(--amber); }
   .att-legend span b{ font-family:'IBM Plex Mono',monospace; }
   .toast{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--paper); color:var(--ink);
     padding:11px 20px; border-radius:4px; font-size:13px; font-weight:600; box-shadow:var(--shadow); opacity:0; transition:all .25s; pointer-events:none; z-index:50; }
@@ -259,7 +267,7 @@
       <h1><input class="prod-input" id="prodName" value="Untitled Production" spellcheck="false"></h1>
       <div class="header-meta">
         <span id="todayDate">—</span>
-        <span><b id="crewCount">0</b> crew on roster</span>
+        <span><b id="crewCount">0</b> cast/crew on roster</span>
       </div>
     </div>
     <div class="header-right">
@@ -298,6 +306,7 @@
   <button data-view="calendar">Calendar</button>
   <button data-view="conflicts">Conflicts</button>
   <button data-view="attendance">Attendance</button>
+  <button data-view="behavior">Behavior</button>
   <button data-view="departments">Departments</button>
   <button data-view="costumes">Costumes</button>
   <button data-view="notifications">Notifications<span class="badge" id="notifBadge" style="display:none;">0</span></button>
@@ -428,6 +437,62 @@
     </div>
   </section>
 
+  <section class="view" id="view-behavior">
+    <div id="behaviorLockedMsg" class="empty-state" style="display:none;">
+      <div class="lamp">🔒</div>Behavior tracking is only visible to the Director and Stage Management team.
+    </div>
+    <div id="behaviorAuthorizedWrap">
+      <div class="subtabs" id="behaviorSubtabs">
+        <button data-beh-sub="log" class="active">Log Infraction</button>
+        <button data-beh-sub="summary">Weekly Summary</button>
+      </div>
+
+      <div id="behaviorLogView">
+        <div class="card">
+          <h2>Log an Etiquette / Behavior Infraction</h2>
+          <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Each school day is worth <span id="behPtsLabel">20</span> points toward the weekly behavior grade. Logging an infraction deducts points from that day; a student with no infractions all week gets full credit.</p>
+          <div class="form-grid">
+            <select id="behStudent"></select>
+            <input type="date" id="behDate">
+          </div>
+          <div class="form-grid">
+            <select id="behReason">
+              <option value="">Select a reason</option>
+              <option>Disrespect toward peers or staff</option>
+              <option>Not following directions</option>
+              <option>Phone / device misuse</option>
+              <option>Disruptive behavior</option>
+              <option>Unsafe behavior in the shop</option>
+              <option>Other</option>
+            </select>
+            <input type="number" id="behDeduction" placeholder="Points to deduct" min="1" max="100">
+          </div>
+          <textarea id="behNotes" class="full-width" style="min-height:50px;" placeholder="Additional notes (optional)"></textarea>
+          <button class="btn" id="behLogBtn">Log Infraction</button>
+        </div>
+        <div class="card">
+          <h2>Recent Infractions</h2>
+          <div id="behaviorIncidentList"></div>
+        </div>
+      </div>
+
+      <div id="behaviorSummaryView" style="display:none;">
+        <div class="card">
+          <div class="cal-nav">
+            <button class="btn ghost small" id="behPrevWeekBtn">‹ Prev Week</button>
+            <span class="stencil" id="behWeekLabel" style="font-size:16px;"></span>
+            <button class="btn ghost small" id="behThisWeekBtn">This Week</button>
+            <button class="btn ghost small" id="behNextWeekBtn">Next Week ›</button>
+          </div>
+          <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+            <button class="btn ghost small" id="behExportCsvBtn">Download CSV for gradebook</button>
+          </div>
+          <div id="behaviorSummaryWrap"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="view" id="view-departments">
     <div class="pill-row" id="deptPills"></div>
     <div class="subtabs" id="deptSubtabs">
@@ -497,9 +562,30 @@
         <input type="number" id="attendanceThreshold" min="1" max="20">
         <button class="btn small" id="attendanceThresholdSaveBtn">Save</button>
       </div>
+      <h2 style="margin-top:22px;">Behavior Grading</h2>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sets how many points each school day is worth toward the weekly behavior/etiquette grade, and how many school days count in a week. Log infractions in the Behavior tab.</p>
+      <div class="form-grid" style="max-width:320px;">
+        <input type="number" id="behPointsPerDay" placeholder="Points per day" min="1" max="100">
+        <input type="number" id="behDaysPerWeek" placeholder="Days per week" min="1" max="7">
+        <button class="btn small" id="behConfigSaveBtn">Save</button>
+      </div>
+    </div>
+    <div class="card" id="emailAlertsCard">
+      <h2>Email Alerts</h2>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sends real emails using <a href="https://www.emailjs.com" target="_blank" style="color:var(--amber);">EmailJS</a> (free, no server needed). Create a free account there, connect an email service, make two templates, and paste the IDs below. Unexcused absences email the student and parent immediately; task deadlines email the assignee about 2 days before due, checked whenever the Director opens the app.</p>
+      <div class="form-grid" style="max-width:460px;">
+        <input type="text" id="ejsPublicKey" placeholder="Public Key">
+        <input type="text" id="ejsServiceId" placeholder="Service ID">
+      </div>
+      <div class="form-grid" style="max-width:460px;">
+        <input type="text" id="ejsTemplateAbsence" placeholder="Template ID — Absence">
+        <input type="text" id="ejsTemplateDeadline" placeholder="Template ID — Deadline">
+      </div>
+      <p style="font-size:11.5px;color:var(--paper-dim);">Suggested template variables — Absence: <code>to_email, student_name, event_title, event_date, production_name</code>. Deadline: <code>to_email, student_name, task_title, due_date, department</code>.</p>
+      <button class="btn small" id="ejsConfigSaveBtn">Save</button>
     </div>
     <div class="card">
-      <h2>Crew Roster</h2>
+      <h2>Cast &amp; Crew Roster</h2>
       <div id="rosterAddFormWrap">
         <div class="form-grid">
           <input type="text" id="rosterName" placeholder="Full name">
@@ -508,20 +594,28 @@
         </div>
         <div class="checkbox-row" id="rosterDeptChecks" style="margin-bottom:10px;"></div>
         <div class="form-grid">
+          <input type="text" id="rosterCastRole" placeholder="Cast role / character (if applicable)">
+        </div>
+        <div class="form-grid">
           <input type="text" id="rosterEmail" placeholder="Their sign-in email (for Google login)">
           <input type="text" id="rosterParentEmail" placeholder="Parent email (optional)">
           <input type="text" id="rosterParentPhone" placeholder="Parent phone (optional)">
         </div>
-        <button class="btn small" id="rosterAddBtn">Add Crew Member</button>
+        <button class="btn small" id="rosterAddBtn">Add Cast / Crew Member</button>
       </div>
-      <div id="rosterLockedMsg" class="lockmsg" style="display:none;">Viewing as Team — only the Teacher/Director can add, remove, or reassign crew.</div>
+      <div id="rosterLockedMsg" class="lockmsg" style="display:none;">Viewing as Team — only the Teacher/Director can add, remove, or reassign cast/crew.</div>
       <div id="rosterList" style="margin-top:14px;"></div>
     </div>
     <div class="card" id="bulkImportCard">
-      <h2>Bulk Import Roster</h2>
-      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">No live Google Classroom connection is possible from a standalone file, but you can paste a roster copied from Classroom (or anywhere) — one student per line — and add them all at once. Assign teams to each afterward using "Edit Teams" below. Include their sign-in email so Google sign-in can match them automatically.</p>
+      <h2>Bulk Import Cast &amp; Crew</h2>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">No live Google Classroom connection is possible from a standalone file, but you can paste a roster copied from Classroom (or anywhere) — one person per line — and add them all at once. Assign teams (including Cast) to each afterward using "Edit Teams" below. Include their sign-in email so Google sign-in can match them automatically.</p>
       <textarea id="bulkImportText" class="full-width" style="min-height:110px;" placeholder="Jane Smith, jane@school.edu&#10;John Doe, john@school.edu"></textarea>
       <button class="btn ghost small" id="bulkImportBtn">Import as Students</button>
+    </div>
+    <div class="card" id="exportGradesCard">
+      <h2>Export Grades</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Downloads a spreadsheet with one row per student per report — final grade already accounts for any individual overrides — across every department at once, ready to paste into your gradebook.</p>
+      <button class="btn small" id="exportAllGradesBtn">Download All Department Grades (CSV)</button>
     </div>
     <div class="card" id="resetCard">
       <h2>Data</h2>
@@ -533,6 +627,8 @@
 </main>
 
 <div class="toast" id="toast"></div>
+
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -592,7 +688,7 @@ function todayISO(){ return new Date().toISOString().slice(0,10); }
 
 function seedTasks(items){
   return items.map(([title, workType, priority, hours])=>({
-    id:cryptoId(), title, description:'', workType, priority, dueDate:todayISO(), estimatedHours:hours, status:'todo', assignedTo:'', checklist:[]
+    id:cryptoId(), title, description:'', workType, priority, dueDate:todayISO(), estimatedHours:hours, status:'todo', assignedTo:'', assignedToCrewId:null, deadlineAlertSent:false, checklist:[]
   }));
 }
 function defaultDeptState(seed){ return { tasks: seedTasks(seed), templates:[], reports:[] }; }
@@ -628,12 +724,14 @@ function defaultProductionState(name, seeded){
     conflicts:[],
     changelog:[ { id:cryptoId(), timestamp:new Date().toISOString(), message:'Production created.' } ],
     costumeRecords:[],
+    behaviorIncidents:[],
+    behaviorConfig: { pointsPerDay:20, daysPerWeek:5 },
     departments: freshDepartments(seeded)
   };
 }
 // Production defaults are created via defaultProductionState(name, seeded) above.
 
-const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null };
+const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null, emailjs:{ publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' } };
 
 let state = null;
 let globalState = null;
@@ -789,7 +887,7 @@ function toast(msg){
   clearTimeout(t._timer); t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
-let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set() };
+let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set(), behaviorSub:'log', behaviorWeekCursor:null, editingEventId:null };
 let authUser = null; // { email, displayName } once signed in via Google, else null
 
 // Identity resolves two ways: real Google sign-in (authUser) is verified;
@@ -855,13 +953,13 @@ async function signOutUser(){
   device.manualEmail = '';
   saveDevice();
   renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
-  renderConflicts(); renderAttendanceView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+  renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
 }
 function setManualEmail(email){
   device.manualEmail = email.trim();
   saveDevice();
   renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
-  renderConflicts(); renderAttendanceView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+  renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
 }
 function canViewDept(deptKey){
   if(isDirector()) return true;
@@ -869,7 +967,9 @@ function canViewDept(deptKey){
   return !!(u && (u.departments||[]).includes(deptKey));
 }
 function canViewCostumes(){ return canViewDept('costumes'); }
-function canTakeAttendance(){ return isDirector() || canViewDept('stage_mgmt'); }
+function isDirectorOrStageMgmt(){ return isDirector() || canViewDept('stage_mgmt'); }
+function canTakeAttendance(){ return isDirectorOrStageMgmt(); }
+function canManageBehavior(){ return isDirectorOrStageMgmt(); }
 function expectedAttendees(ev){
   if(ev.isSpecificCall){
     return state.crew.filter(c=>c.role==='student' && ((ev.calledStudentIds||[]).includes(c.id) || (c.departments||[]).some(d=>(ev.calledDepartments||[]).includes(d))));
@@ -881,6 +981,62 @@ function attendanceStatus(ev, crewId){
   const hasApproved = state.conflicts.some(c=>c.eventId===ev.id && c.crewId===crewId && c.status==='approved');
   return hasApproved ? 'excused' : null;
 }
+// ---------------- EMAIL ALERTS (EmailJS — no server required) ----------------
+function initEmailJs(){
+  const cfg = globalState && globalState.emailjs;
+  if(window.emailjs && cfg && cfg.publicKey){
+    try{ emailjs.init({ publicKey: cfg.publicKey }); }catch(e){ console.warn('EmailJS init failed', e); }
+  }
+}
+function emailAlertsConfigured(kind){
+  const cfg = globalState && globalState.emailjs;
+  if(!cfg || !window.emailjs || !cfg.publicKey || !cfg.serviceId) return false;
+  return kind==='absence' ? !!cfg.templateAbsence : !!cfg.templateDeadline;
+}
+async function sendAbsenceEmail(student, ev){
+  if(!emailAlertsConfigured('absence')) return;
+  const cfg = globalState.emailjs;
+  const recipients = [student.email, student.parentEmail].filter(Boolean);
+  if(!recipients.length) return;
+  for(const to_email of recipients){
+    try{
+      await emailjs.send(cfg.serviceId, cfg.templateAbsence, {
+        to_email, student_name: student.name, event_title: ev.title, event_date: fmtDate(ev.date), production_name: state.productionName
+      });
+    }catch(e){ console.warn('Absence email failed to send to '+to_email, e); }
+  }
+}
+let deadlineCheckRanThisSession = false;
+async function checkAndSendDeadlineAlerts(){
+  if(!emailAlertsConfigured('deadline')) return;
+  if(deadlineCheckRanThisSession) return;
+  deadlineCheckRanThisSession = true;
+  const cfg = globalState.emailjs;
+  const today = new Date(todayISO()+'T00:00');
+  let anySent = false;
+  for(const depKey of Object.keys(state.departments)){
+    const depState = state.departments[depKey];
+    for(const t of depState.tasks){
+      if(t.status==='done' || t.deadlineAlertSent || !t.assignedToCrewId || !t.dueDate) continue;
+      const due = new Date(t.dueDate+'T00:00');
+      const diffDays = Math.round((due - today) / 86400000);
+      if(diffDays >= 0 && diffDays <= 2){
+        const person = state.crew.find(c=>c.id===t.assignedToCrewId);
+        if(person && person.email){
+          try{
+            await emailjs.send(cfg.serviceId, cfg.templateDeadline, {
+              to_email: person.email, student_name: person.name, task_title: t.title, due_date: t.dueDate, department: deptInfo(depKey).label
+            });
+            t.deadlineAlertSent = true;
+            anySent = true;
+          }catch(e){ console.warn('Deadline email failed for task '+t.title, e); }
+        }
+      }
+    }
+  }
+  if(anySent) await saveState();
+}
+
 async function setAttendance(ev, crewId, status){
   if(!ev.attendance) ev.attendance = {};
   const before = absentCount(crewId);
@@ -890,6 +1046,10 @@ async function setAttendance(ev, crewId, status){
   if(before < threshold && after >= threshold){
     const c = state.crew.find(x=>x.id===crewId);
     logChange(`🚩 Attendance alert: ${c?c.name:'A student'} has reached ${after} unexcused absences.`, {type:'directorOnly'});
+  }
+  if(status==='absent'){
+    const student = state.crew.find(x=>x.id===crewId);
+    if(student) sendAbsenceEmail(student, ev);
   }
   await saveState();
 }
@@ -1118,47 +1278,116 @@ function renderCalMonth(){
   renderCalDayDetail(ui.calSelectedDate);
 }
 
+function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+// Builds one calendar event card as a DOM element — either its normal display,
+// or (if the Director has clicked Edit on it) a full inline edit form.
+function buildEventCardEl(ev){
+  const card = document.createElement('div');
+  card.className = 'cal-event';
+  card.style.marginBottom = '8px';
+
+  if(ui.editingEventId === ev.id && isDirector()){
+    card.innerHTML = `
+      <div class="form-grid">
+        <input type="text" class="edit-title" value="${escapeAttr(ev.title)}" placeholder="Title">
+        <input type="date" class="edit-date" value="${ev.date}">
+      </div>
+      <div class="form-grid">
+        <input type="time" class="edit-start" value="${ev.startTime||''}" placeholder="Start">
+        <input type="time" class="edit-end" value="${ev.endTime||''}" placeholder="End">
+        <input type="text" class="edit-location" value="${escapeAttr(ev.location||'')}" placeholder="Location">
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; margin-bottom:10px;">
+        <input type="checkbox" class="edit-specific" ${ev.isSpecificCall?'checked':''}> Specific call (only selected departments/students see it)
+      </label>
+      <div class="checkbox-row edit-dept-checks" style="margin-bottom:10px;">
+        ${DEPARTMENTS.map(d=>`<label><input type="checkbox" value="${d.key}" ${(ev.calledDepartments||[]).includes(d.key)?'checked':''}> ${d.label}</label>`).join('')}
+      </div>
+      <div class="edit-student-wrap" style="display:${ev.isSpecificCall?'block':'none'}; margin-bottom:10px;">
+        <div class="checkbox-row edit-student-checks">
+          ${state.crew.filter(c=>c.role==='student').map(c=>`<label><input type="checkbox" value="${c.id}" ${(ev.calledStudentIds||[]).includes(c.id)?'checked':''}> ${c.name}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No students on roster yet.</span>'}
+        </div>
+      </div>
+      <textarea class="edit-notes full-width" style="min-height:50px;" placeholder="Notes">${ev.notes||''}</textarea>
+      <div class="cal-actions">
+        <button class="btn small edit-save-btn">Save Changes</button>
+        <button class="btn ghost small edit-discard-btn">Discard</button>
+      </div>
+    `;
+    const specCb = card.querySelector('.edit-specific');
+    const studentWrap = card.querySelector('.edit-student-wrap');
+    specCb.addEventListener('change', ()=>{ studentWrap.style.display = specCb.checked ? 'block' : 'none'; });
+    card.querySelector('.edit-discard-btn').addEventListener('click', ()=>{
+      ui.editingEventId = null; renderCalMonth(); renderCalendar();
+    });
+    card.querySelector('.edit-save-btn').addEventListener('click', async ()=>{
+      const newTitle = card.querySelector('.edit-title').value.trim();
+      if(!newTitle){ toast('Title is required'); return; }
+      const before = { title:ev.title, date:ev.date, startTime:ev.startTime };
+      ev.title = newTitle;
+      ev.date = card.querySelector('.edit-date').value || ev.date;
+      ev.startTime = card.querySelector('.edit-start').value;
+      ev.endTime = card.querySelector('.edit-end').value;
+      ev.location = card.querySelector('.edit-location').value.trim();
+      ev.notes = card.querySelector('.edit-notes').value.trim();
+      ev.isSpecificCall = specCb.checked;
+      ev.calledDepartments = Array.from(card.querySelectorAll('.edit-dept-checks input:checked')).map(i=>i.value);
+      ev.calledStudentIds = Array.from(card.querySelectorAll('.edit-student-checks input:checked')).map(i=>i.value);
+      const moved = before.date!==ev.date || before.startTime!==ev.startTime;
+      logChange(`Edited: "${before.title}"${moved ? ` — moved from ${fmtDate(before.date)} ${before.startTime||''} to ${fmtDate(ev.date)} ${ev.startTime||''}` : ` (${fmtDate(ev.date)})`}.`, eventScope(ev));
+      ui.editingEventId = null;
+      await saveState(); renderCalMonth(); renderCalendar(); renderNotifications(); renderDashboard();
+      toast('Call updated — crew notified');
+    });
+    return card;
+  }
+
+  card.innerHTML = `
+    <div class="cal-event-top">
+      <div><div class="cal-title">${ev.title}</div><div class="cal-meta">${fmtDate(ev.date)} · ${ev.startTime||'TBD'}${ev.endTime?'–'+ev.endTime:''} ${ev.location?'· '+ev.location:''}</div></div>
+      <span class="cal-date-chip">${ev.date}</span>
+    </div>
+    ${ev.isSpecificCall ? `<div class="chip-row">
+      <span class="chip outline">Specific call</span>
+      ${(ev.calledDepartments||[]).map(k=>`<span class="chip" style="background:${deptInfo(k).color}">${deptInfo(k).label}</span>`).join('')}
+      ${(ev.calledStudentIds||[]).map(id=>{ const c=state.crew.find(x=>x.id===id); return c?`<span class="chip outline">${c.name}</span>`:''; }).join('')}
+    </div>` : ''}
+    ${ev.notes?`<div class="cal-notes">${ev.notes}</div>`:''}
+    ${conflictsBlockForEvent(ev)}
+    ${attendanceChipForEvent(ev)}
+    ${isDirector() ? `<div class="cal-actions"><button class="btn ghost small edit-btn">Edit</button><button class="btn danger small del-btn">Cancel</button></div>` : ''}
+  `;
+  if(isDirector()){
+    card.querySelector('.edit-btn').addEventListener('click', ()=>{
+      ui.editingEventId = ev.id; renderCalMonth(); renderCalendar();
+    });
+    card.querySelector('.del-btn').addEventListener('click', async ()=>{
+      if(!confirm(`Cancel "${ev.title}" on ${fmtDate(ev.date)}?`)) return;
+      state.calendar = state.calendar.filter(e=>e.id!==ev.id);
+      logChange(`Cancelled: "${ev.title}" originally set for ${fmtDate(ev.date)}.`, eventScope(ev));
+      await saveState(); renderCalMonth(); renderCalendar(); renderNotifications(); renderDashboard();
+      toast('Call cancelled — crew notified');
+    });
+  }
+  return card;
+}
+
 function renderCalDayDetail(dateISO){
   document.getElementById('calDayDetailTitle').textContent = fmtDate(dateISO);
-  const { events, dueTasks, approvedConflicts } = itemsForDate(dateISO);
+  const { events, dueTasks } = itemsForDate(dateISO);
   const wrap = document.getElementById('calDayDetail');
+  wrap.innerHTML = '';
   if(!events.length && !dueTasks.length){ wrap.innerHTML = `<div class="empty-state">Nothing scheduled or due this day.</div>`; return; }
-  let html = '';
-  events.forEach(ev=>{
-    html += `<div class="cal-event" style="margin-bottom:8px;">
-      <div class="cal-title">${ev.title}</div>
-      <div class="cal-meta">${ev.startTime||'TBD'}${ev.endTime?'–'+ev.endTime:''} ${ev.location?'· '+ev.location:''}</div>
-      ${ev.isSpecificCall ? `<div class="chip-row"><span class="chip outline">Specific call</span>${(ev.calledDepartments||[]).map(k=>`<span class="chip" style="background:${deptInfo(k).color}">${deptInfo(k).label}</span>`).join('')}</div>` : ''}
-      ${ev.notes?`<div class="cal-notes">${ev.notes}</div>`:''}
-      ${conflictsBlockForEvent(ev)}
-      ${attendanceChipForEvent(ev)}
-      ${isDirector() ? `<div class="cal-actions"><button class="btn ghost small" data-act="edit" data-id="${ev.id}">Reschedule</button><button class="btn danger small" data-act="del" data-id="${ev.id}">Cancel</button></div>` : ''}
-    </div>`;
-  });
+  events.forEach(ev=>wrap.appendChild(buildEventCardEl(ev)));
   if(dueTasks.length){
-    html += `<div style="margin-top:6px;"><h3>Tasks due</h3>` + dueTasks.map(dt=>`
+    const due = document.createElement('div');
+    due.style.marginTop = '6px';
+    due.innerHTML = `<h3>Tasks due</h3>` + dueTasks.map(dt=>`
       <div class="list-item"><span><span class="chip" style="background:${dt.dept.color}; margin-right:6px;">${dt.dept.label}</span>${dt.task.title}</span><span class="d">${dt.task.status.replace('_',' ')}</span></div>
-    `).join('') + `</div>`;
+    `).join('');
+    wrap.appendChild(due);
   }
-  wrap.innerHTML = html;
-  wrap.querySelectorAll('[data-act=del]').forEach(btn=>btn.addEventListener('click', async ()=>{
-    const ev = state.calendar.find(e=>e.id===btn.dataset.id); if(!ev) return;
-    if(!confirm(`Cancel "${ev.title}" on ${fmtDate(ev.date)}?`)) return;
-    state.calendar = state.calendar.filter(e=>e.id!==ev.id);
-    logChange(`Cancelled: "${ev.title}" originally set for ${fmtDate(ev.date)}.`, eventScope(ev));
-    await saveState(); renderCalMonth(); renderNotifications(); renderDashboard();
-    toast('Call cancelled — crew notified');
-  }));
-  wrap.querySelectorAll('[data-act=edit]').forEach(btn=>btn.addEventListener('click', async ()=>{
-    const ev = state.calendar.find(e=>e.id===btn.dataset.id); if(!ev) return;
-    const newDate = prompt('New date (YYYY-MM-DD):', ev.date); if(!newDate) return;
-    const newTime = prompt('New start time (e.g. 17:00):', ev.startTime||'');
-    const oldDate = ev.date, oldTime = ev.startTime;
-    ev.date = newDate; ev.startTime = newTime;
-    logChange(`Rescheduled: "${ev.title}" moved from ${fmtDate(oldDate)} ${oldTime||''} to ${fmtDate(newDate)} ${newTime||''}.`, eventScope(ev));
-    await saveState(); renderCalMonth(); renderNotifications(); renderDashboard();
-    toast('Rescheduled — crew notified');
-  }));
 }
 
 function renderCalendar(){
@@ -1171,43 +1400,7 @@ function renderCalendar(){
   }
   const sorted = [...state.calendar].filter(visibleToCurrentUser).sort((a,b)=>a.date.localeCompare(b.date));
   if(!sorted.length){ list.innerHTML += `<div class="empty-state"><div class="lamp">🗓️</div>No calls scheduled yet.</div>`; return; }
-  sorted.forEach(ev=>{
-    const card = document.createElement('div'); card.className = 'cal-event';
-    card.innerHTML = `
-      <div class="cal-event-top">
-        <div><div class="cal-title">${ev.title}</div><div class="cal-meta">${fmtDate(ev.date)} · ${ev.startTime||'TBD'}${ev.endTime?'–'+ev.endTime:''} ${ev.location?'· '+ev.location:''}</div></div>
-        <span class="cal-date-chip">${ev.date}</span>
-      </div>
-      ${ev.isSpecificCall ? `<div class="chip-row">
-        <span class="chip outline">Specific call</span>
-        ${(ev.calledDepartments||[]).map(k=>`<span class="chip" style="background:${deptInfo(k).color}">${deptInfo(k).label}</span>`).join('')}
-        ${(ev.calledStudentIds||[]).map(id=>{ const c=state.crew.find(x=>x.id===id); return c?`<span class="chip outline">${c.name}</span>`:''; }).join('')}
-      </div>` : ''}
-      ${ev.notes?`<div class="cal-notes">${ev.notes}</div>`:''}
-      ${conflictsBlockForEvent(ev)}
-      ${attendanceChipForEvent(ev)}
-      ${isDirector() ? `<div class="cal-actions"><button class="btn ghost small" data-act="edit" data-id="${ev.id}">Reschedule</button><button class="btn danger small" data-act="del" data-id="${ev.id}">Cancel</button></div>` : ''}
-    `;
-    list.appendChild(card);
-  });
-  list.querySelectorAll('[data-act=del]').forEach(btn=>btn.addEventListener('click', async ()=>{
-    const ev = state.calendar.find(e=>e.id===btn.dataset.id); if(!ev) return;
-    if(!confirm(`Cancel "${ev.title}" on ${fmtDate(ev.date)}?`)) return;
-    state.calendar = state.calendar.filter(e=>e.id!==ev.id);
-    logChange(`Cancelled: "${ev.title}" originally set for ${fmtDate(ev.date)}.`, eventScope(ev));
-    await saveState(); renderCalendar(); renderNotifications(); renderDashboard();
-    toast('Call cancelled — crew notified');
-  }));
-  list.querySelectorAll('[data-act=edit]').forEach(btn=>btn.addEventListener('click', async ()=>{
-    const ev = state.calendar.find(e=>e.id===btn.dataset.id); if(!ev) return;
-    const newDate = prompt('New date (YYYY-MM-DD):', ev.date); if(!newDate) return;
-    const newTime = prompt('New start time (e.g. 17:00):', ev.startTime||'');
-    const oldDate = ev.date, oldTime = ev.startTime;
-    ev.date = newDate; ev.startTime = newTime;
-    logChange(`Rescheduled: "${ev.title}" moved from ${fmtDate(oldDate)} ${oldTime||''} to ${fmtDate(newDate)} ${newTime||''}.`, eventScope(ev));
-    await saveState(); renderCalendar(); renderNotifications(); renderDashboard();
-    toast('Rescheduled — crew notified');
-  }));
+  sorted.forEach(ev=>list.appendChild(buildEventCardEl(ev)));
 }
 async function addCalendarEvent(){
   const date = document.getElementById('calDate').value, title = document.getElementById('calTitle').value.trim();
@@ -1401,6 +1594,198 @@ function renderAttendanceGrid(){
   gridWrap.innerHTML = html;
 }
 
+// ---------------- BEHAVIOR TRACKING ----------------
+function weekStartISO(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = (day===0 ? -6 : 1-day); // shift back to Monday
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+function weekEndISO(weekStart){
+  const d = new Date(weekStart+'T00:00:00');
+  d.setDate(d.getDate()+6);
+  return d.toISOString().slice(0,10);
+}
+function fmtWeekLabel(weekStart){
+  const end = weekEndISO(weekStart);
+  return `Week of ${fmtDate(weekStart)} – ${new Date(end+'T00:00').toLocaleDateString(undefined,{month:'short', day:'numeric'})}`;
+}
+// Weekly score for one student: full marks minus, for each day that had at least
+// one infraction, that day's deductions (capped so one bad day can't cost more than
+// its own share of the week).
+function behaviorScoreForStudent(crewId, weekStart){
+  const cfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
+  const weekEnd = weekEndISO(weekStart);
+  const incidents = state.behaviorIncidents.filter(i=>i.crewId===crewId && i.date>=weekStart && i.date<=weekEnd);
+  const byDate = {};
+  incidents.forEach(i=>{ byDate[i.date] = (byDate[i.date]||0) + (i.deduction||cfg.pointsPerDay); });
+  let totalDeduction = 0;
+  Object.values(byDate).forEach(dayTotal=>{ totalDeduction += Math.min(dayTotal, cfg.pointsPerDay); });
+  const maxScore = cfg.pointsPerDay * cfg.daysPerWeek;
+  return { score: Math.max(0, maxScore - totalDeduction), maxScore, incidentCount: incidents.length, incidents };
+}
+
+function switchBehaviorSub(sub){
+  ui.behaviorSub = sub;
+  document.querySelectorAll('#behaviorSubtabs button').forEach(b=>b.classList.toggle('active', b.dataset.behSub===sub));
+  document.getElementById('behaviorLogView').style.display = sub==='log' ? 'block' : 'none';
+  document.getElementById('behaviorSummaryView').style.display = sub==='summary' ? 'block' : 'none';
+  if(sub==='log') renderBehaviorLog(); else renderBehaviorSummary();
+}
+function renderBehaviorView(){
+  const authorized = canManageBehavior();
+  document.getElementById('behaviorLockedMsg').style.display = authorized ? 'none' : 'block';
+  document.getElementById('behaviorAuthorizedWrap').style.display = authorized ? 'block' : 'none';
+  if(!authorized) return;
+  if(!ui.behaviorWeekCursor) ui.behaviorWeekCursor = weekStartISO(todayISO());
+  switchBehaviorSub(ui.behaviorSub || 'log');
+}
+
+function renderBehaviorLog(){
+  const cfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
+  document.getElementById('behPtsLabel').textContent = cfg.pointsPerDay;
+  document.getElementById('behDeduction').value = cfg.pointsPerDay;
+  document.getElementById('behDate').value = document.getElementById('behDate').value || todayISO();
+
+  const studentSel = document.getElementById('behStudent');
+  const students = state.crew.filter(c=>c.role==='student').sort((a,b)=>a.name.localeCompare(b.name));
+  studentSel.innerHTML = students.map(c=>`<option value="${c.id}">${c.name}${(c.departments||[]).includes('cast') && c.castRole ? ' as '+c.castRole : ''} — ${(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team'}</option>`).join('') || '<option value="">No students on roster</option>';
+
+  const list = document.getElementById('behaviorIncidentList');
+  const sorted = [...state.behaviorIncidents].sort((a,b)=>b.date.localeCompare(a.date) || b.timestamp.localeCompare(a.timestamp));
+  if(!sorted.length){ list.innerHTML = `<div class="empty-state">No infractions logged yet.</div>`; return; }
+  list.innerHTML = sorted.slice(0,50).map(i=>`
+    <div class="incident-card">
+      <div class="incident-top"><span><b>${i.crewName}</b></span><span class="mono" style="color:var(--red);">−${i.deduction} pts</span></div>
+      <div class="incident-meta">${fmtDate(i.date)} · ${i.reason||'No reason given'} · logged by ${i.loggedBy||'someone'}</div>
+      ${i.notes?`<div class="incident-note">${i.notes}</div>`:''}
+      ${isDirector()?`<button class="btn danger small" style="margin-top:8px;" data-del-incident="${i.id}">Delete</button>`:''}
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-del-incident]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if(!confirm('Delete this infraction record?')) return;
+    state.behaviorIncidents = state.behaviorIncidents.filter(i=>i.id!==btn.dataset.delIncident);
+    await saveState(); renderBehaviorLog();
+    toast('Infraction deleted');
+  }));
+}
+async function logInfraction(){
+  if(!canManageBehavior()){ toast('Only Director or Stage Management can log infractions'); return; }
+  const crewId = document.getElementById('behStudent').value;
+  const student = state.crew.find(c=>c.id===crewId);
+  if(!student){ toast('Choose a student'); return; }
+  const date = document.getElementById('behDate').value || todayISO();
+  const reason = document.getElementById('behReason').value;
+  if(!reason){ toast('Select a reason'); return; }
+  const deduction = parseInt(document.getElementById('behDeduction').value) || (state.behaviorConfig||{pointsPerDay:20}).pointsPerDay;
+  const notes = document.getElementById('behNotes').value.trim();
+  const loggedBy = currentUser()?.name || authUser?.displayName || activeEmail() || 'someone';
+  state.behaviorIncidents.push({
+    id:cryptoId(), crewId, crewName:student.name, date, reason, deduction, notes,
+    loggedBy, loggedByEmail: activeEmail()||'', timestamp:new Date().toISOString()
+  });
+  logChange(`Behavior infraction logged for ${student.name} (${fmtDate(date)}).`, {type:'crew', crewId});
+  await saveState(); renderBehaviorLog(); renderNotifications();
+  document.getElementById('behReason').value = ''; document.getElementById('behNotes').value = '';
+  toast('Infraction logged');
+}
+
+function renderBehaviorSummary(){
+  document.getElementById('behWeekLabel').textContent = fmtWeekLabel(ui.behaviorWeekCursor);
+  const cfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
+  const students = state.crew.filter(c=>c.role==='student').sort((a,b)=>a.name.localeCompare(b.name));
+  const wrap = document.getElementById('behaviorSummaryWrap');
+  if(!students.length){ wrap.innerHTML = `<div class="empty-state">No students on the roster yet.</div>`; return; }
+
+  const rows = students.map(c=>{
+    const r = behaviorScoreForStudent(c.id, ui.behaviorWeekCursor);
+    const pct = r.maxScore ? r.score / r.maxScore : 1;
+    const cls = pct>=0.9 ? 'behavior-score-good' : pct>=0.6 ? 'behavior-score-mid' : 'behavior-score-bad';
+    const isCast = (c.departments||[]).includes('cast');
+    return { name: c.name + (isCast && c.castRole ? ` (${c.castRole})` : ''), classPeriod:c.classPeriod||'', departments:(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team', score:r.score, maxScore:r.maxScore, incidentCount:r.incidentCount, cls };
+  });
+
+  wrap.innerHTML = `
+    <div class="att-grid-scroll">
+    <table class="att-table" style="white-space:normal;">
+      <thead><tr>
+        <th class="att-name-th">Student</th><th>Class</th><th>Team</th><th># Infractions</th><th>Score</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>`<tr>
+          <td class="att-name-cell">${r.name}</td>
+          <td>${r.classPeriod}</td>
+          <td>${r.departments}</td>
+          <td>${r.incidentCount}</td>
+          <td class="${r.cls}" style="font-weight:700;">${r.score}/${r.maxScore}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
+  ui._behaviorRowsCache = rows;
+}
+function downloadCsvRows(headerRow, dataRows, filename){
+  const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  const lines = [headerRow.map(esc).join(',')];
+  dataRows.forEach(row=>lines.push(row.map(esc).join(',')));
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('CSV downloaded');
+}
+function exportBehaviorCsv(){
+  const rows = ui._behaviorRowsCache || [];
+  if(!rows.length){ toast('Nothing to export'); return; }
+  const weekLabel = ui.behaviorWeekCursor;
+  const dataRows = rows.map(r=>[r.name, r.classPeriod, r.departments, r.incidentCount, r.score, r.maxScore, weekLabel]);
+  downloadCsvRows(['Student','Class Period','Team','Infractions','Score','Max Score','Week Of'], dataRows, `behavior-grades-${weekLabel}.csv`);
+}
+
+// One row per student per report: uses that student's individual grade adjustment if the
+// Director set one, otherwise the whole team's grade for that report.
+function deptGradeRowsFor(deptKeys){
+  const rows = [];
+  deptKeys.forEach(deptKey=>{
+    const dep = deptInfo(deptKey);
+    const depState = state.departments[deptKey];
+    depState.reports.forEach(r=>{
+      const teamIds = (r.teamMemberIds && r.teamMemberIds.length) ? r.teamMemberIds : [];
+      if(!teamIds.length){
+        rows.push([dep.label, r.date, r.classPeriod||'', r.shift||'', '(whole team — no members listed)', r.grade, r.gradeLetter, r.status, '', r.teacherFeedback||'']);
+        return;
+      }
+      teamIds.forEach(crewId=>{
+        const student = state.crew.find(c=>c.id===crewId);
+        const name = student ? student.name : '(removed student)';
+        const adj = (r.individualAdjustments||[]).find(a=>a.crewId===crewId);
+        const grade = adj ? adj.adjustedGrade : r.grade;
+        const letter = adj ? letterFor(adj.adjustedGrade) : r.gradeLetter;
+        const nonContrib = (r.nonContributorIds||[]).includes(crewId) ? 'Yes' : '';
+        const feedback = (adj && adj.teacherNote) ? adj.teacherNote : (r.teacherFeedback||'');
+        rows.push([dep.label, r.date, r.classPeriod||'', r.shift||'', name, grade, letter, r.status, nonContrib, feedback]);
+      });
+    });
+  });
+  return rows;
+}
+const DEPT_GRADE_CSV_HEADER = ['Department','Date','Class Period','Shift','Student','Grade','Letter','Status','Flagged Non-Contributor','Feedback'];
+function exportDeptGradesCsv(deptKey){
+  const dep = deptInfo(deptKey);
+  const rows = deptGradeRowsFor([deptKey]);
+  if(!rows.length){ toast('No reports to export for this department yet'); return; }
+  downloadCsvRows(DEPT_GRADE_CSV_HEADER, rows, `${dep.label.replace(/\s+/g,'-').toLowerCase()}-grades.csv`);
+}
+function exportAllDeptGradesCsv(){
+  const rows = deptGradeRowsFor(DEPARTMENTS.map(d=>d.key));
+  if(!rows.length){ toast('No reports to export yet'); return; }
+  downloadCsvRows(DEPT_GRADE_CSV_HEADER, rows, `all-department-grades.csv`);
+}
+
 async function submitConflict(){
   const whoId = document.getElementById('conflictWho').value;
   const user = state.crew.find(c=>c.id===whoId);
@@ -1445,7 +1830,12 @@ function renderDepartments(){
 }
 
 function renderTasksSub(content, dep, depState){
+  if(!canViewDept(dep.key)){
+    content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>${dep.label} tasks are only visible to ${dep.label} crew and the Director.</div>`;
+    return;
+  }
   const total = depState.tasks.length, done = depState.tasks.filter(t=>t.status==='done').length;
+  const deptCrewOptions = state.crew.filter(c=>(c.departments||[]).includes(dep.key));
   content.innerHTML = `
     <div class="progress-wrap">
       <div class="progress-top"><span class="stencil" style="font-size:17px;">${dep.label} Tasks</span><span class="mono" style="font-size:12px;color:var(--paper-dim);">${done} / ${total} done</span></div>
@@ -1461,7 +1851,10 @@ function renderTasksSub(content, dep, depState){
         <select name="priority">${PRIORITIES.map(p=>`<option value="${p}">${p}</option>`).join('')}</select>
         <input type="date" name="dueDate" value="${todayISO()}">
         <input type="number" name="hours" placeholder="Hrs" value="1" min="0.5" step="0.5" style="width:70px;">
-        <input type="text" name="assignedTo" placeholder="Assigned to">
+        <select name="assignedToCrewId">
+          <option value="">— Unassigned —</option>
+          ${deptCrewOptions.map(c=>`<option value="${c.id}">${c.name}${c.email?'':' (no email on file)'}</option>`).join('')}
+        </select>
       </div>
       <textarea name="description" placeholder="Instructions / notes for whoever picks this up (optional)" style="width:100%; min-height:54px; background:var(--ink); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:8px 10px; font-size:13px; font-family:'Inter',sans-serif; resize:vertical;"></textarea>
       <div><button class="btn small" id="addTaskConfirm">Add Task</button></div>
@@ -1476,12 +1869,14 @@ function renderTasksSub(content, dep, depState){
     const form = document.getElementById('addForm');
     const title = form.querySelector('[name=title]').value.trim();
     if(!title){ toast('Give the task a title'); return; }
+    const assignedToCrewId = form.querySelector('[name=assignedToCrewId]').value || null;
+    const assignedPerson = assignedToCrewId ? state.crew.find(c=>c.id===assignedToCrewId) : null;
     depState.tasks.push({
       id:cryptoId(), title, description: form.querySelector('[name=description]').value.trim(),
       workType: form.querySelector('[name=workType]').value, priority: form.querySelector('[name=priority]').value,
       dueDate: form.querySelector('[name=dueDate]').value || todayISO(),
       estimatedHours: parseFloat(form.querySelector('[name=hours]').value)||1,
-      status:'todo', assignedTo: form.querySelector('[name=assignedTo]').value.trim(), checklist:[]
+      status:'todo', assignedTo: assignedPerson?assignedPerson.name:'', assignedToCrewId, deadlineAlertSent:false, checklist:[]
     });
     await saveState(); renderDepartments(); renderDashboard();
     toast('Task added');
@@ -1520,9 +1915,17 @@ function renderTaskCard(t, dep, depState){
     <span class="tag">Due ${t.dueDate}</span>
     <span class="tag">${t.estimatedHours}h</span>
   `;
-  const assignee = document.createElement('input');
-  assignee.className = 'assignee'; assignee.placeholder = 'Assigned to'; assignee.value = t.assignedTo;
-  assignee.addEventListener('change', async ()=>{ t.assignedTo = assignee.value; await saveState(); });
+  const assignee = document.createElement('select');
+  assignee.className = 'assignee';
+  const deptCrewOptions = state.crew.filter(c=>(c.departments||[]).includes(dep.key));
+  assignee.innerHTML = `<option value="">— Unassigned —</option>` + deptCrewOptions.map(c=>`<option value="${c.id}" ${c.id===t.assignedToCrewId?'selected':''}>${c.name}</option>`).join('');
+  assignee.addEventListener('change', async ()=>{
+    const person = state.crew.find(c=>c.id===assignee.value);
+    t.assignedToCrewId = assignee.value || null;
+    t.assignedTo = person ? person.name : '';
+    t.deadlineAlertSent = false; // reassigning re-arms the deadline alert for the new person
+    await saveState();
+  });
   metaRow.appendChild(assignee);
   if(isDirector()){
     const del = document.createElement('button'); del.className='task-del'; del.textContent='✕';
@@ -1596,6 +1999,10 @@ function renderTaskCard(t, dep, depState){
 }
 
 function renderTemplatesSub(content, dep, depState){
+  if(!canViewDept(dep.key)){
+    content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>${dep.label} templates are only visible to ${dep.label} crew and the Director.</div>`;
+    return;
+  }
   content.innerHTML = `
     <div class="lockmsg" style="display:${isDirector()?'none':'block'}">Viewing as Team — only the Teacher/Director can create or apply templates.</div>
     <div id="tplList"></div>
@@ -1620,7 +2027,7 @@ function renderTemplatesSub(content, dep, depState){
   list.querySelectorAll('[data-act=apply]').forEach(b=>b.addEventListener('click', async ()=>{
     const tpl = depState.templates.find(t=>t.id===b.dataset.id); if(!tpl) return;
     const due = prompt('Due date for these tasks (YYYY-MM-DD):', todayISO()); if(!due) return;
-    tpl.items.forEach(it=>depState.tasks.push({ id:cryptoId(), title:it.title, description:it.description||'', workType:it.workType||'Other', priority:it.priority||'medium', dueDate:due, estimatedHours:it.estimatedHours||1, status:'todo', assignedTo:'', checklist:[] }));
+    tpl.items.forEach(it=>depState.tasks.push({ id:cryptoId(), title:it.title, description:it.description||'', workType:it.workType||'Other', priority:it.priority||'medium', dueDate:due, estimatedHours:it.estimatedHours||1, status:'todo', assignedTo:'', assignedToCrewId:null, deadlineAlertSent:false, checklist:[] }));
     await saveState(); renderDepartments(); renderDashboard();
     toast(`${tpl.items.length} tasks created from template`);
   }));
@@ -1665,6 +2072,10 @@ function renderReportFormSub(content, dep, depState){
   const u = currentUser();
   if(!isDirector() && !u){
     content.innerHTML = `<div class="empty-state">Sign in with Google, or enter your email (top right), to submit a report — reports and attendance are tied to your class period, so we need to know who's submitting. If you've done that and still see this, ask the Director to add your email to the roster.</div>`;
+    return;
+  }
+  if(!isDirector() && !canViewDept(dep.key)){
+    content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>Only ${dep.label} crew and the Director can submit a report for this department.</div>`;
     return;
   }
   const classOptions = ['Class A','Class B','Class C','Class D'];
@@ -1737,6 +2148,14 @@ function renderReportsHistorySub(content, dep, depState){
   const visibleReports = isDirector() ? depState.reports : depState.reports.filter(r=>!r.classPeriod || (u && r.classPeriod===u.classPeriod));
   if(!visibleReports.length){ content.innerHTML = `<div class="empty-state"><div class="lamp">👻</div>No ${dep.label} reports filed yet${!isDirector() && u ? ' for '+u.classPeriod : ''}.</div>`; return; }
   content.innerHTML = '';
+  if(isDirector()){
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'btn ghost small';
+    exportBtn.style.marginBottom = '14px';
+    exportBtn.textContent = 'Download CSV for gradebook';
+    exportBtn.addEventListener('click', ()=>exportDeptGradesCsv(dep.key));
+    content.appendChild(exportBtn);
+  }
   visibleReports.forEach(r=>{
     const item = document.createElement('div'); item.className = 'hist-item';
     const steps = ['submitted','verified','graded'];
@@ -1904,6 +2323,16 @@ function renderSetup(){
   document.getElementById('claimDirectorCard').style.display = (noDirectorsYet && authUser) ? 'block' : 'none';
   document.getElementById('dirAccessCard').style.display = isDirector() ? 'block' : 'none';
   document.getElementById('attendanceThreshold').value = globalState.attendanceAlertThreshold || 3;
+  const behCfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
+  document.getElementById('behPointsPerDay').value = behCfg.pointsPerDay;
+  document.getElementById('behDaysPerWeek').value = behCfg.daysPerWeek;
+
+  document.getElementById('emailAlertsCard').style.display = isDirector() ? 'block' : 'none';
+  const ejs = globalState.emailjs || { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' };
+  document.getElementById('ejsPublicKey').value = ejs.publicKey;
+  document.getElementById('ejsServiceId').value = ejs.serviceId;
+  document.getElementById('ejsTemplateAbsence').value = ejs.templateAbsence;
+  document.getElementById('ejsTemplateDeadline').value = ejs.templateDeadline;
 
   const dirList = document.getElementById('directorEmailsList');
   dirList.innerHTML = (globalState.directorEmails||[]).map(email=>`
@@ -1919,22 +2348,24 @@ function renderSetup(){
   document.getElementById('rosterAddFormWrap').style.display = isDirector() ? 'block' : 'none';
   document.getElementById('rosterLockedMsg').style.display = isDirector() ? 'none' : 'block';
   document.getElementById('bulkImportCard').style.display = isDirector() ? 'block' : 'none';
+  document.getElementById('exportGradesCard').style.display = isDirector() ? 'block' : 'none';
   document.getElementById('resetCard').style.display = isDirector() ? 'block' : 'none';
 
   const deptWrap = document.getElementById('rosterDeptChecks');
   deptWrap.innerHTML = DEPARTMENTS.map(d=>`<label><input type="checkbox" value="${d.key}"> ${d.label}</label>`).join('');
   const list = document.getElementById('rosterList'); list.innerHTML = '';
-  if(!state.crew.length){ list.innerHTML = `<div class="empty-state">No crew added yet.</div>`; }
+  if(!state.crew.length){ list.innerHTML = `<div class="empty-state">No cast/crew added yet.</div>`; }
   state.crew.forEach(c=>{
     const wrap = document.createElement('div');
     const row = document.createElement('div'); row.className = 'roster-row';
+    const isCast = (c.departments||[]).includes('cast');
     row.innerHTML = `<span class="dot" style="background:${c.role==='teacher'?'var(--gold)':'var(--amber)'}"></span>
-      <span class="rname">${c.name}${c.role==='teacher'?' <span class="mono" style="font-size:10px;color:var(--gold)">TEACHER</span>':''}<br><span class="mono" style="font-size:10px;color:var(--paper-dim);">${c.email||'no sign-in email set'}</span></span>
+      <span class="rname">${c.name}${c.role==='teacher'?' <span class="mono" style="font-size:10px;color:var(--gold)">TEACHER</span>':''}${isCast && c.castRole?` <span class="mono" style="font-size:10.5px;color:var(--cast,#8C3B3B);">as ${c.castRole}</span>`:''}<br><span class="mono" style="font-size:10px;color:var(--paper-dim);">${c.email||'no sign-in email set'}</span></span>
       <span class="rmeta">${(c.departments||[]).map(k=>deptInfo(k).label).join(', ')||'No team yet'}</span>
       ${isDirector() ? `<select class="mono" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:4px 7px; font-size:11.5px;" data-classperiod="${c.id}">
         ${['Class A','Class B','Class C','Class D'].map(cp=>`<option ${cp===c.classPeriod?'selected':''}>${cp}</option>`).join('')}
       </select>` : `<span class="rmeta">${c.classPeriod||''}</span>`}
-      ${isDirector() ? `<button class="btn ghost small" data-editemail="${c.id}">Edit Email</button><button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
+      ${isDirector() ? `${isCast?`<button class="btn ghost small" data-editrole="${c.id}">Edit Role</button>`:''}<button class="btn ghost small" data-editemail="${c.id}">Edit Email</button><button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
     wrap.appendChild(row);
     if(isDirector()){
       row.querySelector('[data-classperiod]').addEventListener('change', async (e)=>{
@@ -1949,6 +2380,15 @@ function renderSetup(){
         await saveState(); renderSetup();
         toast('Email updated');
       });
+      if(isCast){
+        row.querySelector('[data-editrole]').addEventListener('click', async ()=>{
+          const val = prompt(`Cast role / character for ${c.name}:`, c.castRole||'');
+          if(val===null) return;
+          c.castRole = val.trim();
+          await saveState(); renderSetup();
+          toast('Cast role updated');
+        });
+      }
       const editRow = document.createElement('div');
       editRow.className = 'checkbox-row';
       editRow.style.display = 'none';
@@ -1982,7 +2422,7 @@ async function bulkImportCrew(){
     const name = parts[0];
     if(!name) return;
     const email = parts[1] && parts[1].includes('@') ? parts[1] : '';
-    state.crew.push({ id:cryptoId(), name, role:'student', classPeriod:'Class A', departments:[], email, parentEmail:'', parentPhone:'' });
+    state.crew.push({ id:cryptoId(), name, role:'student', classPeriod:'Class A', departments:[], castRole:'', email, parentEmail:'', parentPhone:'' });
     count++;
   });
   await saveState();
@@ -1997,12 +2437,13 @@ async function addCrew(){
   const role = document.getElementById('rosterRole').value;
   const classPeriod = document.getElementById('rosterClassPeriod').value;
   const departments = Array.from(document.querySelectorAll('#rosterDeptChecks input:checked')).map(i=>i.value);
+  const castRole = document.getElementById('rosterCastRole').value.trim();
   const email = document.getElementById('rosterEmail').value.trim();
   const parentEmail = document.getElementById('rosterParentEmail').value.trim();
   const parentPhone = document.getElementById('rosterParentPhone').value.trim();
-  state.crew.push({ id:cryptoId(), name, role, classPeriod, departments, email, parentEmail, parentPhone });
+  state.crew.push({ id:cryptoId(), name, role, classPeriod, departments, castRole, email, parentEmail, parentPhone });
   await saveState();
-  document.getElementById('rosterName').value=''; document.getElementById('rosterEmail').value=''; document.getElementById('rosterParentEmail').value=''; document.getElementById('rosterParentPhone').value='';
+  document.getElementById('rosterName').value=''; document.getElementById('rosterCastRole').value=''; document.getElementById('rosterEmail').value=''; document.getElementById('rosterParentEmail').value=''; document.getElementById('rosterParentPhone').value='';
   document.querySelectorAll('#rosterDeptChecks input').forEach(i=>i.checked=false);
   renderSetup(); renderHeader();
   toast('Crew member added');
@@ -2017,6 +2458,7 @@ function switchView(view){
   if(view==='calendar'){ renderCalendarForm(); switchCalSub(ui.calSub); }
   if(view==='conflicts') renderConflicts();
   if(view==='attendance') renderAttendanceView();
+  if(view==='behavior') renderBehaviorView();
   if(view==='departments') renderDepartments();
   if(view==='costumes') renderCostumesView();
   if(view==='notifications') renderNotifications();
@@ -2024,7 +2466,7 @@ function switchView(view){
 }
 function renderAll(){
   renderHeader(); renderCalendarForm();
-  renderDashboard(); renderProductionsView(); renderCalMonth(); renderCalendar(); renderConflicts(); renderAttendanceView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+  renderDashboard(); renderProductionsView(); renderCalMonth(); renderCalendar(); renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
 }
 
 async function init(){
@@ -2034,8 +2476,12 @@ async function init(){
   currentProductionId = globalState.activeProductionId;
   state = await loadProductionState(currentProductionId);
   if(!state.costumeRecords) state.costumeRecords = [];
+  if(!state.behaviorIncidents) state.behaviorIncidents = [];
+  if(!state.behaviorConfig) state.behaviorConfig = { pointsPerDay:20, daysPerWeek:5 };
+  if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' };
   renderAll();
   renderCostumeMeasureGrid(); renderCostumePieces();
+  initEmailJs();
 
   await waitForFirebase();
   if(window.__fb){
@@ -2043,7 +2489,8 @@ async function init(){
       authUser = user ? { email:user.email, displayName:user.displayName } : null;
       if(authUser && device.manualEmail){ device.manualEmail = ''; saveDevice(); } // real sign-in takes over
       renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
-      renderConflicts(); renderAttendanceView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+      renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+      if(isDirector()) checkAndSendDeadlineAlerts();
     });
   }
   document.getElementById('googleSignInBtn').addEventListener('click', signInWithGoogle);
@@ -2107,6 +2554,7 @@ async function init(){
   document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click', ()=>switchView(b.dataset.view)));
   document.querySelectorAll('#deptSubtabs button').forEach(b=>b.addEventListener('click', ()=>{ ui.activeSub = b.dataset.sub; renderDepartments(); }));
   document.querySelectorAll('#attendanceSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchAttendanceSub(b.dataset.attSub)));
+  document.querySelectorAll('#behaviorSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchBehaviorSub(b.dataset.behSub)));
 
   document.getElementById('calAddBtn').addEventListener('click', addCalendarEvent);
   document.querySelectorAll('#calSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchCalSub(b.dataset.calSub)));
@@ -2114,6 +2562,19 @@ async function init(){
   document.getElementById('calNextBtn').addEventListener('click', ()=>{ ui.calMonthCursor = new Date(ui.calMonthCursor.getFullYear(), ui.calMonthCursor.getMonth()+1, 1); renderCalMonth(); });
   document.getElementById('calTodayBtn').addEventListener('click', ()=>{ const n=new Date(); ui.calMonthCursor = new Date(n.getFullYear(), n.getMonth(), 1); ui.calSelectedDate = todayISO(); renderCalMonth(); });
   document.getElementById('conflictAddBtn').addEventListener('click', submitConflict);
+  document.getElementById('behLogBtn').addEventListener('click', logInfraction);
+  document.getElementById('behPrevWeekBtn').addEventListener('click', ()=>{
+    const d = new Date(ui.behaviorWeekCursor+'T00:00'); d.setDate(d.getDate()-7);
+    ui.behaviorWeekCursor = d.toISOString().slice(0,10); renderBehaviorSummary();
+  });
+  document.getElementById('behNextWeekBtn').addEventListener('click', ()=>{
+    const d = new Date(ui.behaviorWeekCursor+'T00:00'); d.setDate(d.getDate()+7);
+    ui.behaviorWeekCursor = d.toISOString().slice(0,10); renderBehaviorSummary();
+  });
+  document.getElementById('behThisWeekBtn').addEventListener('click', ()=>{
+    ui.behaviorWeekCursor = weekStartISO(todayISO()); renderBehaviorSummary();
+  });
+  document.getElementById('behExportCsvBtn').addEventListener('click', exportBehaviorCsv);
   document.getElementById('rosterAddBtn').addEventListener('click', addCrew);
   document.getElementById('attendanceThresholdSaveBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can change this'); return; }
@@ -2122,8 +2583,32 @@ async function init(){
     await saveGlobalState(); renderSetup(); renderDashboard();
     toast(`Attendance alert threshold set to ${val}`);
   });
+  document.getElementById('behConfigSaveBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can change this'); return; }
+    const pointsPerDay = parseInt(document.getElementById('behPointsPerDay').value) || 20;
+    const daysPerWeek = parseInt(document.getElementById('behDaysPerWeek').value) || 5;
+    state.behaviorConfig = { pointsPerDay, daysPerWeek };
+    await saveState(); renderSetup(); renderBehaviorView();
+    toast(`Behavior grading set to ${pointsPerDay} pts/day × ${daysPerWeek} days`);
+  });
+  document.getElementById('ejsConfigSaveBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can change this'); return; }
+    globalState.emailjs = {
+      publicKey: document.getElementById('ejsPublicKey').value.trim(),
+      serviceId: document.getElementById('ejsServiceId').value.trim(),
+      templateAbsence: document.getElementById('ejsTemplateAbsence').value.trim(),
+      templateDeadline: document.getElementById('ejsTemplateDeadline').value.trim(),
+    };
+    await saveGlobalState();
+    initEmailJs();
+    toast('Email alert settings saved');
+  });
   document.getElementById('bulkImportBtn').addEventListener('click', bulkImportCrew);
   document.getElementById('markReadBtn').addEventListener('click', ()=>{ device.lastSeenChangelog = new Date().toISOString(); saveDevice(); renderNotifications(); toast('Marked read'); });
+  document.getElementById('exportAllGradesBtn').addEventListener('click', ()=>{
+    if(!isDirector()){ toast('Only the Director can export grades'); return; }
+    exportAllDeptGradesCsv();
+  });
   document.getElementById('resetAllBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can reset production data'); return; }
     if(confirm('This clears all data for the CURRENT production only (tasks, calendar, conflicts, costumes, crew). Other productions are unaffected. Continue?')){
