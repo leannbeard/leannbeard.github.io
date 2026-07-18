@@ -250,6 +250,38 @@
   .announcement-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
   .announcement-text{ font-size:14px; white-space:pre-wrap; }
   .announcement-meta{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--paper-dim); margin-top:6px; }
+
+  .team-note-item{ background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--sage); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; }
+  .team-note-item.staff .team-note-top .author{ color:var(--amber); }
+  .team-note-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .team-note-top .author{ font-weight:600; font-size:13px; }
+  .team-note-text{ font-size:14px; white-space:pre-wrap; margin-top:4px; }
+  .team-note-meta{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--paper-dim); margin-top:6px; }
+  .staff-tag{ font-size:9.5px; padding:1px 6px; border-radius:8px; background:rgba(232,163,61,0.18); color:var(--amber); margin-left:6px; vertical-align:middle; }
+
+  .whiteboard-wrap{
+    position:relative; width:100%; height:480px; overflow:auto; border:1px solid var(--line); border-radius:var(--radius);
+    background-color:rgba(0,0,0,0.15);
+    background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .whiteboard-canvas{ position:relative; width:1400px; height:900px; }
+  .sticky-note{
+    position:absolute; width:170px; min-height:110px; border-radius:2px; padding:10px 10px 26px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.35); cursor:grab; font-family:'Inter',sans-serif; font-size:12.5px; color:#241f14;
+    display:flex; flex-direction:column; user-select:none;
+  }
+  .sticky-note.dragging{ cursor:grabbing; z-index:50; box-shadow:0 8px 20px rgba(0,0,0,0.5); }
+  .sticky-note textarea{
+    background:transparent; border:none; resize:none; width:100%; flex:1; font-family:inherit; font-size:inherit; color:inherit;
+    outline:none; cursor:text;
+  }
+  .sticky-note .sn-meta{ position:absolute; bottom:6px; left:10px; right:28px; font-size:9.5px; opacity:0.65; font-family:'IBM Plex Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sticky-note .sn-del{ position:absolute; bottom:4px; right:6px; background:none; border:none; cursor:pointer; font-size:13px; opacity:0.5; color:#241f14; }
+  .sticky-note .sn-del:hover{ opacity:1; }
+  .sticky-color-row{ display:flex; gap:6px; margin-bottom:10px; }
+  .sticky-color-swatch{ width:22px; height:22px; border-radius:4px; cursor:pointer; border:2px solid transparent; }
+  .sticky-color-swatch.active{ border-color:var(--paper); }
   .incident-top{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
   .incident-meta{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--paper-dim); margin-top:3px; }
   .incident-note{ font-size:13px; margin-top:6px; color:var(--paper-dim); }
@@ -536,6 +568,8 @@
       <button data-sub="templates">Templates</button>
       <button data-sub="report">Daily Report</button>
       <button data-sub="reports">Reports & Grading</button>
+      <button data-sub="participation">Participation</button>
+      <button data-sub="workspace">Team Workspace</button>
     </div>
     <div id="deptContent"></div>
   </section>
@@ -605,6 +639,13 @@
         <input type="number" id="behDaysPerWeek" placeholder="Days per week" min="1" max="7">
         <button class="btn small" id="behConfigSaveBtn">Save</button>
       </div>
+      <h2 style="margin-top:22px;">Participation Grading</h2>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sets how many points each school day is worth toward the weekly participation grade (daily reports), and how many school days count in a week. Everyone starts at full marks; a student is only docked for days they're flagged as a non-contributor on their department's daily report.</p>
+      <div class="form-grid" style="max-width:320px;">
+        <input type="number" id="partPointsPerDay" placeholder="Points per day" min="1" max="100">
+        <input type="number" id="partDaysPerWeek" placeholder="Days per week" min="1" max="7">
+        <button class="btn small" id="partConfigSaveBtn">Save</button>
+      </div>
     </div>
     <div class="card" id="emailAlertsCard">
       <h2>Email Alerts</h2>
@@ -666,6 +707,17 @@
       <p style="font-size:12.5px;color:var(--paper-dim);">Downloads a spreadsheet with one row per student per report — final grade already accounts for any individual overrides — across every department at once, ready to paste into your gradebook.</p>
       <button class="btn small" id="exportAllGradesBtn">Download All Department Grades (CSV)</button>
     </div>
+    <div class="card" id="participationExportCard">
+      <h2>Weekly Participation (All Departments)</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">One row per student with their combined participation average across every department they're on, for a chosen week — everyone starts at full marks, only docked for days they were flagged as a non-contributor. This is the number to use for weekly participation grades.</p>
+      <div class="cal-nav" style="margin-bottom:10px;">
+        <button class="btn ghost small" id="allPartPrevWeekBtn">‹ Prev Week</button>
+        <span class="stencil" id="allPartWeekLabel" style="font-size:15px;"></span>
+        <button class="btn ghost small" id="allPartThisWeekBtn">This Week</button>
+        <button class="btn ghost small" id="allPartNextWeekBtn">Next Week ›</button>
+      </div>
+      <button class="btn small" id="allPartExportCsvBtn">Download Weekly Participation Averages (CSV)</button>
+    </div>
     <div class="card" id="resetCard">
       <h2>Data</h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">All production data is shared and saved automatically to this app. Note: this app does not send real emails or sync with Google Classroom — those need a live server connection, which a standalone file can't provide.</p>
@@ -681,7 +733,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
@@ -699,7 +751,7 @@
   const auth = getAuth(app);
   const googleProvider = new GoogleAuthProvider();
 
-  window.__fb = { db, doc, getDoc, setDoc, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword };
+  window.__fb = { db, doc, getDoc, setDoc, onSnapshot, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword };
   window.__firebaseReady = true;
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
@@ -775,6 +827,7 @@ function defaultProductionState(name, seeded){
     costumeRecords:[],
     behaviorIncidents:[],
     behaviorConfig: { pointsPerDay:20, daysPerWeek:5 },
+    participationConfig: { pointsPerDay:20, daysPerWeek:5 },
     announcements:[],
     departments: freshDepartments(seeded)
   };
@@ -910,6 +963,7 @@ async function createProduction(name, copyFromId){
   return prodId;
 }
 async function switchToProduction(id){
+  stopWorkspaceListener();
   const prod = await loadProductionState(id);
   currentProductionId = id;
   state = prod;
@@ -937,7 +991,7 @@ function toast(msg){
   clearTimeout(t._timer); t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
-let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set(), behaviorSub:'log', behaviorWeekCursor:null, myBehaviorWeekCursor:null, editingEventId:null, editingAnnouncementId:null };
+let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set(), behaviorSub:'log', behaviorWeekCursor:null, myBehaviorWeekCursor:null, editingEventId:null, editingAnnouncementId:null, participationWeekCursor:null, allPartWeekCursor:null };
 let authUser = null; // { email, displayName } once signed in via Google, else null
 
 // Identity resolves two ways: real Google sign-in (authUser) is verified;
@@ -1835,6 +1889,33 @@ function behaviorScoreForStudent(crewId, weekStart){
   return { score: Math.max(0, maxScore - totalDeduction), maxScore, incidentCount: incidents.length, incidents };
 }
 
+// Participation grade for one student, in one department, for one week — same math as
+// behavior: everyone starts at full marks (pointsPerDay × daysPerWeek); a day only gets
+// docked if that student was actually flagged as a non-contributor on a report that date.
+// Days with no report at all simply aren't touched, same as days with no logged infraction.
+function participationScoreForStudent(crewId, deptKey, weekStart){
+  const cfg = state.participationConfig || { pointsPerDay:20, daysPerWeek:5 };
+  const weekEnd = weekEndISO(weekStart);
+  const depState = state.departments[deptKey];
+  const reportsThisWeek = (depState?depState.reports:[]).filter(r=>
+    r.date>=weekStart && r.date<=weekEnd && (r.teamMemberIds||[]).includes(crewId));
+  const dockedDates = [];
+  reportsThisWeek.forEach(r=>{ if((r.nonContributorIds||[]).includes(crewId) && !dockedDates.includes(r.date)) dockedDates.push(r.date); });
+  const maxScore = cfg.pointsPerDay * cfg.daysPerWeek;
+  const deduction = Math.min(dockedDates.length * cfg.pointsPerDay, maxScore);
+  return { score: Math.max(0, maxScore - deduction), maxScore, dockedDates, reportsCount: reportsThisWeek.length };
+}
+// A student's overall weekly participation across every department they're on, averaged
+// to a 0-100 percentage — this is the "average score" used in the combined CSV export.
+function combinedParticipationForStudent(crewId, weekStart){
+  let earned = 0, max = 0, anyReports = false;
+  DEPARTMENTS.forEach(dep=>{
+    const r = participationScoreForStudent(crewId, dep.key, weekStart);
+    if(r.reportsCount>0){ earned += r.score; max += r.maxScore; anyReports = true; }
+  });
+  return { earned, max, pct: (anyReports && max) ? Math.round(earned/max*100) : null };
+}
+
 function switchBehaviorSub(sub){
   ui.behaviorSub = sub;
   document.querySelectorAll('#behaviorSubtabs button').forEach(b=>b.classList.toggle('active', b.dataset.behSub===sub));
@@ -2081,10 +2162,14 @@ function renderDepartments(){
   const content = document.getElementById('deptContent'); content.innerHTML = '';
   const dep = deptInfo(ui.activeDept), depState = state.departments[ui.activeDept];
 
+  if(ui.activeSub !== 'workspace') stopWorkspaceListener();
+
   if(ui.activeSub === 'tasks') renderTasksSub(content, dep, depState);
   if(ui.activeSub === 'templates') renderTemplatesSub(content, dep, depState);
   if(ui.activeSub === 'report') renderReportFormSub(content, dep, depState);
   if(ui.activeSub === 'reports') renderReportsHistorySub(content, dep, depState);
+  if(ui.activeSub === 'participation') renderParticipationSub(content, dep, depState);
+  if(ui.activeSub === 'workspace') renderWorkspaceSub(content, dep, depState);
 }
 
 function renderTasksSub(content, dep, depState){
@@ -2437,6 +2522,341 @@ function renderReportsHistorySub(content, dep, depState){
   });
 }
 
+function renderParticipationSub(content, dep, depState){
+  if(!canViewDept(dep.key)){
+    content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>Participation grades for ${dep.label} are only visible to ${dep.label} crew and the Director.</div>`;
+    return;
+  }
+  if(!ui.participationWeekCursor) ui.participationWeekCursor = weekStartISO(todayISO());
+  const cfg = state.participationConfig || { pointsPerDay:20, daysPerWeek:5 };
+
+  if(isDirector()){
+    const teamCrew = state.crew.filter(c=>c.role==='student' && (c.departments||[]).includes(dep.key)).sort((a,b)=>a.name.localeCompare(b.name));
+    content.innerHTML = `
+      <div class="cal-nav">
+        <button class="btn ghost small" id="partPrevWeekBtn">‹ Prev Week</button>
+        <span class="stencil" id="partWeekLabel" style="font-size:16px;"></span>
+        <button class="btn ghost small" id="partThisWeekBtn">This Week</button>
+        <button class="btn ghost small" id="partNextWeekBtn">Next Week ›</button>
+      </div>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-4px;">Each day is worth ${cfg.pointsPerDay} points (${cfg.pointsPerDay*cfg.daysPerWeek}/week). Everyone starts at full marks — a day only gets docked for a student flagged as a non-contributor on that day's report.</p>
+      <div style="display:flex; justify-content:flex-end; margin:10px 0;">
+        <button class="btn ghost small" id="partExportCsvBtn">Download CSV for gradebook</button>
+      </div>
+      <div id="participationTableWrap"></div>
+    `;
+    document.getElementById('partWeekLabel').textContent = fmtWeekLabel(ui.participationWeekCursor);
+    const tableWrap = document.getElementById('participationTableWrap');
+    if(!teamCrew.length){
+      tableWrap.innerHTML = `<div class="empty-state">No students assigned to ${dep.label} yet.</div>`;
+    } else {
+      tableWrap.innerHTML = `
+        <div class="att-grid-scroll">
+        <table class="att-table" style="white-space:normal;">
+          <thead><tr><th class="att-name-th">Student</th><th>Reports This Week</th><th>Docked Days</th><th>Score</th></tr></thead>
+          <tbody>
+            ${teamCrew.map(c=>{
+              const r = participationScoreForStudent(c.id, dep.key, ui.participationWeekCursor);
+              const pct = r.maxScore ? r.score/r.maxScore : 1;
+              const cls = pct>=0.9?'behavior-score-good':pct>=0.6?'behavior-score-mid':'behavior-score-bad';
+              return `<tr><td class="att-name-cell">${c.name}</td><td>${r.reportsCount}</td><td>${r.dockedDates.length}</td><td class="${cls}" style="font-weight:700;">${r.score}/${r.maxScore}</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        </div>
+      `;
+    }
+    document.getElementById('partPrevWeekBtn').addEventListener('click', ()=>{
+      const d = new Date(ui.participationWeekCursor+'T00:00'); d.setDate(d.getDate()-7);
+      ui.participationWeekCursor = d.toISOString().slice(0,10); renderParticipationSub(content, dep, depState);
+    });
+    document.getElementById('partNextWeekBtn').addEventListener('click', ()=>{
+      const d = new Date(ui.participationWeekCursor+'T00:00'); d.setDate(d.getDate()+7);
+      ui.participationWeekCursor = d.toISOString().slice(0,10); renderParticipationSub(content, dep, depState);
+    });
+    document.getElementById('partThisWeekBtn').addEventListener('click', ()=>{
+      ui.participationWeekCursor = weekStartISO(todayISO()); renderParticipationSub(content, dep, depState);
+    });
+    document.getElementById('partExportCsvBtn').addEventListener('click', ()=>{
+      const weekLabel = ui.participationWeekCursor;
+      const rows = teamCrew.map(c=>{
+        const r = participationScoreForStudent(c.id, dep.key, weekLabel);
+        return [dep.label, c.name, c.classPeriod||'', r.reportsCount, r.dockedDates.length, r.score, r.maxScore, weekLabel];
+      });
+      if(!rows.length){ toast('No students to export'); return; }
+      downloadCsvRows(['Department','Student','Class Period','Reports This Week','Docked Days','Score','Max Score','Week Of'], rows, `${dep.label.replace(/\s+/g,'-').toLowerCase()}-participation-${weekLabel}.csv`);
+    });
+    return;
+  }
+
+  // Team member (not Director): show only their own participation record for this department.
+  const u = currentUser();
+  if(!u){
+    content.innerHTML = `<div class="empty-state">Sign in with Google, or enter your email (top right), to see your participation grade.</div>`;
+    return;
+  }
+  const r = participationScoreForStudent(u.id, dep.key, ui.participationWeekCursor);
+  const pct = r.maxScore ? r.score/r.maxScore : 1;
+  const cls = pct>=0.9?'behavior-score-good':pct>=0.6?'behavior-score-mid':'behavior-score-bad';
+  content.innerHTML = `
+    <div class="card">
+      <div class="cal-nav">
+        <button class="btn ghost small" id="partPrevWeekBtn">‹ Prev Week</button>
+        <span class="stencil" id="partWeekLabel" style="font-size:16px;"></span>
+        <button class="btn ghost small" id="partThisWeekBtn">This Week</button>
+        <button class="btn ghost small" id="partNextWeekBtn">Next Week ›</button>
+      </div>
+      <p style="font-size:12px;color:var(--paper-dim); text-align:center;">This is your own ${dep.label} participation grade — nobody else's is shown here.</p>
+      <div style="text-align:center; margin:14px 0;">
+        <div class="stencil ${cls}" style="font-size:34px; font-weight:700;">${r.score}/${r.maxScore}</div>
+        <div class="mono" style="font-size:12px; color:var(--paper-dim); margin-top:4px;">${r.reportsCount} report${r.reportsCount!==1?'s':''} this week${r.dockedDates.length?' · '+r.dockedDates.length+' day(s) docked':''}</div>
+      </div>
+    </div>
+  `;
+  document.getElementById('partWeekLabel').textContent = fmtWeekLabel(ui.participationWeekCursor);
+  document.getElementById('partPrevWeekBtn').addEventListener('click', ()=>{
+    const d = new Date(ui.participationWeekCursor+'T00:00'); d.setDate(d.getDate()-7);
+    ui.participationWeekCursor = d.toISOString().slice(0,10); renderParticipationSub(content, dep, depState);
+  });
+  document.getElementById('partNextWeekBtn').addEventListener('click', ()=>{
+    const d = new Date(ui.participationWeekCursor+'T00:00'); d.setDate(d.getDate()+7);
+    ui.participationWeekCursor = d.toISOString().slice(0,10); renderParticipationSub(content, dep, depState);
+  });
+  document.getElementById('partThisWeekBtn').addEventListener('click', ()=>{
+    ui.participationWeekCursor = weekStartISO(todayISO()); renderParticipationSub(content, dep, depState);
+  });
+}
+
+// ---------------- TEAM WORKSPACE (cross-class-period notes + whiteboard, LIVE) ----------------
+// Lives in its own Firestore collection ("workspaces"), separate from the main production
+// document, with a real-time listener active only while this exact tab is open. This keeps
+// live updates scoped to just this feature instead of re-pushing the whole production on
+// every unrelated change elsewhere in the app.
+const STICKY_COLORS = ['#E8C468','#8FBF9F','#E8A7A0','#9BB8D3','#D9B3E8'];
+function canModerateWorkspace(){ return isDirector() || canViewDept('stage_mgmt'); }
+
+let workspaceUnsubscribe = null;
+let workspaceListenerDeptKey = null;
+let workspaceCache = { teamNotes:[], stickyNotes:[] };
+let workspaceDraggingId = null;
+let workspacePendingRerender = false;
+
+function workspaceDocId(deptKey){ return currentProductionId + '_' + deptKey; }
+
+function stopWorkspaceListener(){
+  if(workspaceUnsubscribe){ workspaceUnsubscribe(); workspaceUnsubscribe = null; }
+  workspaceListenerDeptKey = null;
+}
+
+async function startWorkspaceListener(dep, depState){
+  stopWorkspaceListener();
+  if(!window.__fb) return;
+  workspaceListenerDeptKey = dep.key;
+  const ref = window.__fb.doc(window.__fb.db, 'workspaces', workspaceDocId(dep.key));
+  workspaceUnsubscribe = window.__fb.onSnapshot(ref, (snap)=>{
+    workspaceCache = snap.exists() ? snap.data() : { teamNotes:[], stickyNotes:[] };
+    if(!workspaceCache.teamNotes) workspaceCache.teamNotes = [];
+    if(!workspaceCache.stickyNotes) workspaceCache.stickyNotes = [];
+    // Only actually touch the DOM if we're still looking at this exact department's workspace.
+    if(ui.activeDept===dep.key && ui.activeSub==='workspace'){
+      renderWorkspaceFromCache(dep, depState);
+    }
+  }, (err)=>{
+    console.warn('Workspace live listener failed (check Firestore rules include "workspaces")', err);
+  });
+}
+async function saveWorkspaceData(){
+  try{
+    if(window.__fb && workspaceListenerDeptKey){
+      const ref = window.__fb.doc(window.__fb.db, 'workspaces', workspaceDocId(workspaceListenerDeptKey));
+      await window.__fb.setDoc(ref, JSON.parse(JSON.stringify(workspaceCache)));
+    }
+  }catch(e){ console.warn('Workspace save failed', e); }
+}
+
+function renderWorkspaceSub(content, dep, depState){
+  if(!canViewDept(dep.key)){
+    stopWorkspaceListener();
+    content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>The ${dep.label} workspace is only visible to ${dep.label} crew and the Director.</div>`;
+    return;
+  }
+  content.innerHTML = `
+    <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Shared live by everyone on ${dep.label} — across every class period, not just yours. Updates appear automatically while this tab is open, no refresh needed.</p>
+    <div class="card">
+      <h2>Team Notes</h2>
+      <textarea id="teamNoteText" class="full-width" style="min-height:54px;" placeholder="Leave a note for the rest of the team — what you're working on, what's blocking you, questions for other class periods..."></textarea>
+      <button class="btn small" id="teamNotePostBtn">Post Note</button>
+      <div id="teamNotesList" style="margin-top:14px;"></div>
+    </div>
+    <div class="card">
+      <h2>Whiteboard</h2>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sticky notes anyone on the team can add, drag around, and write on — a shared board for sketching out ideas, assignments, or reminders.</p>
+      <div class="sticky-color-row" id="stickyColorRow"></div>
+      <button class="btn ghost small" id="addStickyBtn" style="margin-bottom:12px;">+ Add sticky note</button>
+      <div class="whiteboard-wrap" id="whiteboardWrap"><div class="whiteboard-canvas" id="whiteboardCanvas"></div></div>
+    </div>
+  `;
+
+  let selectedColor = STICKY_COLORS[0];
+  const colorRow = document.getElementById('stickyColorRow');
+  colorRow.innerHTML = STICKY_COLORS.map((c,i)=>`<div class="sticky-color-swatch ${i===0?'active':''}" style="background:${c}" data-color="${c}"></div>`).join('');
+  colorRow.querySelectorAll('.sticky-color-swatch').forEach(sw=>sw.addEventListener('click', ()=>{
+    selectedColor = sw.dataset.color;
+    colorRow.querySelectorAll('.sticky-color-swatch').forEach(s=>s.classList.remove('active'));
+    sw.classList.add('active');
+  }));
+
+  document.getElementById('teamNotePostBtn').addEventListener('click', async ()=>{
+    const text = document.getElementById('teamNoteText').value.trim();
+    if(!text){ toast('Write something first'); return; }
+    const author = currentUser()?.name || authUser?.displayName || 'Someone';
+    workspaceCache.teamNotes.unshift({ id:cryptoId(), text, authorName:author, authorId: currentUser()?.id||null, isStaff:canModerateWorkspace(), timestamp:new Date().toISOString() });
+    document.getElementById('teamNoteText').value = '';
+    renderTeamNotes(dep, depState);
+    await saveWorkspaceData();
+    toast('Note posted');
+  });
+
+  document.getElementById('addStickyBtn').addEventListener('click', async ()=>{
+    const author = currentUser()?.name || authUser?.displayName || 'Someone';
+    workspaceCache.stickyNotes.push({
+      id:cryptoId(), text:'', color:selectedColor,
+      x: 20 + Math.round(Math.random()*300), y: 20 + Math.round(Math.random()*200),
+      authorName:author, authorId: currentUser()?.id||null, timestamp:new Date().toISOString()
+    });
+    renderWhiteboard(dep, depState);
+    await saveWorkspaceData();
+  });
+
+  startWorkspaceListener(dep, depState);
+  renderTeamNotes(dep, depState);
+  renderWhiteboard(dep, depState);
+}
+
+// Called when a live update arrives while this exact tab is open. Skips touching the DOM
+// for whatever the user is actively doing right now (typing in a sticky, dragging a sticky)
+// so an incoming update never yanks focus or a drag out from under them — it just re-renders
+// once they're done.
+function renderWorkspaceFromCache(dep, depState){
+  const activeIsSticky = document.activeElement && document.activeElement.matches && document.activeElement.matches('.sticky-note textarea');
+  if(activeIsSticky || workspaceDraggingId){
+    workspacePendingRerender = true;
+    return;
+  }
+  renderTeamNotes(dep, depState);
+  renderWhiteboard(dep, depState);
+}
+
+function renderTeamNotes(dep, depState){
+  const list = document.getElementById('teamNotesList');
+  if(!list) return;
+  const notes = workspaceCache.teamNotes || [];
+  if(!notes.length){ list.innerHTML = `<div class="empty-state">No notes yet — be the first to post one.</div>`; return; }
+  const u = currentUser();
+  list.innerHTML = notes.map(n=>{
+    const canEdit = canModerateWorkspace() || (u && n.authorId===u.id);
+    return `
+      <div class="team-note-item ${n.isStaff?'staff':''}">
+        <div class="team-note-top">
+          <span class="author">${n.authorName}${n.isStaff?'<span class="staff-tag">STAFF</span>':''}</span>
+          ${canEdit?`<span style="display:flex; gap:6px;"><button class="btn ghost small" data-edit-note="${n.id}">Edit</button><button class="task-del" data-del-note="${n.id}">✕</button></span>`:''}
+        </div>
+        <div class="team-note-text" id="noteText-${n.id}">${escapeHtml(n.text).replace(/\n/g,'<br>')}</div>
+        <div class="team-note-meta">${fmtDateTime(n.timestamp)}${n.editedAt?' · edited':''}</div>
+      </div>
+    `;
+  }).join('');
+  list.querySelectorAll('[data-del-note]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if(!confirm('Delete this note?')) return;
+    workspaceCache.teamNotes = workspaceCache.teamNotes.filter(n=>n.id!==btn.dataset.delNote);
+    renderTeamNotes(dep, depState);
+    await saveWorkspaceData();
+    toast('Note deleted');
+  }));
+  list.querySelectorAll('[data-edit-note]').forEach(btn=>btn.addEventListener('click', ()=>{
+    const n = workspaceCache.teamNotes.find(x=>x.id===btn.dataset.editNote);
+    if(!n) return;
+    const textEl = document.getElementById(`noteText-${n.id}`);
+    const ta = document.createElement('textarea');
+    ta.className = 'full-width'; ta.style.minHeight = '54px'; ta.value = n.text;
+    textEl.replaceWith(ta);
+    btn.textContent = 'Save';
+    btn.replaceWith(btn.cloneNode(true)); // strip old listener
+    const newBtn = list.querySelector(`[data-edit-note="${n.id}"]`);
+    newBtn.textContent = 'Save';
+    newBtn.addEventListener('click', async ()=>{
+      const val = ta.value.trim();
+      if(!val){ toast("Note can't be empty"); return; }
+      n.text = val; n.editedAt = new Date().toISOString();
+      renderTeamNotes(dep, depState);
+      await saveWorkspaceData();
+      toast('Note updated');
+    });
+  }));
+}
+
+function renderWhiteboard(dep, depState){
+  const canvas = document.getElementById('whiteboardCanvas');
+  if(!canvas) return;
+  canvas.innerHTML = '';
+  const u = currentUser();
+  (workspaceCache.stickyNotes||[]).forEach(sn=>{
+    const canEditText = canModerateWorkspace() || (u && sn.authorId===u.id);
+    const el = document.createElement('div');
+    el.className = 'sticky-note';
+    el.style.left = sn.x+'px'; el.style.top = sn.y+'px'; el.style.background = sn.color;
+    el.innerHTML = `
+      <textarea placeholder="Write something..." ${canEditText?'':'readonly'}>${sn.text}</textarea>
+      <div class="sn-meta">${sn.authorName}</div>
+      ${canEditText?`<button class="sn-del">✕</button>`:''}
+    `;
+    canvas.appendChild(el);
+
+    const ta = el.querySelector('textarea');
+    if(canEditText){
+      ta.addEventListener('focus', ()=>{ workspaceDraggingId = workspaceDraggingId || null; });
+      ta.addEventListener('blur', async ()=>{
+        sn.text = ta.value;
+        await saveWorkspaceData();
+        if(workspacePendingRerender){ workspacePendingRerender = false; renderWorkspaceFromCache(dep, depState); }
+      });
+    }
+    const delBtn = el.querySelector('.sn-del');
+    if(delBtn){
+      delBtn.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        workspaceCache.stickyNotes = workspaceCache.stickyNotes.filter(x=>x.id!==sn.id);
+        renderWhiteboard(dep, depState);
+        await saveWorkspaceData();
+      });
+    }
+
+    // Dragging — anyone on the team can reposition any note (collaborative rearranging),
+    // even if they can't edit its text. Position only commits (saves) on release.
+    let dragging = false, startX=0, startY=0, origX=sn.x, origY=sn.y;
+    el.addEventListener('pointerdown', (e)=>{
+      if(e.target === ta || e.target === delBtn) return;
+      dragging = true; workspaceDraggingId = sn.id; el.classList.add('dragging');
+      startX = e.clientX; startY = e.clientY; origX = sn.x; origY = sn.y;
+      el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener('pointermove', (e)=>{
+      if(!dragging) return;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      const newX = Math.max(0, origX + dx), newY = Math.max(0, origY + dy);
+      el.style.left = newX+'px'; el.style.top = newY+'px';
+      sn._pendingX = newX; sn._pendingY = newY;
+    });
+    el.addEventListener('pointerup', async ()=>{
+      if(!dragging) return;
+      dragging = false; workspaceDraggingId = null; el.classList.remove('dragging');
+      if(sn._pendingX!==undefined){ sn.x = sn._pendingX; sn.y = sn._pendingY; delete sn._pendingX; delete sn._pendingY; }
+      await saveWorkspaceData();
+      if(workspacePendingRerender){ workspacePendingRerender = false; renderWorkspaceFromCache(dep, depState); }
+    });
+  });
+}
+
 function renderReportDetail(r, dep, depState, container){
   const teamNames = r.teamMemberIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'—'; });
   const nonContribNames = r.nonContributorIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'—'; });
@@ -2588,6 +3008,9 @@ function renderSetup(){
   const behCfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
   document.getElementById('behPointsPerDay').value = behCfg.pointsPerDay;
   document.getElementById('behDaysPerWeek').value = behCfg.daysPerWeek;
+  const partCfg = state.participationConfig || { pointsPerDay:20, daysPerWeek:5 };
+  document.getElementById('partPointsPerDay').value = partCfg.pointsPerDay;
+  document.getElementById('partDaysPerWeek').value = partCfg.daysPerWeek;
 
   document.getElementById('emailAlertsCard').style.display = isDirector() ? 'block' : 'none';
   const ejs = globalState.emailjs || { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
@@ -2616,6 +3039,11 @@ function renderSetup(){
   document.getElementById('rosterLockedMsg').style.display = isDirector() ? 'none' : 'block';
   document.getElementById('bulkImportCard').style.display = isDirector() ? 'block' : 'none';
   document.getElementById('exportGradesCard').style.display = isDirector() ? 'block' : 'none';
+  document.getElementById('participationExportCard').style.display = isDirector() ? 'block' : 'none';
+  if(isDirector()){
+    if(!ui.allPartWeekCursor) ui.allPartWeekCursor = weekStartISO(todayISO());
+    document.getElementById('allPartWeekLabel').textContent = fmtWeekLabel(ui.allPartWeekCursor);
+  }
   document.getElementById('resetCard').style.display = isDirector() ? 'block' : 'none';
 
   const deptWrap = document.getElementById('rosterDeptChecks');
@@ -2720,6 +3148,7 @@ async function addCrew(){
 function switchView(view){
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
+  if(view!=='departments') stopWorkspaceListener();
   if(view==='dashboard') renderDashboard();
   if(view==='productions') renderProductionsView();
   if(view==='calendar'){ renderCalendarForm(); switchCalSub(ui.calSub); }
@@ -2745,6 +3174,7 @@ async function init(){
   if(!state.costumeRecords) state.costumeRecords = [];
   if(!state.behaviorIncidents) state.behaviorIncidents = [];
   if(!state.behaviorConfig) state.behaviorConfig = { pointsPerDay:20, daysPerWeek:5 };
+  if(!state.participationConfig) state.participationConfig = { pointsPerDay:20, daysPerWeek:5 };
   if(!state.announcements) state.announcements = [];
   if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
   if(globalState.emailjs.templateBehavior === undefined) globalState.emailjs.templateBehavior = '';
@@ -2895,6 +3325,14 @@ async function init(){
     await saveState(); renderSetup(); renderBehaviorView();
     toast(`Behavior grading set to ${pointsPerDay} pts/day × ${daysPerWeek} days`);
   });
+  document.getElementById('partConfigSaveBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can change this'); return; }
+    const pointsPerDay = parseInt(document.getElementById('partPointsPerDay').value) || 20;
+    const daysPerWeek = parseInt(document.getElementById('partDaysPerWeek').value) || 5;
+    state.participationConfig = { pointsPerDay, daysPerWeek };
+    await saveState(); renderSetup(); renderDepartments();
+    toast(`Participation grading set to ${pointsPerDay} pts/day × ${daysPerWeek} days`);
+  });
   document.getElementById('ejsConfigSaveBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can change this'); return; }
     globalState.emailjs = {
@@ -2920,6 +3358,32 @@ async function init(){
   document.getElementById('exportAllGradesBtn').addEventListener('click', ()=>{
     if(!isDirector()){ toast('Only the Director can export grades'); return; }
     exportAllDeptGradesCsv();
+  });
+  document.getElementById('allPartPrevWeekBtn').addEventListener('click', ()=>{
+    const d = new Date(ui.allPartWeekCursor+'T00:00'); d.setDate(d.getDate()-7);
+    ui.allPartWeekCursor = d.toISOString().slice(0,10);
+    document.getElementById('allPartWeekLabel').textContent = fmtWeekLabel(ui.allPartWeekCursor);
+  });
+  document.getElementById('allPartNextWeekBtn').addEventListener('click', ()=>{
+    const d = new Date(ui.allPartWeekCursor+'T00:00'); d.setDate(d.getDate()+7);
+    ui.allPartWeekCursor = d.toISOString().slice(0,10);
+    document.getElementById('allPartWeekLabel').textContent = fmtWeekLabel(ui.allPartWeekCursor);
+  });
+  document.getElementById('allPartThisWeekBtn').addEventListener('click', ()=>{
+    ui.allPartWeekCursor = weekStartISO(todayISO());
+    document.getElementById('allPartWeekLabel').textContent = fmtWeekLabel(ui.allPartWeekCursor);
+  });
+  document.getElementById('allPartExportCsvBtn').addEventListener('click', ()=>{
+    if(!isDirector()){ toast('Only the Director can export grades'); return; }
+    const weekLabel = ui.allPartWeekCursor || weekStartISO(todayISO());
+    const students = state.crew.filter(c=>c.role==='student').sort((a,b)=>a.name.localeCompare(b.name));
+    const rows = students.map(c=>{
+      const combined = combinedParticipationForStudent(c.id, weekLabel);
+      const depts = (c.departments||[]).map(k=>deptInfo(k).label).join(', ') || 'No team';
+      return [c.name, c.classPeriod||'', depts, combined.earned, combined.max, combined.pct===null?'':combined.pct, weekLabel];
+    });
+    if(!rows.length){ toast('No students to export'); return; }
+    downloadCsvRows(['Student','Class Period','Teams','Points Earned','Points Possible','Average Score (%)','Week Of'], rows, `weekly-participation-averages-${weekLabel}.csv`);
   });
   document.getElementById('resetAllBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can reset production data'); return; }
