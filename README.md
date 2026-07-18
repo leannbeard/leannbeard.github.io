@@ -458,8 +458,24 @@
   </section>
 
   <section class="view" id="view-behavior">
-    <div id="behaviorLockedMsg" class="empty-state" style="display:none;">
-      <div class="lamp">🔒</div>Behavior tracking is only visible to the Director and Stage Management team.
+    <div id="behaviorNotSignedInMsg" class="empty-state" style="display:none;">
+      Sign in with Google, or enter your email (top right), to see your behavior record.
+    </div>
+    <div id="behaviorNotOnRosterMsg" class="empty-state" style="display:none;">
+      You're identified, but that email isn't on the roster yet — ask the Director to add it in Roster / Setup.
+    </div>
+    <div id="behaviorMyViewWrap" style="display:none;">
+      <div class="card">
+        <div class="cal-nav">
+          <button class="btn ghost small" id="myBehPrevWeekBtn">‹ Prev Week</button>
+          <span class="stencil" id="myBehWeekLabel" style="font-size:16px;"></span>
+          <button class="btn ghost small" id="myBehThisWeekBtn">This Week</button>
+          <button class="btn ghost small" id="myBehNextWeekBtn">Next Week ›</button>
+        </div>
+        <p style="font-size:12px;color:var(--paper-dim); text-align:center;">This is your own behavior/etiquette record — nobody else's is shown here.</p>
+        <div id="myBehaviorScoreWrap" style="text-align:center; margin:14px 0;"></div>
+        <div id="myBehaviorIncidentList"></div>
+      </div>
     </div>
     <div id="behaviorAuthorizedWrap">
       <div class="subtabs" id="behaviorSubtabs">
@@ -592,16 +608,20 @@
     </div>
     <div class="card" id="emailAlertsCard">
       <h2>Email Alerts</h2>
-      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sends real emails using <a href="https://www.emailjs.com" target="_blank" style="color:var(--amber);">EmailJS</a> (free, no server needed). Create a free account there, connect an email service, make two templates, and paste the IDs below. Unexcused absences email the student and parent immediately; task deadlines email the assignee about 2 days before due, checked whenever the Director opens the app.</p>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sends real emails using <a href="https://www.emailjs.com" target="_blank" style="color:var(--amber);">EmailJS</a> (free, no server needed). Each of the 4 alerts below is independent — leave any Template ID blank and that alert simply stays off, so you don't need all 4 set up at once. <b>EmailJS's free plan allows 2 templates</b> — Absence and Behavior are the two most people set up first; Deadline and Failing Grade are optional extras for later if you upgrade. Each alert emails both the student and their parent (using the emails on their roster entry) at the moment it happens.</p>
       <div class="form-grid" style="max-width:460px;">
         <input type="text" id="ejsPublicKey" placeholder="Public Key">
         <input type="text" id="ejsServiceId" placeholder="Service ID">
       </div>
       <div class="form-grid" style="max-width:460px;">
         <input type="text" id="ejsTemplateAbsence" placeholder="Template ID — Absence">
-        <input type="text" id="ejsTemplateDeadline" placeholder="Template ID — Deadline">
+        <input type="text" id="ejsTemplateBehavior" placeholder="Template ID — Behavior Infraction">
       </div>
-      <p style="font-size:11.5px;color:var(--paper-dim);">Suggested template variables — Absence: <code>to_email, student_name, event_title, event_date, production_name</code>. Deadline: <code>to_email, student_name, task_title, due_date, department</code>.</p>
+      <div class="form-grid" style="max-width:460px;">
+        <input type="text" id="ejsTemplateDeadline" placeholder="Template ID — Deadline (optional)">
+        <input type="text" id="ejsTemplateFailingGrade" placeholder="Template ID — Failing Grade (optional)">
+      </div>
+      <p style="font-size:11.5px;color:var(--paper-dim);">Suggested template variables — Absence: <code>to_email, student_name, event_title, event_date, production_name</code>. Behavior: <code>to_email, student_name, reason, infraction_date, deduction, notes, production_name</code>. Deadline: <code>to_email, student_name, task_title, due_date, department</code>. Failing Grade: <code>to_email, student_name, department, grade, grade_letter, report_date, production_name</code>. A failing grade is anything under 60.</p>
       <button class="btn small" id="ejsConfigSaveBtn">Save</button>
     </div>
     <div class="card" id="groupmeCard">
@@ -761,7 +781,7 @@ function defaultProductionState(name, seeded){
 }
 // Production defaults are created via defaultProductionState(name, seeded) above.
 
-const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null, emailjs:{ publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' }, groupme:{ botId:'' } };
+const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null, emailjs:{ publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' }, groupme:{ botId:'' } };
 
 let state = null;
 let globalState = null;
@@ -917,7 +937,7 @@ function toast(msg){
   clearTimeout(t._timer); t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
-let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set(), behaviorSub:'log', behaviorWeekCursor:null, editingEventId:null };
+let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set(), behaviorSub:'log', behaviorWeekCursor:null, myBehaviorWeekCursor:null, editingEventId:null, editingAnnouncementId:null };
 let authUser = null; // { email, displayName } once signed in via Google, else null
 
 // Identity resolves two ways: real Google sign-in (authUser) is verified;
@@ -1021,7 +1041,48 @@ function initEmailJs(){
 function emailAlertsConfigured(kind){
   const cfg = globalState && globalState.emailjs;
   if(!cfg || !window.emailjs || !cfg.publicKey || !cfg.serviceId) return false;
-  return kind==='absence' ? !!cfg.templateAbsence : !!cfg.templateDeadline;
+  if(kind==='absence') return !!cfg.templateAbsence;
+  if(kind==='deadline') return !!cfg.templateDeadline;
+  if(kind==='behavior') return !!cfg.templateBehavior;
+  if(kind==='failingGrade') return !!cfg.templateFailingGrade;
+  return false;
+}
+async function sendBehaviorInfractionEmail(student, incident){
+  if(!emailAlertsConfigured('behavior')) return;
+  const cfg = globalState.emailjs;
+  const recipients = [student.email, student.parentEmail].filter(Boolean);
+  if(!recipients.length) return;
+  for(const to_email of recipients){
+    try{
+      await emailjs.send(cfg.serviceId, cfg.templateBehavior, {
+        to_email, student_name: student.name, reason: incident.reason || 'No reason given',
+        infraction_date: fmtDate(incident.date), deduction: incident.deduction, notes: incident.notes || '', production_name: state.productionName
+      });
+    }catch(e){ console.warn('Behavior infraction email failed to send to '+to_email, e); }
+  }
+}
+async function checkAndSendFailingGradeEmails(report, dep){
+  if(!emailAlertsConfigured('failingGrade')) return;
+  if(!report.failingGradeEmailedIds) report.failingGradeEmailedIds = [];
+  const cfg = globalState.emailjs;
+  for(const crewId of (report.teamMemberIds||[])){
+    if(report.failingGradeEmailedIds.includes(crewId)) continue;
+    const adj = (report.individualAdjustments||[]).find(a=>a.crewId===crewId);
+    const effectiveGrade = adj ? adj.adjustedGrade : report.grade;
+    if(effectiveGrade >= 60) continue;
+    const student = state.crew.find(c=>c.id===crewId);
+    if(!student) continue;
+    const recipients = [student.email, student.parentEmail].filter(Boolean);
+    for(const to_email of recipients){
+      try{
+        await emailjs.send(cfg.serviceId, cfg.templateFailingGrade, {
+          to_email, student_name: student.name, department: dep.label, grade: effectiveGrade,
+          grade_letter: letterFor(effectiveGrade), report_date: fmtDate(report.date), production_name: state.productionName
+        });
+      }catch(e){ console.warn('Failing grade email failed to send to '+to_email, e); }
+    }
+    report.failingGradeEmailedIds.push(crewId);
+  }
 }
 async function sendAbsenceEmail(student, ev){
   if(!emailAlertsConfigured('absence')) return;
@@ -1232,20 +1293,53 @@ function renderAnnouncements(){
     list.innerHTML = isDirector() ? `<div class="empty-state">Nothing posted yet — write something above.</div>` : `<div class="empty-state">No announcements right now.</div>`;
     return;
   }
-  list.innerHTML = items.map(a=>`
-    <div class="announcement-item">
-      <div class="announcement-top">
-        <div class="announcement-text">${escapeHtml(a.text).replace(/\n/g,'<br>')}</div>
-        ${isDirector()?`<button class="task-del" data-del-announcement="${a.id}">✕</button>`:''}
+  list.innerHTML = items.map(a=>{
+    if(ui.editingAnnouncementId === a.id && isDirector()){
+      return `
+        <div class="announcement-item">
+          <textarea class="full-width edit-announcement-text" style="min-height:60px;">${escapeHtml(a.text)}</textarea>
+          <div class="cal-actions">
+            <button class="btn small" data-save-announcement="${a.id}">Save</button>
+            <button class="btn ghost small" data-discard-announcement="${a.id}">Discard</button>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="announcement-item">
+        <div class="announcement-top">
+          <div class="announcement-text">${escapeHtml(a.text).replace(/\n/g,'<br>')}</div>
+          ${isDirector()?`<span style="display:flex; gap:6px; flex-shrink:0;"><button class="btn ghost small" data-edit-announcement="${a.id}">Edit</button><button class="task-del" data-del-announcement="${a.id}">✕</button></span>`:''}
+        </div>
+        <div class="announcement-meta">${a.postedBy} · ${fmtDateTime(a.postedAt)}${a.editedAt?' · edited':''}</div>
       </div>
-      <div class="announcement-meta">${a.postedBy} · ${fmtDateTime(a.postedAt)}</div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
   list.querySelectorAll('[data-del-announcement]').forEach(btn=>btn.addEventListener('click', async ()=>{
     if(!confirm('Delete this announcement?')) return;
     state.announcements = state.announcements.filter(a=>a.id!==btn.dataset.delAnnouncement);
     await saveState(); renderAnnouncements();
     toast('Announcement deleted');
+  }));
+  list.querySelectorAll('[data-edit-announcement]').forEach(btn=>btn.addEventListener('click', ()=>{
+    ui.editingAnnouncementId = btn.dataset.editAnnouncement;
+    renderAnnouncements();
+  }));
+  list.querySelectorAll('[data-discard-announcement]').forEach(btn=>btn.addEventListener('click', ()=>{
+    ui.editingAnnouncementId = null;
+    renderAnnouncements();
+  }));
+  list.querySelectorAll('[data-save-announcement]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    const a = state.announcements.find(x=>x.id===btn.dataset.saveAnnouncement);
+    if(!a) return;
+    const card = btn.closest('.announcement-item');
+    const newText = card.querySelector('.edit-announcement-text').value.trim();
+    if(!newText){ toast('Announcement can\'t be empty'); return; }
+    a.text = newText;
+    a.editedAt = new Date().toISOString();
+    ui.editingAnnouncementId = null;
+    await saveState(); renderAnnouncements();
+    toast('Announcement updated');
   }));
 }
 async function postAnnouncement(){
@@ -1750,11 +1844,58 @@ function switchBehaviorSub(sub){
 }
 function renderBehaviorView(){
   const authorized = canManageBehavior();
-  document.getElementById('behaviorLockedMsg').style.display = authorized ? 'none' : 'block';
   document.getElementById('behaviorAuthorizedWrap').style.display = authorized ? 'block' : 'none';
-  if(!authorized) return;
-  if(!ui.behaviorWeekCursor) ui.behaviorWeekCursor = weekStartISO(todayISO());
-  switchBehaviorSub(ui.behaviorSub || 'log');
+  if(authorized){
+    document.getElementById('behaviorNotSignedInMsg').style.display = 'none';
+    document.getElementById('behaviorNotOnRosterMsg').style.display = 'none';
+    document.getElementById('behaviorMyViewWrap').style.display = 'none';
+    if(!ui.behaviorWeekCursor) ui.behaviorWeekCursor = weekStartISO(todayISO());
+    switchBehaviorSub(ui.behaviorSub || 'log');
+    return;
+  }
+  const u = currentUser();
+  if(!activeEmail()){
+    document.getElementById('behaviorNotSignedInMsg').style.display = 'block';
+    document.getElementById('behaviorNotOnRosterMsg').style.display = 'none';
+    document.getElementById('behaviorMyViewWrap').style.display = 'none';
+    return;
+  }
+  if(!u){
+    document.getElementById('behaviorNotSignedInMsg').style.display = 'none';
+    document.getElementById('behaviorNotOnRosterMsg').style.display = 'block';
+    document.getElementById('behaviorMyViewWrap').style.display = 'none';
+    return;
+  }
+  document.getElementById('behaviorNotSignedInMsg').style.display = 'none';
+  document.getElementById('behaviorNotOnRosterMsg').style.display = 'none';
+  document.getElementById('behaviorMyViewWrap').style.display = 'block';
+  if(!ui.myBehaviorWeekCursor) ui.myBehaviorWeekCursor = weekStartISO(todayISO());
+  renderMyBehaviorView();
+}
+
+function renderMyBehaviorView(){
+  const u = currentUser();
+  if(!u) return;
+  document.getElementById('myBehWeekLabel').textContent = fmtWeekLabel(ui.myBehaviorWeekCursor);
+  const r = behaviorScoreForStudent(u.id, ui.myBehaviorWeekCursor);
+  const pct = r.maxScore ? r.score / r.maxScore : 1;
+  const cls = pct>=0.9 ? 'behavior-score-good' : pct>=0.6 ? 'behavior-score-mid' : 'behavior-score-bad';
+  document.getElementById('myBehaviorScoreWrap').innerHTML = `
+    <div class="stencil ${cls}" style="font-size:34px; font-weight:700;">${r.score}/${r.maxScore}</div>
+    <div class="mono" style="font-size:12px; color:var(--paper-dim); margin-top:4px;">${r.incidentCount} infraction${r.incidentCount!==1?'s':''} this week</div>
+  `;
+  const list = document.getElementById('myBehaviorIncidentList');
+  if(!r.incidents.length){
+    list.innerHTML = `<div class="empty-state">No infractions logged for you this week. 🎉</div>`;
+    return;
+  }
+  list.innerHTML = [...r.incidents].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`
+    <div class="incident-card">
+      <div class="incident-top"><span>${fmtDate(i.date)}</span><span class="mono" style="color:var(--red);">−${i.deduction} pts</span></div>
+      <div class="incident-meta">${i.reason||'No reason given'}</div>
+      ${i.notes?`<div class="incident-note">${escapeHtml(i.notes)}</div>`:''}
+    </div>
+  `).join('');
 }
 
 function renderBehaviorLog(){
@@ -1796,12 +1937,14 @@ async function logInfraction(){
   const deduction = parseInt(document.getElementById('behDeduction').value) || (state.behaviorConfig||{pointsPerDay:20}).pointsPerDay;
   const notes = document.getElementById('behNotes').value.trim();
   const loggedBy = currentUser()?.name || authUser?.displayName || activeEmail() || 'someone';
-  state.behaviorIncidents.push({
+  const incident = {
     id:cryptoId(), crewId, crewName:student.name, date, reason, deduction, notes,
     loggedBy, loggedByEmail: activeEmail()||'', timestamp:new Date().toISOString()
-  });
+  };
+  state.behaviorIncidents.push(incident);
   logChange(`Behavior infraction logged for ${student.name} (${fmtDate(date)}).`, {type:'crew', crewId});
   await saveState(); renderBehaviorLog(); renderNotifications();
+  sendBehaviorInfractionEmail(student, incident);
   document.getElementById('behReason').value = ''; document.getElementById('behNotes').value = '';
   toast('Infraction logged');
 }
@@ -2243,7 +2386,7 @@ function renderReportFormSub(content, dep, depState){
       inProgressTasks: document.getElementById('repInProgress').value.trim(),
       notes: document.getElementById('repNotes').value.trim(), challenges: document.getElementById('repChallenges').value.trim(),
       tasksCompletedCount: doneCount, status:'submitted', grade: suggestedGrade, gradeLetter: letterFor(suggestedGrade),
-      teacherFeedback:'', verifiedBy:'', verifiedDate:'', individualAdjustments:[]
+      teacherFeedback:'', verifiedBy:'', verifiedDate:'', individualAdjustments:[], failingGradeEmailedIds:[]
     };
     depState.reports.unshift(report);
     logChange(`${dep.label} (${classPeriod}) submitted a daily report for ${fmtDate(report.date)} (suggested grade ${suggestedGrade}).`, {type:'deptClass', dept:dep.key, classPeriod});
@@ -2340,6 +2483,8 @@ function renderReportDetail(r, dep, depState, container){
     r.grade = Math.max(0, Math.min(100, parseFloat(g)||0)); r.gradeLetter = letterFor(r.grade); r.teacherFeedback = fb; r.status='graded';
     logChange(`${dep.label} report for ${fmtDate(r.date)} graded: ${r.gradeLetter} (${r.grade}).`, {type:'deptClass', dept:dep.key, classPeriod:r.classPeriod});
     await saveState(); renderDepartments(); renderNotifications();
+    await checkAndSendFailingGradeEmails(r, dep);
+    await saveState();
     toast('Grade finalized');
   });
   actions.querySelector('[data-act=return]')?.addEventListener('click', async ()=>{
@@ -2358,6 +2503,8 @@ function renderReportDetail(r, dep, depState, container){
     const note = prompt('Note (optional):','') || '';
     r.individualAdjustments.push({ crewId: crewMember.id, crewName: crewMember.name, adjustedGrade: parseFloat(g)||0, teacherNote: note });
     await saveState(); renderDepartments();
+    await checkAndSendFailingGradeEmails(r, dep);
+    await saveState();
     toast('Adjustment added');
   });
 }
@@ -2443,11 +2590,13 @@ function renderSetup(){
   document.getElementById('behDaysPerWeek').value = behCfg.daysPerWeek;
 
   document.getElementById('emailAlertsCard').style.display = isDirector() ? 'block' : 'none';
-  const ejs = globalState.emailjs || { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' };
+  const ejs = globalState.emailjs || { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
   document.getElementById('ejsPublicKey').value = ejs.publicKey;
   document.getElementById('ejsServiceId').value = ejs.serviceId;
   document.getElementById('ejsTemplateAbsence').value = ejs.templateAbsence;
   document.getElementById('ejsTemplateDeadline').value = ejs.templateDeadline;
+  document.getElementById('ejsTemplateBehavior').value = ejs.templateBehavior || '';
+  document.getElementById('ejsTemplateFailingGrade').value = ejs.templateFailingGrade || '';
 
   document.getElementById('groupmeCard').style.display = isDirector() ? 'block' : 'none';
   document.getElementById('groupmeBotId').value = (globalState.groupme && globalState.groupme.botId) || '';
@@ -2597,7 +2746,9 @@ async function init(){
   if(!state.behaviorIncidents) state.behaviorIncidents = [];
   if(!state.behaviorConfig) state.behaviorConfig = { pointsPerDay:20, daysPerWeek:5 };
   if(!state.announcements) state.announcements = [];
-  if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'' };
+  if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
+  if(globalState.emailjs.templateBehavior === undefined) globalState.emailjs.templateBehavior = '';
+  if(globalState.emailjs.templateFailingGrade === undefined) globalState.emailjs.templateFailingGrade = '';
   if(!globalState.groupme) globalState.groupme = { botId:'' };
   renderAll();
   renderCostumeMeasureGrid(); renderCostumePieces();
@@ -2717,6 +2868,17 @@ async function init(){
     ui.behaviorWeekCursor = weekStartISO(todayISO()); renderBehaviorSummary();
   });
   document.getElementById('behExportCsvBtn').addEventListener('click', exportBehaviorCsv);
+  document.getElementById('myBehPrevWeekBtn').addEventListener('click', ()=>{
+    const d = new Date(ui.myBehaviorWeekCursor+'T00:00'); d.setDate(d.getDate()-7);
+    ui.myBehaviorWeekCursor = d.toISOString().slice(0,10); renderMyBehaviorView();
+  });
+  document.getElementById('myBehNextWeekBtn').addEventListener('click', ()=>{
+    const d = new Date(ui.myBehaviorWeekCursor+'T00:00'); d.setDate(d.getDate()+7);
+    ui.myBehaviorWeekCursor = d.toISOString().slice(0,10); renderMyBehaviorView();
+  });
+  document.getElementById('myBehThisWeekBtn').addEventListener('click', ()=>{
+    ui.myBehaviorWeekCursor = weekStartISO(todayISO()); renderMyBehaviorView();
+  });
   document.getElementById('rosterAddBtn').addEventListener('click', addCrew);
   document.getElementById('attendanceThresholdSaveBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can change this'); return; }
@@ -2740,6 +2902,8 @@ async function init(){
       serviceId: document.getElementById('ejsServiceId').value.trim(),
       templateAbsence: document.getElementById('ejsTemplateAbsence').value.trim(),
       templateDeadline: document.getElementById('ejsTemplateDeadline').value.trim(),
+      templateBehavior: document.getElementById('ejsTemplateBehavior').value.trim(),
+      templateFailingGrade: document.getElementById('ejsTemplateFailingGrade').value.trim(),
     };
     await saveGlobalState();
     initEmailJs();
