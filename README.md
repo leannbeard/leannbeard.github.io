@@ -1,4 +1,3 @@
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -507,6 +506,28 @@
 
 <div class="toast" id="toast"></div>
 
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDbK6aryhE8wBUJ54Hq3_shhSOsJzSP-bY",
+    authDomain: "stagedesk-f77d7.firebaseapp.com",
+    projectId: "stagedesk-f77d7",
+    storageBucket: "stagedesk-f77d7.firebasestorage.app",
+    messagingSenderId: "30796013348",
+    appId: "1:30796013348:web:3a3c5d65cd147f2d725db1",
+    measurementId: "G-48CELBXKHK"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  window.__fb = { db, doc, getDoc, setDoc };
+  window.__firebaseReady = true;
+  window.dispatchEvent(new Event('firebase-ready'));
+</script>
+
 <script>
 (function(){
 
@@ -540,7 +561,7 @@ function todayISO(){ return new Date().toISOString().slice(0,10); }
 
 function seedTasks(items){
   return items.map(([title, workType, priority, hours])=>({
-    id:cryptoId(), title, description:'', workType, priority, dueDate:todayISO(), estimatedHours:hours, status:'todo', assignedTo:''
+    id:cryptoId(), title, description:'', workType, priority, dueDate:todayISO(), estimatedHours:hours, status:'todo', assignedTo:'', checklist:[]
   }));
 }
 function defaultDeptState(seed){ return { tasks: seedTasks(seed), templates:[], reports:[] }; }
@@ -587,43 +608,66 @@ let state = null;
 let globalState = null;
 let currentProductionId = null;
 let device = { currentUserId:'', lastSeenChangelog:null, role:'team' };
-const GLOBAL_KEY = 'setdesk-global-v1';
-const PROD_KEY_PREFIX = 'setdesk-prod-';
-const LEGACY_KEY = 'setdesk-production-state-v1'; // single-production version, migrated on first load
-const DEVICE_KEY = 'setdesk-device-prefs-v2';
-const memoryProductions = new Map(); // fallback cache keyed by production id, used if window.storage is unavailable
+const GLOBAL_DOC = ['config','main'];              // Firestore: collection 'config', doc 'main'
+const PROD_COLLECTION = 'productions';             // Firestore: collection 'productions', doc <id>
+const LEGACY_KEY = 'setdesk-production-state-v1';  // old single-production version (Claude.ai artifact only)
+const DEVICE_STORAGE_KEY = 'setdesk-device-prefs-v2'; // now a real browser localStorage key
+const memoryProductions = new Map(); // fallback cache, used only if Firestore is unreachable
 let memoryFallbackGlobal = null;
 
-async function loadProductionState(id){
+function waitForFirebase(){
+  return new Promise(resolve=>{
+    if(window.__firebaseReady) return resolve();
+    window.addEventListener('firebase-ready', ()=>resolve(), {once:true});
+    setTimeout(resolve, 4000); // don't hang forever if the SDK failed to load (e.g. offline)
+  });
+}
+async function fsGet(collectionName, docId){
+  await waitForFirebase();
   try{
-    if(window.storage){
-      const res = await window.storage.get(PROD_KEY_PREFIX+id, true);
-      if(res && res.value) return JSON.parse(res.value);
+    if(window.__fb){
+      const ref = window.__fb.doc(window.__fb.db, collectionName, docId);
+      const snap = await window.__fb.getDoc(ref);
+      if(snap.exists()) return snap.data();
     }
-  }catch(e){}
+  }catch(e){ console.warn('Firestore read failed', e); }
+  return null;
+}
+async function fsSet(collectionName, docId, data){
+  await waitForFirebase();
+  try{
+    if(window.__fb){
+      const ref = window.__fb.doc(window.__fb.db, collectionName, docId);
+      await window.__fb.setDoc(ref, JSON.parse(JSON.stringify(data))); // strip undefined/functions, keep plain JSON
+      return true;
+    }
+  }catch(e){ console.warn('Firestore write failed', e); }
+  return false;
+}
+
+async function loadProductionState(id){
+  const data = await fsGet(PROD_COLLECTION, id);
+  if(data) return data;
   if(memoryProductions.has(id)) return memoryProductions.get(id);
   return defaultProductionState('Untitled Production', true);
 }
 async function saveState(){
-  if(currentProductionId) memoryProductions.set(currentProductionId, state);
-  try{ if(window.storage && currentProductionId) await window.storage.set(PROD_KEY_PREFIX+currentProductionId, JSON.stringify(state), true); }
-  catch(e){ console.warn('save failed', e); }
+  if(currentProductionId){
+    memoryProductions.set(currentProductionId, state);
+    await fsSet(PROD_COLLECTION, currentProductionId, state);
+  }
 }
 async function loadGlobalStateRaw(){
-  try{
-    if(window.storage){
-      const res = await window.storage.get(GLOBAL_KEY, true);
-      if(res && res.value) return JSON.parse(res.value);
-    }
-  }catch(e){}
-  return memoryFallbackGlobal;
+  const data = await fsGet(GLOBAL_DOC[0], GLOBAL_DOC[1]);
+  return data || memoryFallbackGlobal;
 }
 async function saveGlobalState(){
   memoryFallbackGlobal = globalState;
-  try{ if(window.storage) await window.storage.set(GLOBAL_KEY, JSON.stringify(globalState), true); }
-  catch(e){ console.warn('global save failed', e); }
+  await fsSet(GLOBAL_DOC[0], GLOBAL_DOC[1], globalState);
 }
 async function loadLegacyStateRaw(){
+  // Only relevant if this file is ever reopened inside a Claude.ai artifact that still has
+  // pre-Firebase data sitting in window.storage. Harmless no-op everywhere else (e.g. GitHub Pages).
   try{
     if(window.storage){
       const res = await window.storage.get(LEGACY_KEY, true);
@@ -672,8 +716,7 @@ async function loadOrMigrateGlobalState(){
 
 async function saveProductionStateFor(id, data){
   memoryProductions.set(id, data);
-  try{ if(window.storage) await window.storage.set(PROD_KEY_PREFIX+id, JSON.stringify(data), true); }
-  catch(e){ console.warn('save failed', e); }
+  await fsSet(PROD_COLLECTION, id, data);
 }
 async function createProduction(name, copyFromId){
   const prodId = cryptoId();
@@ -695,12 +738,18 @@ async function switchToProduction(id){
   renderAll();
 }
 
-async function loadDevice(){
-  try{ if(window.storage){ const res = await window.storage.get(DEVICE_KEY, false); if(res && res.value) return {role:'team', ...JSON.parse(res.value)}; } }catch(e){}
+// Device prefs (who you are, role toggle, notification read-state) are personal to this
+// browser only — a normal localStorage key is the right tool here, not shared cloud storage.
+function loadDevice(){
+  try{
+    const raw = localStorage.getItem(DEVICE_STORAGE_KEY);
+    if(raw) return { role:'team', currentUserId:'', lastSeenChangelog:null, ...JSON.parse(raw) };
+  }catch(e){}
   return { currentUserId:'', lastSeenChangelog:null, role:'team' };
 }
-async function saveDevice(){
-  try{ if(window.storage) await window.storage.set(DEVICE_KEY, JSON.stringify(device), false); }catch(e){}
+function saveDevice(){
+  try{ localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(device)); }
+  catch(e){ console.warn('device save failed', e); }
 }
 
 function toast(msg){
