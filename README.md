@@ -341,7 +341,6 @@
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
           <button class="btn" id="googleSignInBtn">Sign in with Google</button>
           <button class="btn ghost small" id="toggleEmailPwBtn">Email &amp; password</button>
-          <button class="btn ghost small" id="toggleManualBtn">Can't sign in?</button>
         </div>
         <div id="emailPwWrap" style="display:none; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
           <input type="email" id="epEmail" placeholder="email" style="background:rgba(0,0,0,0.25); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:14px; font-size:12px; width:140px;">
@@ -349,11 +348,6 @@
           <button class="btn small" id="epSignInBtn">Sign In</button>
           <button class="btn ghost small" id="epSignUpBtn">Create Account</button>
           <button class="btn ghost small" id="epForgotBtn" style="font-size:10.5px; opacity:0.75;">Forgot password?</button>
-        </div>
-        <div id="manualWrap" style="display:none; gap:6px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
-          <span style="font-size:10.5px; color:var(--paper-dim); max-width:220px; text-align:right;">Not verified — only use if sign-in truly doesn't work for you:</span>
-          <input type="text" id="manualEmailInput" placeholder="your email" style="background:rgba(0,0,0,0.25); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:14px; font-size:12px; width:140px;">
-          <button class="btn ghost small" id="manualEmailBtn">Continue</button>
         </div>
       </div>
       <div id="signedInWrap" style="display:none; align-items:center; gap:10px;">
@@ -367,7 +361,7 @@
   </div>
 </div>
 
-<nav class="tabs">
+<nav class="tabs" id="mainTabs" style="display:none;">
   <button data-view="dashboard" class="active">Dashboard</button>
   <button data-view="productions">Productions</button>
   <button data-view="calendar">Calendar</button>
@@ -380,7 +374,12 @@
   <button data-view="setup">Roster / Setup</button>
 </nav>
 
-<main>
+<div id="signedOutShell" style="display:none; max-width:520px; margin:70px auto; text-align:center; padding:0 24px;">
+  <div class="lamp" style="font-size:30px; margin-bottom:10px;">🔒</div>
+  <p style="font-size:15px; color:var(--paper-dim); line-height:1.6;">Sign in above — with Google, or Email &amp; Password if your school blocks Google sign-in — to view this production. A real account is required now, even just to look around.</p>
+</div>
+
+<main id="mainContent" style="display:none;">
 
   <section class="view active" id="view-dashboard">
     <div class="card" id="announcementsCard">
@@ -479,7 +478,7 @@
       <h2>Report a Conflict</h2>
       <div id="conflictNoCrewMsg" class="empty-state" style="display:none;">No crew on the roster yet — add crew members in <b>Roster / Setup</b> first, then come back here to submit a conflict.</div>
       <div id="conflictNoEventMsg" class="empty-state" style="display:none;">No upcoming calls on the calendar yet — add one in the <b>Calendar</b> tab first.</div>
-      <div id="conflictNotSignedInMsg" class="empty-state" style="display:none;">Sign in with Google, or enter your email (top right), to submit a conflict.</div>
+      <div id="conflictNotSignedInMsg" class="empty-state" style="display:none;">Sign in with Google or Email &amp; Password (top right) to submit a conflict.</div>
       <div id="conflictNotOnRosterMsg" class="empty-state" style="display:none;">You're identified, but that email isn't on the roster yet — ask the Director to add it in Roster / Setup.</div>
       <div id="conflictFormWrap">
         <div class="form-grid">
@@ -522,7 +521,7 @@
 
   <section class="view" id="view-behavior">
     <div id="behaviorNotSignedInMsg" class="empty-state" style="display:none;">
-      Sign in with Google, or enter your email (top right), to see your behavior record.
+      Sign in with Google or Email &amp; Password (top right) to see your behavior record.
     </div>
     <div id="behaviorNotOnRosterMsg" class="empty-state" style="display:none;">
       You're identified, but that email isn't on the roster yet — ask the Director to add it in Roster / Setup.
@@ -1036,14 +1035,23 @@ function toast(msg){
   t.textContent = msg; t.classList.add('show');
   clearTimeout(t._timer); t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
 }
+function showSignedOutShell(){
+  document.getElementById('mainTabs').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('signedOutShell').style.display = 'block';
+}
+function showAppShell(){
+  document.getElementById('mainTabs').style.display = 'flex';
+  document.getElementById('mainContent').style.display = 'block';
+  document.getElementById('signedOutShell').style.display = 'none';
+}
 
 let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set(), behaviorSub:'log', behaviorWeekCursor:null, myBehaviorWeekCursor:null, editingEventId:null, editingAnnouncementId:null, participationWeekCursor:null, allPartWeekCursor:null };
-let authUser = null; // { email, displayName } once signed in via Google, else null
+let authUser = null; // { email, displayName } once signed in via Google or Email/Password, else null
 
-// Identity resolves two ways: real Google sign-in (authUser) is verified;
-// device.manualEmail is a self-typed fallback for accounts Google blocks
-// (e.g. locked-down school Workspace accounts) and is NOT verified.
-function activeEmail(){ return authUser ? authUser.email : (device.manualEmail || null); }
+// Reading any data now requires real Firebase Auth (Firestore rules enforce this), so
+// identity is simply whether authUser is set — there's no unverified fallback anymore.
+function activeEmail(){ return authUser ? authUser.email : null; }
 function isVerified(){ return !!authUser; }
 function currentUser(){
   const email = activeEmail();
@@ -1111,16 +1119,8 @@ async function sendPasswordReset(email){
 }
 async function signOutUser(){
   try{ if(window.__fb && authUser) await window.__fb.signOut(window.__fb.auth); }catch(e){ console.warn('Sign-out failed', e); }
-  device.manualEmail = '';
-  saveDevice();
-  renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
-  renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
-}
-function setManualEmail(email){
-  device.manualEmail = email.trim();
-  saveDevice();
-  renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
-  renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+  // The ongoing onAuthStateChanged listener (see init()) picks up the transition from here —
+  // it clears loaded data and shows the sign-in shell, since reads require auth now.
 }
 function canViewDept(deptKey){
   if(isDirector()) return true;
@@ -1336,23 +1336,25 @@ function eventScope(ev){ return { type:'event', isSpecificCall: !!ev.isSpecificC
 
 // ---------------- HEADER ----------------
 function renderHeader(){
-  document.getElementById('prodName').value = state.productionName;
-  document.getElementById('prodName').disabled = !isDirector();
-  document.getElementById('todayDate').textContent = new Date().toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
-  document.getElementById('crewCount').textContent = state.crew.length;
-
   const email = activeEmail();
   document.getElementById('signedOutWrap').style.display = email ? 'none' : 'flex';
   document.getElementById('signedInWrap').style.display = email ? 'flex' : 'none';
   if(email){
-    const u = currentUser();
     document.getElementById('authUserName').textContent = authUser ? (authUser.displayName || authUser.email) : email;
-    let roleLabel;
-    if(isDirector()) roleLabel = 'Director (verified)';
-    else if(u) roleLabel = `${u.name} · ${deptInfo((u.departments||[])[0]||'').label || 'No team yet'}${isVerified()?'':' · unverified'}`;
-    else roleLabel = `Not on the roster yet${isVerified()?'':' · unverified'}`;
+    let roleLabel = 'Loading…';
+    if(state){
+      const u = currentUser();
+      if(isDirector()) roleLabel = 'Director (verified)';
+      else if(u) roleLabel = `${u.name} · ${deptInfo((u.departments||[])[0]||'').label || 'No team yet'}`;
+      else roleLabel = 'Not on the roster yet';
+    }
     document.getElementById('authUserRole').textContent = roleLabel;
   }
+  if(!state) return; // production data hasn't loaded yet (e.g. still signing in) — nothing more to show
+  document.getElementById('prodName').value = state.productionName;
+  document.getElementById('prodName').disabled = !isDirector();
+  document.getElementById('todayDate').textContent = new Date().toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'});
+  document.getElementById('crewCount').textContent = state.crew.length;
 }
 
 // ---------------- DASHBOARD ----------------
@@ -2515,7 +2517,7 @@ function renderReportFormSub(content, dep, depState){
   const u = currentUser();
   const staffLike = isDirectorOrStageMgmt();
   if(!staffLike && !u){
-    content.innerHTML = `<div class="empty-state">Sign in with Google, or enter your email (top right), to submit a report — reports and attendance are tied to your class period, so we need to know who's submitting. If you've done that and still see this, ask the Director to add your email to the roster.</div>`;
+    content.innerHTML = `<div class="empty-state">Sign in with Google or Email &amp; Password (top right) to submit a report — reports and attendance are tied to your class period, so we need to know who's submitting. If you've done that and still see this, ask the Director to add your email to the roster.</div>`;
     return;
   }
   if(!staffLike && !canViewDept(dep.key)){
@@ -2693,7 +2695,7 @@ function renderParticipationSub(content, dep, depState){
   // Team member (not Director): show only their own participation record for this department.
   const u = currentUser();
   if(!u){
-    content.innerHTML = `<div class="empty-state">Sign in with Google, or enter your email (top right), to see your participation grade.</div>`;
+    content.innerHTML = `<div class="empty-state">Sign in with Google or Email &amp; Password (top right) to see your participation grade.</div>`;
     return;
   }
   const r = participationScoreForStudent(u.id, dep.key, ui.participationWeekCursor);
@@ -3572,9 +3574,8 @@ function renderAll(){
   renderDashboard(); renderProductionsView(); renderCalMonth(); renderCalendar(); renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
 }
 
-async function init(){
+async function loadEverythingAndRender(){
   globalState = await loadOrMigrateGlobalState();
-  device = loadDevice();
   if(!globalState.activeProductionId && globalState.productions.length){ globalState.activeProductionId = globalState.productions[0].id; }
   currentProductionId = globalState.activeProductionId;
   state = await loadProductionState(currentProductionId);
@@ -3587,30 +3588,57 @@ async function init(){
   if(globalState.emailjs.templateBehavior === undefined) globalState.emailjs.templateBehavior = '';
   if(globalState.emailjs.templateFailingGrade === undefined) globalState.emailjs.templateFailingGrade = '';
   if(!globalState.groupme) globalState.groupme = { botId:'' };
+  showAppShell();
   renderAll();
   renderCostumeMeasureGrid(); renderCostumePieces();
   initEmailJs();
+  if(isDirector()){ checkAndSendDeadlineAlerts(); checkAndSendGroupMeReminders(); }
+}
 
+async function init(){
+  device = loadDevice();
   await waitForFirebase();
-  if(window.__fb){
-    window.__fb.onAuthStateChanged(window.__fb.auth, (user)=>{
+
+  if(!window.__fb){
+    toast('Sign-in service failed to load — try refreshing the page');
+    showSignedOutShell();
+  } else {
+    // Resolve the very first auth check (including restoring any persisted session) before
+    // attempting any Firestore reads, since reads now require request.auth != null — a read
+    // fired before this resolves would incorrectly look "signed out" and get rejected.
+    const firstUser = await new Promise(resolve=>{
+      const unsub = window.__fb.onAuthStateChanged(window.__fb.auth, (user)=>{ unsub(); resolve(user); });
+    });
+    authUser = firstUser ? { email:firstUser.email, displayName:firstUser.displayName } : null;
+
+    if(authUser) await loadEverythingAndRender();
+    else showSignedOutShell();
+    renderHeader();
+
+    // Ongoing listener for sign-in/out events that happen after this initial load.
+    window.__fb.onAuthStateChanged(window.__fb.auth, async (user)=>{
+      const wasSignedIn = !!authUser;
       authUser = user ? { email:user.email, displayName:user.displayName } : null;
-      if(authUser && device.manualEmail){ device.manualEmail = ''; saveDevice(); } // real sign-in takes over
-      renderHeader(); renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
-      renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
-      if(isDirector()){ checkAndSendDeadlineAlerts(); checkAndSendGroupMeReminders(); }
+      const isSignedIn = !!authUser;
+      if(!wasSignedIn && isSignedIn){
+        await loadEverythingAndRender();
+      } else if(wasSignedIn && !isSignedIn){
+        stopWorkspaceListener();
+        state = null; globalState = null; currentProductionId = null;
+        showSignedOutShell();
+      } else if(isSignedIn && state){
+        renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
+        renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+        if(isDirector()){ checkAndSendDeadlineAlerts(); checkAndSendGroupMeReminders(); }
+      }
+      renderHeader();
     });
   }
+
   document.getElementById('googleSignInBtn').addEventListener('click', signInWithGoogle);
   document.getElementById('toggleEmailPwBtn').addEventListener('click', ()=>{
     const wrap = document.getElementById('emailPwWrap');
     wrap.style.display = wrap.style.display==='none' ? 'flex' : 'none';
-    document.getElementById('manualWrap').style.display = 'none';
-  });
-  document.getElementById('toggleManualBtn').addEventListener('click', ()=>{
-    const wrap = document.getElementById('manualWrap');
-    wrap.style.display = wrap.style.display==='none' ? 'flex' : 'none';
-    document.getElementById('emailPwWrap').style.display = 'none';
   });
   document.getElementById('epSignInBtn').addEventListener('click', ()=>{
     const email = document.getElementById('epEmail').value.trim();
@@ -3628,13 +3656,6 @@ async function init(){
     const email = document.getElementById('epEmail').value.trim();
     if(!email){ toast('Enter your email above first, then click Forgot password'); return; }
     sendPasswordReset(email);
-  });
-  document.getElementById('manualEmailBtn').addEventListener('click', ()=>{
-    const val = document.getElementById('manualEmailInput').value.trim();
-    if(!val || !val.includes('@')){ toast('Enter a valid email'); return; }
-    setManualEmail(val);
-    document.getElementById('manualEmailInput').value = '';
-    toast("Continuing as " + val + " (unverified)");
   });
   document.getElementById('signOutBtn').addEventListener('click', signOutUser);
   document.getElementById('claimDirectorBtn').addEventListener('click', async ()=>{
@@ -3887,4 +3908,4 @@ init();
 })();
 </script>
 </body>
-</html>    
+</html>  
