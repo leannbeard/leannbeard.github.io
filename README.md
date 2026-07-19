@@ -267,11 +267,17 @@
   }
   .whiteboard-canvas{ position:relative; width:1400px; height:900px; }
   .sticky-note{
-    position:absolute; width:170px; min-height:110px; border-radius:2px; padding:10px 10px 26px;
-    box-shadow:0 4px 10px rgba(0,0,0,0.35); cursor:grab; font-family:'Inter',sans-serif; font-size:12.5px; color:#241f14;
+    position:absolute; width:170px; min-height:120px; border-radius:2px; padding:0 10px 26px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.35); font-family:'Inter',sans-serif; font-size:12.5px; color:#241f14;
     display:flex; flex-direction:column; user-select:none;
   }
-  .sticky-note.dragging{ cursor:grabbing; z-index:50; box-shadow:0 8px 20px rgba(0,0,0,0.5); }
+  .sticky-note.dragging{ z-index:50; box-shadow:0 8px 20px rgba(0,0,0,0.5); }
+  .sticky-note .sn-handle{
+    height:20px; margin:0 -10px 6px; padding:0 10px; display:flex; align-items:center;
+    font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.06em; text-transform:uppercase;
+    background:rgba(0,0,0,0.12); border-radius:2px 2px 0 0; cursor:grab; touch-action:none; opacity:0.7;
+  }
+  .sticky-note .sn-handle:active{ cursor:grabbing; }
   .sticky-note textarea{
     background:transparent; border:none; resize:none; width:100%; flex:1; font-family:inherit; font-size:inherit; color:inherit;
     outline:none; cursor:text;
@@ -282,6 +288,30 @@
   .sticky-color-row{ display:flex; gap:6px; margin-bottom:10px; }
   .sticky-color-swatch{ width:22px; height:22px; border-radius:4px; cursor:pointer; border:2px solid transparent; }
   .sticky-color-swatch.active{ border-color:var(--paper); }
+
+  .wb-toolbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid var(--line); border-radius:var(--radius); }
+  .wb-tool-btn{ background:none; border:1px solid var(--line); color:var(--paper-dim); padding:7px 12px; border-radius:16px; font-size:12px; cursor:pointer; }
+  .wb-tool-btn.active{ background:var(--amber); color:var(--ink); border-color:var(--amber); font-weight:600; }
+  .wb-sep{ width:1px; align-self:stretch; background:var(--line); margin:0 2px; }
+  .wb-color-row{ display:flex; gap:5px; }
+  .wb-width-row{ display:flex; gap:5px; }
+  .wb-width-btn.active{ background:var(--amber); color:var(--ink); }
+  .wb-image-add-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .wb-image-add-row input{ flex:1; min-width:200px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:8px 10px; border-radius:3px; font-size:12.5px; }
+  #wbDrawCanvas{ position:absolute; top:0; left:0; width:1400px; height:900px; z-index:40; pointer-events:none; }
+
+  .wb-image{
+    position:absolute; box-shadow:0 4px 10px rgba(0,0,0,0.35); border:2px solid rgba(255,255,255,0.12); border-radius:2px;
+    background:rgba(0,0,0,0.2); display:flex; flex-direction:column; overflow:visible;
+  }
+  .wb-image.dragging{ z-index:50; }
+  .wb-image img{ width:100%; flex:1; object-fit:contain; background:rgba(0,0,0,0.25); pointer-events:none; min-height:0; }
+  .wb-image .sn-handle{ position:relative; z-index:2; }
+  .wb-image .sn-del{ position:absolute; top:2px; right:4px; bottom:auto; background:rgba(20,22,26,0.6); border-radius:50%; width:18px; height:18px; display:flex; align-items:center; justify-content:center; color:var(--paper); font-size:11px; }
+  .img-resize-handle{
+    position:absolute; bottom:-4px; right:-4px; width:14px; height:14px; background:var(--amber); border-radius:2px;
+    cursor:nwse-resize; touch-action:none; border:1px solid var(--ink);
+  }
   .incident-top{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
   .incident-meta{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--paper-dim); margin-top:3px; }
   .incident-note{ font-size:13px; margin-top:6px; color:var(--paper-dim); }
@@ -318,6 +348,7 @@
           <input type="password" id="epPassword" placeholder="password" style="background:rgba(0,0,0,0.25); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:14px; font-size:12px; width:120px;">
           <button class="btn small" id="epSignInBtn">Sign In</button>
           <button class="btn ghost small" id="epSignUpBtn">Create Account</button>
+          <button class="btn ghost small" id="epForgotBtn" style="font-size:10.5px; opacity:0.75;">Forgot password?</button>
         </div>
         <div id="manualWrap" style="display:none; gap:6px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
           <span style="font-size:10.5px; color:var(--paper-dim); max-width:220px; text-align:right;">Not verified — only use if sign-in truly doesn't work for you:</span>
@@ -512,7 +543,7 @@
     <div id="behaviorAuthorizedWrap">
       <div class="subtabs" id="behaviorSubtabs">
         <button data-beh-sub="log" class="active">Log Infraction</button>
-        <button data-beh-sub="summary">Weekly Summary</button>
+        <button data-beh-sub="summary" id="behSummaryTabBtn">Weekly Summary</button>
       </div>
 
       <div id="behaviorLogView">
@@ -538,7 +569,7 @@
           <textarea id="behNotes" class="full-width" style="min-height:50px;" placeholder="Additional notes (optional)"></textarea>
           <button class="btn" id="behLogBtn">Log Infraction</button>
         </div>
-        <div class="card">
+        <div class="card" id="behRecentCard" style="display:none;">
           <h2>Recent Infractions</h2>
           <div id="behaviorIncidentList"></div>
         </div>
@@ -604,9 +635,12 @@
 
   <section class="view" id="view-notifications">
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
         <h2 style="margin:0;">Schedule & Grading Changes</h2>
-        <button class="btn ghost small" id="markReadBtn">Mark all read</button>
+        <span style="display:flex; gap:8px;">
+          <button class="btn ghost small" id="markReadBtn">Mark all read</button>
+          <button class="btn danger small" id="clearAllNotifsBtn" style="display:none;">Clear All</button>
+        </span>
       </div>
       <div id="notifList"></div>
     </div>
@@ -621,6 +655,7 @@
     <div class="card" id="dirAccessCard" style="display:none;">
       <h2>Director Access</h2>
       <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Anyone signed in with one of these Google accounts gets Director access. Real Google sign-in enforces this — it isn't just a UI toggle.</p>
+      <div id="dirRecoveryWarning" class="lockmsg" style="display:none; border-color:var(--red); color:var(--red);">⚠ Only one Director email is on file. If you lose access to that Google account, there's no self-service way back in — add a second email you also control as a backup.</div>
       <div id="directorEmailsList" style="margin-bottom:10px;"></div>
       <div class="form-grid" style="max-width:320px;">
         <input type="text" id="newDirectorEmail" placeholder="name@school.edu">
@@ -721,7 +756,18 @@
     <div class="card" id="resetCard">
       <h2>Data</h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">All production data is shared and saved automatically to this app. Note: this app does not send real emails or sync with Google Classroom — those need a live server connection, which a standalone file can't provide.</p>
+      <p style="font-size:12.5px; margin-bottom:4px;">Current production size: <b id="dataSizeLabel">—</b> <span style="color:var(--paper-dim);">(Firestore's per-document limit is 1 MB — everything in this production shares that one limit, so this is worth checking occasionally over a long season.)</span></p>
+      <div class="bar" style="margin-bottom:14px;"><div class="bar-fill" id="dataSizeBar" style="width:0%;"></div></div>
+      <button class="btn ghost small" id="downloadBackupBtn" style="margin-right:8px;">Download Full Backup (JSON)</button>
       <button class="btn danger small" id="resetAllBtn">Reset All Production Data</button>
+    </div>
+    <div class="card" id="archiveCard">
+      <h2>Archive Old Records</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Once you've exported a grading period's CSV into your real gradebook (Ascender, etc.), you don't need this app to keep holding onto it — this permanently deletes daily reports and behavior infractions dated before the date you choose, across every department. Grades/behavior after that date are untouched. <b>Export your CSVs first</b> — this cannot be undone.</p>
+      <div class="form-grid" style="max-width:260px;">
+        <input type="date" id="archiveCutoffDate">
+        <button class="btn danger small" id="archiveDeleteBtn">Delete Records Before This Date</button>
+      </div>
     </div>
   </section>
 
@@ -733,8 +779,8 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDbK6aryhE8wBUJ54Hq3_shhSOsJzSP-bY",
@@ -751,7 +797,7 @@
   const auth = getAuth(app);
   const googleProvider = new GoogleAuthProvider();
 
-  window.__fb = { db, doc, getDoc, setDoc, onSnapshot, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword };
+  window.__fb = { db, doc, getDoc, setDoc, onSnapshot, deleteDoc, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail };
   window.__firebaseReady = true;
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
@@ -792,7 +838,7 @@ function seedTasks(items){
     id:cryptoId(), title, description:'', workType, priority, dueDate:todayISO(), estimatedHours:hours, status:'todo', assignedTo:'', assignedToCrewId:null, deadlineAlertSent:false, checklist:[]
   }));
 }
-function defaultDeptState(seed){ return { tasks: seedTasks(seed), templates:[], reports:[] }; }
+function defaultDeptState(seed){ return { tasks: seedTasks(seed), templates:[], reports:[], workspaceRestricted:false }; }
 
 function freshDepartments(seeded){
   if(seeded){
@@ -1052,6 +1098,17 @@ async function signUpWithEmailPassword(email, password){
     toast(friendlyAuthError(e));
   }
 }
+async function sendPasswordReset(email){
+  try{
+    await waitForFirebase();
+    if(!window.__fb){ toast('Still loading, try again in a moment'); return; }
+    await window.__fb.sendPasswordResetEmail(window.__fb.auth, email);
+    toast('Password reset email sent — check your inbox');
+  }catch(e){
+    console.warn('Password reset failed', e);
+    toast(friendlyAuthError(e));
+  }
+}
 async function signOutUser(){
   try{ if(window.__fb && authUser) await window.__fb.signOut(window.__fb.auth); }catch(e){ console.warn('Sign-out failed', e); }
   device.manualEmail = '';
@@ -1254,7 +1311,10 @@ function attendanceChipForEvent(ev){
   return `<div class="chip-row" style="margin-top:6px;"><span class="chip outline">Attendance: ✓${counts.present} ✕${counts.absent} ⊘${counts.excused} / ${attendees.length}</span></div>`;
 }
 
-function logChange(message, scope){ state.changelog.unshift({ id:cryptoId(), timestamp:new Date().toISOString(), message, scope: scope || {type:'all'} }); }
+function logChange(message, scope){
+  state.changelog.unshift({ id:cryptoId(), timestamp:new Date().toISOString(), message, scope: scope || {type:'all'} });
+  if(state.changelog.length > 300) state.changelog = state.changelog.slice(0, 300);
+}
 function canSeeNotification(n){
   if(isDirector()) return true;
   const scope = n.scope || {type:'all'};
@@ -1315,7 +1375,7 @@ function renderProductionsView(){
 
   const copySel = document.getElementById('copyFromProduction');
   copySel.innerHTML = '<option value="">Start with an empty roster</option>' +
-    globalState.productions.map(p=>`<option value="${p.id}">Copy crew from "${p.name}"</option>`).join('');
+    globalState.productions.map(p=>`<option value="${p.id}">Copy crew from "${escapeHtml(p.name)}"</option>`).join('');
 
   const list = document.getElementById('productionsList');
   list.innerHTML = '';
@@ -1326,9 +1386,12 @@ function renderProductionsView(){
     row.className = 'cal-event';
     row.innerHTML = `
       <div class="cal-event-top">
-        <div><div class="cal-title">${p.name}${isActive?' <span class="tag" style="margin-left:6px; color:var(--sage); border-color:var(--sage);">Currently viewing</span>':''}</div>
+        <div><div class="cal-title">${escapeHtml(p.name)}${isActive?' <span class="tag" style="margin-left:6px; color:var(--sage); border-color:var(--sage);">Currently viewing</span>':''}</div>
         <div class="cal-meta">Created ${fmtDate(p.createdAt.slice(0,10))}</div></div>
-        ${!isActive?`<button class="btn ghost small" data-switch="${p.id}">Switch to this production</button>`:''}
+        <span style="display:flex; gap:8px;">
+          ${!isActive?`<button class="btn ghost small" data-switch="${p.id}">Switch to this production</button>`:''}
+          ${!isActive?`<button class="btn danger small" data-delete="${p.id}">Delete</button>`:''}
+        </span>
       </div>
     `;
     list.appendChild(row);
@@ -1337,6 +1400,29 @@ function renderProductionsView(){
     await switchToProduction(btn.dataset.switch);
     toast(`Switched to "${globalState.productions.find(p=>p.id===btn.dataset.switch).name}"`);
   }));
+  list.querySelectorAll('[data-delete]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    const p = globalState.productions.find(x=>x.id===btn.dataset.delete);
+    if(!p) return;
+    if(!confirm(`Permanently delete "${p.name}"? This removes ALL of its data — tasks, calendar, grades, attendance, behavior records, and workspace boards — with no undo. Download a backup first (Setup → Data) if you want to keep anything from it.`)) return;
+    btn.disabled = true; btn.textContent = 'Deleting…';
+    try{
+      await deleteProductionCompletely(p.id);
+      globalState.productions = globalState.productions.filter(x=>x.id!==p.id);
+      await saveGlobalState();
+      renderProductionsView();
+      toast(`"${p.name}" deleted`);
+    }catch(e){
+      toast('Delete failed — check your connection and try again');
+      btn.disabled = false; btn.textContent = 'Delete';
+    }
+  }));
+}
+async function deleteProductionCompletely(prodId){
+  if(!window.__fb) throw new Error('Firebase not ready');
+  await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'productions', prodId));
+  await Promise.all(DEPARTMENTS.map(d=>
+    window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'workspaces', prodId+'_'+d.key)).catch(()=>{})
+  ));
 }
 
 function renderAnnouncements(){
@@ -1424,17 +1510,19 @@ function renderDashboard(){
 
   const upcoming = document.getElementById('dashUpcoming');
   const future = [...state.calendar].filter(e=>e.date >= todayISO()).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
-  upcoming.innerHTML = future.length ? future.map(e=>`<div class="list-item"><span>${e.title}${e.isSpecificCall?' <span class="tag" style="margin-left:4px;">specific call</span>':''}</span><span class="d">${fmtDate(e.date)} · ${e.startTime||'TBD'}</span></div>`).join('')
+  upcoming.innerHTML = future.length ? future.map(e=>`<div class="list-item"><span>${escapeHtml(e.title)}${e.isSpecificCall?' <span class="tag" style="margin-left:4px;">specific call</span>':''}</span><span class="d">${fmtDate(e.date)} · ${e.startTime||'TBD'}</span></div>`).join('')
     : `<div class="empty-state">No upcoming calls scheduled.</div>`;
 
   const attn = document.getElementById('dashAttention');
   const pendingConflicts = state.conflicts.filter(c=>c.status==='pending').length;
   let reportsToGrade = 0;
-  DEPARTMENTS.forEach(d=>{ reportsToGrade += state.departments[d.key].reports.filter(r=>r.status==='submitted'||r.status==='verified').length; });
+  if(isDirector()){
+    DEPARTMENTS.forEach(d=>{ reportsToGrade += state.departments[d.key].reports.filter(r=>r.status==='submitted'||r.status==='verified').length; });
+  }
   const items = [];
   if(pendingConflicts) items.push(`<div class="list-item"><span>⚠ ${pendingConflicts} conflict(s) awaiting a decision</span><span class="d">Conflicts tab</span></div>`);
   if(reportsToGrade) items.push(`<div class="list-item"><span>📋 ${reportsToGrade} report(s) awaiting review/grade</span><span class="d">Departments tab</span></div>`);
-  if(isDirector()){
+  if(isDirectorOrStageMgmt()){
     attendanceAlerts().forEach(a=>{
       items.push(`<div class="list-item" style="color:var(--red);"><span>🚩 ${a.crew.name} has ${a.count} unexcused absence${a.count!==1?'s':''}</span><span class="d">${a.crew.classPeriod||''}</span></div>`);
     });
@@ -1444,8 +1532,8 @@ function renderDashboard(){
 
 // ---------------- CALENDAR ----------------
 function renderCalendarForm(){
-  document.getElementById('calAddCard').style.display = isDirector() ? 'block' : 'none';
-  document.getElementById('groupmeAnnounceCard').style.display = isDirector() ? 'block' : 'none';
+  document.getElementById('calAddCard').style.display = isDirectorOrStageMgmt() ? 'block' : 'none';
+  document.getElementById('groupmeAnnounceCard').style.display = isDirectorOrStageMgmt() ? 'block' : 'none';
   const wrap = document.getElementById('calDeptChecks');
   wrap.innerHTML = DEPARTMENTS.map(d=>`<label><input type="checkbox" value="${d.key}"> ${d.label}</label>`).join('');
   const specific = document.getElementById('calSpecific');
@@ -1546,7 +1634,7 @@ function buildEventCardEl(ev){
   card.className = 'cal-event';
   card.style.marginBottom = '8px';
 
-  if(ui.editingEventId === ev.id && isDirector()){
+  if(ui.editingEventId === ev.id && isDirectorOrStageMgmt()){
     card.innerHTML = `
       <div class="form-grid">
         <input type="text" class="edit-title" value="${escapeAttr(ev.title)}" placeholder="Title">
@@ -1606,7 +1694,7 @@ function buildEventCardEl(ev){
 
   card.innerHTML = `
     <div class="cal-event-top">
-      <div><div class="cal-title">${ev.title}</div><div class="cal-meta">${fmtDate(ev.date)} · ${ev.startTime||'TBD'}${ev.endTime?'–'+ev.endTime:''} ${ev.location?'· '+ev.location:''}</div></div>
+      <div><div class="cal-title">${escapeHtml(ev.title)}</div><div class="cal-meta">${fmtDate(ev.date)} · ${ev.startTime||'TBD'}${ev.endTime?'–'+ev.endTime:''} ${ev.location?'· '+ev.location:''}</div></div>
       <span class="cal-date-chip">${ev.date}</span>
     </div>
     ${ev.isSpecificCall ? `<div class="chip-row">
@@ -1614,12 +1702,12 @@ function buildEventCardEl(ev){
       ${(ev.calledDepartments||[]).map(k=>`<span class="chip" style="background:${deptInfo(k).color}">${deptInfo(k).label}</span>`).join('')}
       ${(ev.calledStudentIds||[]).map(id=>{ const c=state.crew.find(x=>x.id===id); return c?`<span class="chip outline">${c.name}</span>`:''; }).join('')}
     </div>` : ''}
-    ${ev.notes?`<div class="cal-notes">${ev.notes}</div>`:''}
+    ${ev.notes?`<div class="cal-notes">${escapeHtml(ev.notes)}</div>`:''}
     ${conflictsBlockForEvent(ev)}
     ${attendanceChipForEvent(ev)}
-    ${isDirector() ? `<div class="cal-actions"><button class="btn ghost small edit-btn">Edit</button><button class="btn danger small del-btn">Cancel</button></div>` : ''}
+    ${isDirectorOrStageMgmt() ? `<div class="cal-actions"><button class="btn ghost small edit-btn">Edit</button><button class="btn danger small del-btn">Cancel</button></div>` : ''}
   `;
-  if(isDirector()){
+  if(isDirectorOrStageMgmt()){
     card.querySelector('.edit-btn').addEventListener('click', ()=>{
       ui.editingEventId = ev.id; renderCalMonth(); renderCalendar();
     });
@@ -1646,7 +1734,7 @@ function renderCalDayDetail(dateISO){
     const due = document.createElement('div');
     due.style.marginTop = '6px';
     due.innerHTML = `<h3>Tasks due</h3>` + dueTasks.map(dt=>`
-      <div class="list-item"><span><span class="chip" style="background:${dt.dept.color}; margin-right:6px;">${dt.dept.label}</span>${dt.task.title}</span><span class="d">${dt.task.status.replace('_',' ')}</span></div>
+      <div class="list-item"><span><span class="chip" style="background:${dt.dept.color}; margin-right:6px;">${dt.dept.label}</span>${escapeHtml(dt.task.title)}</span><span class="d">${dt.task.status.replace('_',' ')}</span></div>
     `).join('');
     wrap.appendChild(due);
   }
@@ -1655,9 +1743,9 @@ function renderCalDayDetail(dateISO){
 function renderCalendar(){
   const list = document.getElementById('calList');
   list.innerHTML = '';
-  if(!isDirector()){
+  if(!isDirectorOrStageMgmt()){
     const lock = document.createElement('div'); lock.className = 'lockmsg';
-    lock.textContent = 'Viewing as Team — only the Teacher/Director can add or edit calendar entries.';
+    lock.textContent = 'Viewing as Team — only the Director or Stage Management can add or edit calendar entries.';
     list.appendChild(lock);
   }
   const sorted = [...state.calendar].filter(visibleToCurrentUser).sort((a,b)=>a.date.localeCompare(b.date));
@@ -1665,6 +1753,7 @@ function renderCalendar(){
   sorted.forEach(ev=>list.appendChild(buildEventCardEl(ev)));
 }
 async function addCalendarEvent(){
+  if(!isDirectorOrStageMgmt()){ toast('Only the Director or Stage Management can add calendar entries'); return; }
   const date = document.getElementById('calDate').value, title = document.getElementById('calTitle').value.trim();
   if(!date || !title){ toast('Add a date and title first'); return; }
   const startTime = document.getElementById('calStart').value, endTime = document.getElementById('calEnd').value;
@@ -1728,7 +1817,7 @@ function renderConflicts(){
       card.innerHTML = `
         <div class="conflict-top"><span>${c.crewName} <span style="color:var(--paper-dim); font-weight:400;">(${c.department||'Unassigned'})</span></span><span class="status-chip ${c.status}">${c.status}</span></div>
         <div class="conflict-meta">Submitted ${fmtDateTime(c.submittedAt)}</div>
-        <div class="conflict-reason">${c.reason}${c.notes?' — '+c.notes:''}</div>
+        <div class="conflict-reason">${escapeHtml(c.reason)}${c.notes?' — '+escapeHtml(c.notes):''}</div>
         ${isDirector() && c.status==='pending' ? `<div class="cal-actions"><button class="btn small" data-act="approve" data-id="${c.id}">Approve</button><button class="btn danger small" data-act="deny" data-id="${c.id}">Deny</button></div>` : ''}
       `;
       list.appendChild(card);
@@ -1917,8 +2006,10 @@ function combinedParticipationForStudent(crewId, weekStart){
 }
 
 function switchBehaviorSub(sub){
+  if(sub==='summary' && !isDirector()){ sub = 'log'; } // Weekly Summary is grades/behavior viewing — Director only
   ui.behaviorSub = sub;
   document.querySelectorAll('#behaviorSubtabs button').forEach(b=>b.classList.toggle('active', b.dataset.behSub===sub));
+  document.getElementById('behSummaryTabBtn').style.display = isDirector() ? 'inline-block' : 'none';
   document.getElementById('behaviorLogView').style.display = sub==='log' ? 'block' : 'none';
   document.getElementById('behaviorSummaryView').style.display = sub==='summary' ? 'block' : 'none';
   if(sub==='log') renderBehaviorLog(); else renderBehaviorSummary();
@@ -1989,6 +2080,8 @@ function renderBehaviorLog(){
   const students = state.crew.filter(c=>c.role==='student').sort((a,b)=>a.name.localeCompare(b.name));
   studentSel.innerHTML = students.map(c=>`<option value="${c.id}">${c.name}${(c.departments||[]).includes('cast') && c.castRole ? ' as '+c.castRole : ''} — ${(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team'}</option>`).join('') || '<option value="">No students on roster</option>';
 
+  document.getElementById('behRecentCard').style.display = isDirector() ? 'block' : 'none';
+  if(!isDirector()) return; // Stage Management can log infractions but cannot view existing ones
   const list = document.getElementById('behaviorIncidentList');
   const sorted = [...state.behaviorIncidents].sort((a,b)=>b.date.localeCompare(a.date) || b.timestamp.localeCompare(a.timestamp));
   if(!sorted.length){ list.innerHTML = `<div class="empty-state">No infractions logged yet.</div>`; return; }
@@ -1996,7 +2089,7 @@ function renderBehaviorLog(){
     <div class="incident-card">
       <div class="incident-top"><span><b>${i.crewName}</b></span><span class="mono" style="color:var(--red);">−${i.deduction} pts</span></div>
       <div class="incident-meta">${fmtDate(i.date)} · ${i.reason||'No reason given'} · logged by ${i.loggedBy||'someone'}</div>
-      ${i.notes?`<div class="incident-note">${i.notes}</div>`:''}
+      ${i.notes?`<div class="incident-note">${escapeHtml(i.notes)}</div>`:''}
       ${isDirector()?`<button class="btn danger small" style="margin-top:8px;" data-del-incident="${i.id}">Delete</button>`:''}
     </div>
   `).join('');
@@ -2031,6 +2124,11 @@ async function logInfraction(){
 }
 
 function renderBehaviorSummary(){
+  if(!isDirector()){
+    const wrap = document.getElementById('behaviorSummaryWrap');
+    if(wrap) wrap.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>Weekly behavior summaries are Director-only.</div>`;
+    return;
+  }
   document.getElementById('behWeekLabel').textContent = fmtWeekLabel(ui.behaviorWeekCursor);
   const cfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
   const students = state.crew.filter(c=>c.role==='student').sort((a,b)=>a.name.localeCompare(b.name));
@@ -2078,6 +2176,7 @@ function downloadCsvRows(headerRow, dataRows, filename){
   toast('CSV downloaded');
 }
 function exportBehaviorCsv(){
+  if(!isDirector()){ toast('Only the Director can export behavior grades'); return; }
   const rows = ui._behaviorRowsCache || [];
   if(!rows.length){ toast('Nothing to export'); return; }
   const weekLabel = ui.behaviorWeekCursor;
@@ -2173,7 +2272,7 @@ function renderDepartments(){
 }
 
 function renderTasksSub(content, dep, depState){
-  if(!canViewDept(dep.key)){
+  if(!canViewDept(dep.key) && !isDirectorOrStageMgmt()){
     content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>${dep.label} tasks are only visible to ${dep.label} crew and the Director.</div>`;
     return;
   }
@@ -2246,7 +2345,7 @@ function renderTaskCard(t, dep, depState){
   const clDone = t.checklist.filter(i=>i.done).length;
   body.innerHTML = `
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-      <div class="task-title" style="margin-bottom:0;">${t.title}</div>
+      <div class="task-title" style="margin-bottom:0;">${escapeHtml(t.title)}</div>
       ${t.checklist.length ? `<span class="task-checklist-progress">☑ ${clDone}/${t.checklist.length}</span>` : ''}
     </div>
   `;
@@ -2270,7 +2369,7 @@ function renderTaskCard(t, dep, depState){
     await saveState();
   });
   metaRow.appendChild(assignee);
-  if(isDirector()){
+  if(isDirectorOrStageMgmt()){
     const del = document.createElement('button'); del.className='task-del'; del.textContent='✕';
     del.addEventListener('click', async ()=>{ depState.tasks = depState.tasks.filter(x=>x.id!==t.id); await saveState(); renderDepartments(); renderDashboard(); });
     metaRow.appendChild(del);
@@ -2342,14 +2441,15 @@ function renderTaskCard(t, dep, depState){
 }
 
 function renderTemplatesSub(content, dep, depState){
-  if(!canViewDept(dep.key)){
+  if(!canViewDept(dep.key) && !isDirectorOrStageMgmt()){
     content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>${dep.label} templates are only visible to ${dep.label} crew and the Director.</div>`;
     return;
   }
+  const canManage = isDirectorOrStageMgmt();
   content.innerHTML = `
-    <div class="lockmsg" style="display:${isDirector()?'none':'block'}">Viewing as Team — only the Teacher/Director can create or apply templates.</div>
+    <div class="lockmsg" style="display:${canManage?'none':'block'}">Viewing as Team — only the Director or Stage Management can create or apply templates.</div>
     <div id="tplList"></div>
-    ${isDirector() ? `
+    ${canManage ? `
     <div class="card" style="margin-top:14px;">
       <h3>New Template</h3>
       <input type="text" id="tplName" placeholder="Template name (e.g. Standard Build Week)" class="full-width" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:9px 10px; border-radius:3px;">
@@ -2364,7 +2464,7 @@ function renderTemplatesSub(content, dep, depState){
     const card = document.createElement('div'); card.className = 'card'; card.style.marginBottom='10px';
     card.innerHTML = `<h3 style="margin-bottom:6px;">${tpl.name}</h3><p style="font-size:12.5px;color:var(--paper-dim);margin:0 0 10px;">${tpl.items.length} task(s)</p>
       <button class="btn small" data-act="apply" data-id="${tpl.id}">Apply — creates ${tpl.items.length} tasks</button>
-      ${isDirector()?`<button class="btn danger small" data-act="del" data-id="${tpl.id}" style="margin-left:8px;">Delete</button>`:''}`;
+      ${canManage?`<button class="btn danger small" data-act="del" data-id="${tpl.id}" style="margin-left:8px;">Delete</button>`:''}`;
     list.appendChild(card);
   });
   list.querySelectorAll('[data-act=apply]').forEach(b=>b.addEventListener('click', async ()=>{
@@ -2379,7 +2479,7 @@ function renderTemplatesSub(content, dep, depState){
     await saveState(); renderDepartments(); toast('Template deleted');
   }));
 
-  if(isDirector()){
+  if(canManage){
     let items = [{title:'', workType:'Build', priority:'medium', hours:1}];
     function renderItems(){
       const wrap = document.getElementById('tplItemsWrap'); wrap.innerHTML='';
@@ -2413,16 +2513,17 @@ function renderTemplatesSub(content, dep, depState){
 
 function renderReportFormSub(content, dep, depState){
   const u = currentUser();
-  if(!isDirector() && !u){
+  const staffLike = isDirectorOrStageMgmt();
+  if(!staffLike && !u){
     content.innerHTML = `<div class="empty-state">Sign in with Google, or enter your email (top right), to submit a report — reports and attendance are tied to your class period, so we need to know who's submitting. If you've done that and still see this, ask the Director to add your email to the roster.</div>`;
     return;
   }
-  if(!isDirector() && !canViewDept(dep.key)){
+  if(!staffLike && !canViewDept(dep.key)){
     content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>Only ${dep.label} crew and the Director can submit a report for this department.</div>`;
     return;
   }
   const classOptions = ['Class A','Class B','Class C','Class D'];
-  const effectiveClass = isDirector() ? (ui.reportClassPeriod || classOptions[0]) : u.classPeriod;
+  const effectiveClass = staffLike ? (ui.reportClassPeriod || classOptions[0]) : u.classPeriod;
   const deptCrew = state.crew.filter(c=>(c.departments||[]).includes(ui.activeDept) && c.classPeriod===effectiveClass);
   content.innerHTML = `
     <div class="card">
@@ -2430,7 +2531,7 @@ function renderReportFormSub(content, dep, depState){
       <div class="form-grid">
         <input type="date" id="repDate" value="${todayISO()}">
         <select id="repShift">${SHIFTS.map(s=>`<option>${s}</option>`).join('')}</select>
-        ${isDirector()
+        ${staffLike
           ? `<select id="repClassPeriod">${classOptions.map(cp=>`<option ${cp===effectiveClass?'selected':''}>${cp}</option>`).join('')}</select>`
           : `<span class="tag" style="align-self:center;">${u.classPeriod}</span>`}
       </div>
@@ -2451,7 +2552,7 @@ function renderReportFormSub(content, dep, depState){
       <button class="btn" id="submitReportBtn">Submit Report</button>
     </div>
   `;
-  if(isDirector()){
+  if(staffLike){
     document.getElementById('repClassPeriod').addEventListener('change', (e)=>{
       ui.reportClassPeriod = e.target.value;
       renderReportFormSub(content, dep, depState);
@@ -2460,7 +2561,7 @@ function renderReportFormSub(content, dep, depState){
   document.getElementById('submitReportBtn').addEventListener('click', async ()=>{
     const teamIds = Array.from(document.querySelectorAll('#repTeamChecks input:checked')).map(i=>i.value);
     const nonContribIds = Array.from(document.querySelectorAll('#repNonContribChecks input:checked')).map(i=>i.value);
-    const classPeriod = isDirector() ? document.getElementById('repClassPeriod').value : u.classPeriod;
+    const classPeriod = staffLike ? document.getElementById('repClassPeriod').value : u.classPeriod;
     const doneCount = depState.tasks.filter(t=>t.status==='done').length;
     const totalCount = depState.tasks.length;
     const suggestedGrade = totalCount ? Math.round(doneCount/totalCount*100) : 0;
@@ -2629,19 +2730,32 @@ function renderParticipationSub(content, dep, depState){
 
 // ---------------- TEAM WORKSPACE (cross-class-period notes + whiteboard, LIVE) ----------------
 // Lives in its own Firestore collection ("workspaces"), separate from the main production
-// document, with a real-time listener active only while this exact tab is open. This keeps
-// live updates scoped to just this feature instead of re-pushing the whole production on
-// every unrelated change elsewhere in the app.
+// document, with a real-time listener active only while this exact tab is open.
 const STICKY_COLORS = ['#E8C468','#8FBF9F','#E8A7A0','#9BB8D3','#D9B3E8'];
+const PEN_COLORS = ['#F2EFE9','#E8A33D','#C1443C','#6B8F71','#4C7A93','#14161A'];
+const PEN_WIDTHS = [2,4,8];
 function canModerateWorkspace(){ return isDirector() || canViewDept('stage_mgmt'); }
 
 let workspaceUnsubscribe = null;
 let workspaceListenerDeptKey = null;
-let workspaceCache = { teamNotes:[], stickyNotes:[] };
+let workspaceCache = { teamNotes:[], stickyNotes:[], strokes:[], images:[], activityLog:[] };
 let workspaceDraggingId = null;
+let workspaceDrawingActive = false;
 let workspacePendingRerender = false;
 
 function workspaceDocId(deptKey){ return currentProductionId + '_' + deptKey; }
+function normalizeWorkspaceCache(){
+  if(!workspaceCache.teamNotes) workspaceCache.teamNotes = [];
+  if(!workspaceCache.stickyNotes) workspaceCache.stickyNotes = [];
+  if(!workspaceCache.strokes) workspaceCache.strokes = [];
+  if(!workspaceCache.images) workspaceCache.images = [];
+  if(!workspaceCache.activityLog) workspaceCache.activityLog = [];
+}
+function logWorkspaceActivity(type, detail){
+  const author = currentUser()?.name || authUser?.displayName || 'Someone';
+  workspaceCache.activityLog.unshift({ id:cryptoId(), type, detail, authorName:author, authorId: currentUser()?.id||null, timestamp:new Date().toISOString() });
+  if(workspaceCache.activityLog.length > 100) workspaceCache.activityLog = workspaceCache.activityLog.slice(0,100);
+}
 
 function stopWorkspaceListener(){
   if(workspaceUnsubscribe){ workspaceUnsubscribe(); workspaceUnsubscribe = null; }
@@ -2654,10 +2768,8 @@ async function startWorkspaceListener(dep, depState){
   workspaceListenerDeptKey = dep.key;
   const ref = window.__fb.doc(window.__fb.db, 'workspaces', workspaceDocId(dep.key));
   workspaceUnsubscribe = window.__fb.onSnapshot(ref, (snap)=>{
-    workspaceCache = snap.exists() ? snap.data() : { teamNotes:[], stickyNotes:[] };
-    if(!workspaceCache.teamNotes) workspaceCache.teamNotes = [];
-    if(!workspaceCache.stickyNotes) workspaceCache.stickyNotes = [];
-    // Only actually touch the DOM if we're still looking at this exact department's workspace.
+    workspaceCache = snap.exists() ? snap.data() : { teamNotes:[], stickyNotes:[], strokes:[], images:[] };
+    normalizeWorkspaceCache();
     if(ui.activeDept===dep.key && ui.activeSub==='workspace'){
       renderWorkspaceFromCache(dep, depState);
     }
@@ -2671,7 +2783,7 @@ async function saveWorkspaceData(){
       const ref = window.__fb.doc(window.__fb.db, 'workspaces', workspaceDocId(workspaceListenerDeptKey));
       await window.__fb.setDoc(ref, JSON.parse(JSON.stringify(workspaceCache)));
     }
-  }catch(e){ console.warn('Workspace save failed', e); }
+  }catch(e){ console.warn('Workspace save failed — a pasted image may be too large. Try a smaller image or a URL instead.', e); }
 }
 
 function renderWorkspaceSub(content, dep, depState){
@@ -2680,8 +2792,19 @@ function renderWorkspaceSub(content, dep, depState){
     content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>The ${dep.label} workspace is only visible to ${dep.label} crew and the Director.</div>`;
     return;
   }
+  if(depState.workspaceRestricted===undefined) depState.workspaceRestricted = false;
+  if(!ui.whiteboardTool) ui.whiteboardTool = 'select';
+  if(!ui.whiteboardColor) ui.whiteboardColor = PEN_COLORS[0];
+  if(!ui.whiteboardWidth) ui.whiteboardWidth = PEN_WIDTHS[1];
+  const staff = canModerateWorkspace();
+  const drawingLocked = depState.workspaceRestricted && !staff;
+  if(drawingLocked) ui.whiteboardTool = 'select';
+
   content.innerHTML = `
-    <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Shared live by everyone on ${dep.label} — across every class period, not just yours. Updates appear automatically while this tab is open, no refresh needed.</p>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-top:-6px;">
+      <p style="font-size:12px;color:var(--paper-dim); margin:0;">Shared live by everyone on ${dep.label} — across every class period, not just yours. Updates appear automatically while this tab is open, no refresh needed.</p>
+      <button class="btn danger small" id="wbReportBtn" style="white-space:nowrap;">🚩 Report inappropriate content</button>
+    </div>
     <div class="card">
       <h2>Team Notes</h2>
       <textarea id="teamNoteText" class="full-width" style="min-height:54px;" placeholder="Leave a note for the rest of the team — what you're working on, what's blocking you, questions for other class periods..."></textarea>
@@ -2690,27 +2813,202 @@ function renderWorkspaceSub(content, dep, depState){
     </div>
     <div class="card">
       <h2>Whiteboard</h2>
-      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sticky notes anyone on the team can add, drag around, and write on — a shared board for sketching out ideas, assignments, or reminders.</p>
-      <div class="sticky-color-row" id="stickyColorRow"></div>
-      <button class="btn ghost small" id="addStickyBtn" style="margin-bottom:12px;">+ Add sticky note</button>
-      <div class="whiteboard-wrap" id="whiteboardWrap"><div class="whiteboard-canvas" id="whiteboardCanvas"></div></div>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sticky notes are always open to the team. Pasted images are compressed and there's a practical limit (a shared board, not unlimited storage) — for anything you found online with its own address, paste the URL instead, which has no size limit.</p>
+      ${staff ? `
+      <label class="lockmsg" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="wbRestrictToggle" ${depState.workspaceRestricted?'checked':''}>
+        Restrict Pen, Eraser, and image adding to Director/Stage Management only (sticky notes and text notes stay open to everyone)
+      </label>` : (drawingLocked ? `<div class="lockmsg">Drawing and images are currently staff-only on this board. Sticky notes and Team Notes are still open to you.</div>` : '')}
+      <div class="wb-toolbar" id="wbToolbar" style="display:${drawingLocked?'none':'flex'};">
+        <button class="wb-tool-btn active" data-tool="select">🖐 Select / Move</button>
+        <button class="wb-tool-btn" data-tool="pen">✏️ Pen</button>
+        <button class="wb-tool-btn" data-tool="eraser">🧹 Eraser</button>
+        <span class="wb-sep"></span>
+        <span class="wb-color-row" id="wbColorRow"></span>
+        <span class="wb-width-row" id="wbWidthRow"></span>
+      </div>
+      <div class="wb-toolbar" style="display:flex; margin-top:${drawingLocked?'0':'8px'};">
+        <button class="btn ghost small" id="addStickyBtn">+ Sticky note</button>
+        <button class="btn danger small" id="clearBoardBtn" style="display:${staff?'inline-block':'none'};">Clear Board</button>
+      </div>
+      <div class="wb-image-add-row" style="display:${drawingLocked?'none':'flex'};">
+        <input type="text" id="wbImageUrl" placeholder="Paste an image URL (e.g. copied 'image address')...">
+        <button class="btn ghost small" id="wbAddImageUrlBtn">Add Image from URL</button>
+        <span style="font-size:11px;color:var(--paper-dim);">— or click the board and press Ctrl+V (Cmd+V) to paste a copied image directly</span>
+      </div>
+      <div class="whiteboard-wrap" id="whiteboardWrap" tabindex="0">
+        <div class="whiteboard-canvas" id="whiteboardCanvas"></div>
+        <canvas id="wbDrawCanvas" width="1400" height="900"></canvas>
+      </div>
     </div>
+    ${staff ? `<div class="card"><h2>Activity Log</h2><p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Who added what, and when — visible only to Director and Stage Management, so you can check even if nobody was watching live.</p><div id="wbActivityLog"></div></div>` : ''}
   `;
 
-  let selectedColor = STICKY_COLORS[0];
-  const colorRow = document.getElementById('stickyColorRow');
-  colorRow.innerHTML = STICKY_COLORS.map((c,i)=>`<div class="sticky-color-swatch ${i===0?'active':''}" style="background:${c}" data-color="${c}"></div>`).join('');
+  document.getElementById('wbReportBtn').addEventListener('click', ()=>{
+    const reporter = currentUser()?.name || authUser?.displayName || activeEmail() || 'Someone';
+    logChange(`🚩 ${reporter} reported something inappropriate on the ${dep.label} workspace — please review it.`, {type:'directorOnly'});
+    toast('Reported — Director and Stage Management have been notified');
+  });
+
+  if(staff){
+    document.getElementById('wbRestrictToggle').addEventListener('change', async (e)=>{
+      depState.workspaceRestricted = e.target.checked;
+      await saveState();
+      renderWorkspaceSub(content, dep, depState);
+      toast(depState.workspaceRestricted ? 'Drawing and images locked to staff only' : 'Drawing and images opened back up to the team');
+    });
+  }
+
+  // --- toolbar wiring ---
+  const drawCanvas = document.getElementById('wbDrawCanvas');
+  const ctx = drawCanvas.getContext('2d');
+  function updateCanvasInteractivity(){
+    drawCanvas.style.pointerEvents = ui.whiteboardTool==='select' ? 'none' : 'auto';
+    drawCanvas.style.cursor = ui.whiteboardTool==='eraser' ? 'cell' : ui.whiteboardTool==='pen' ? 'crosshair' : 'default';
+  }
+  document.querySelectorAll('.wb-tool-btn').forEach(btn=>btn.addEventListener('click', ()=>{
+    ui.whiteboardTool = btn.dataset.tool;
+    document.querySelectorAll('.wb-tool-btn').forEach(b=>b.classList.toggle('active', b===btn));
+    updateCanvasInteractivity();
+  }));
+  const colorRow = document.getElementById('wbColorRow');
+  colorRow.innerHTML = PEN_COLORS.map((c,i)=>`<div class="sticky-color-swatch ${c===ui.whiteboardColor?'active':''}" style="background:${c}" data-color="${c}"></div>`).join('');
   colorRow.querySelectorAll('.sticky-color-swatch').forEach(sw=>sw.addEventListener('click', ()=>{
-    selectedColor = sw.dataset.color;
+    ui.whiteboardColor = sw.dataset.color;
     colorRow.querySelectorAll('.sticky-color-swatch').forEach(s=>s.classList.remove('active'));
     sw.classList.add('active');
   }));
+  const widthRow = document.getElementById('wbWidthRow');
+  const widthLabels = {2:'Thin',4:'Med',8:'Thick'};
+  widthRow.innerHTML = PEN_WIDTHS.map(w=>`<button class="btn ghost small wb-width-btn ${w===ui.whiteboardWidth?'active':''}" data-width="${w}">${widthLabels[w]}</button>`).join('');
+  widthRow.querySelectorAll('.wb-width-btn').forEach(btn=>btn.addEventListener('click', ()=>{
+    ui.whiteboardWidth = parseInt(btn.dataset.width);
+    widthRow.querySelectorAll('.wb-width-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }));
+  updateCanvasInteractivity();
+
+  function redrawStrokesCanvas(){
+    ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+    (workspaceCache.strokes||[]).forEach(s=>{
+      if(!s.points || s.points.length<2) return;
+      ctx.beginPath();
+      ctx.strokeStyle = s.color; ctx.lineWidth = s.width; ctx.lineCap='round'; ctx.lineJoin='round';
+      ctx.moveTo(s.points[0].x, s.points[0].y);
+      for(let i=1;i<s.points.length;i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+      ctx.stroke();
+    });
+  }
+  function canvasPointFromEvent(e){
+    const rect = drawCanvas.getBoundingClientRect();
+    return { x: e.clientX-rect.left, y: e.clientY-rect.top };
+  }
+  function eraseAtPoint(p){
+    const threshold = 14;
+    const before = workspaceCache.strokes.length;
+    workspaceCache.strokes = workspaceCache.strokes.filter(s=> !s.points.some(pt => Math.hypot(pt.x-p.x, pt.y-p.y) < threshold));
+    if(workspaceCache.strokes.length !== before) redrawStrokesCanvas();
+  }
+  let currentStrokePoints = null;
+  drawCanvas.addEventListener('pointerdown', (e)=>{
+    if(ui.whiteboardTool==='select' || drawingLocked) return;
+    const p = canvasPointFromEvent(e);
+    workspaceDrawingActive = true;
+    drawCanvas.setPointerCapture(e.pointerId);
+    if(ui.whiteboardTool==='pen') currentStrokePoints = [p];
+    else if(ui.whiteboardTool==='eraser') eraseAtPoint(p);
+  });
+  drawCanvas.addEventListener('pointermove', (e)=>{
+    if(!workspaceDrawingActive) return;
+    const p = canvasPointFromEvent(e);
+    if(ui.whiteboardTool==='pen' && currentStrokePoints){
+      const prev = currentStrokePoints[currentStrokePoints.length-1];
+      currentStrokePoints.push(p);
+      ctx.beginPath(); ctx.strokeStyle=ui.whiteboardColor; ctx.lineWidth=ui.whiteboardWidth; ctx.lineCap='round'; ctx.lineJoin='round';
+      ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    } else if(ui.whiteboardTool==='eraser'){
+      eraseAtPoint(p);
+    }
+  });
+  drawCanvas.addEventListener('pointerup', async ()=>{
+    if(!workspaceDrawingActive) return;
+    workspaceDrawingActive = false;
+    if(ui.whiteboardTool==='pen' && currentStrokePoints && currentStrokePoints.length>1){
+      workspaceCache.strokes.push({ id:cryptoId(), points:currentStrokePoints, color:ui.whiteboardColor, width:ui.whiteboardWidth, authorId: currentUser()?.id||null });
+      logWorkspaceActivity('draw', 'drew on the board');
+    }
+    currentStrokePoints = null;
+    await saveWorkspaceData();
+    if(workspacePendingRerender){ workspacePendingRerender=false; renderWorkspaceFromCache(dep, depState); }
+  });
+
+  // --- images: add via URL or clipboard paste ---
+  function addImageToBoard(src, natW, natH){
+    const author = currentUser()?.name || authUser?.displayName || 'Someone';
+    const maxW = 260;
+    let width = natW||300, height = natH||200;
+    if(width > maxW){ const scale = maxW/width; width = Math.round(width*scale); height = Math.round(height*scale); }
+    workspaceCache.images.push({
+      id:cryptoId(), src, x: 30+Math.round(Math.random()*250), y: 30+Math.round(Math.random()*150),
+      width, height, authorId: currentUser()?.id||null, authorName:author, timestamp:new Date().toISOString()
+    });
+    logWorkspaceActivity('image', 'added an image');
+    renderWhiteboard(dep, depState);
+    saveWorkspaceData();
+  }
+  function resizeImageFile(file){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = (e)=>{
+        const img = new Image();
+        img.onload = ()=>{
+          const maxDim = 700;
+          let w = img.naturalWidth, h = img.naturalHeight;
+          if(w > maxDim || h > maxDim){ const scale = maxDim/Math.max(w,h); w = Math.round(w*scale); h = Math.round(h*scale); }
+          const c = document.createElement('canvas'); c.width=w; c.height=h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve({ dataUrl: c.toDataURL('image/jpeg', 0.72), width:w, height:h });
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  document.getElementById('wbAddImageUrlBtn').addEventListener('click', ()=>{
+    if(drawingLocked){ toast('Images are locked to Director/Stage Management right now'); return; }
+    const url = document.getElementById('wbImageUrl').value.trim();
+    if(!url){ toast('Paste an image URL first'); return; }
+    const testImg = new Image();
+    testImg.onload = ()=>{ addImageToBoard(url, testImg.naturalWidth, testImg.naturalHeight); document.getElementById('wbImageUrl').value=''; toast('Image added'); };
+    testImg.onerror = ()=>{ addImageToBoard(url, 300, 200); document.getElementById('wbImageUrl').value=''; toast('Added — if it looks broken, that site may block outside embedding'); };
+    testImg.src = url;
+  });
+  document.getElementById('whiteboardWrap').addEventListener('paste', async (e)=>{
+    if(drawingLocked) return;
+    const items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    for(const item of items){
+      if(item.type.indexOf('image')===0){
+        e.preventDefault();
+        const file = item.getAsFile();
+        try{
+          const { dataUrl, width, height } = await resizeImageFile(file);
+          addImageToBoard(dataUrl, width, height);
+          toast('Pasted image added');
+        }catch(err){ console.warn('Paste image failed', err); toast('Could not read that pasted image'); }
+        return;
+      }
+    }
+  });
 
   document.getElementById('teamNotePostBtn').addEventListener('click', async ()=>{
     const text = document.getElementById('teamNoteText').value.trim();
     if(!text){ toast('Write something first'); return; }
     const author = currentUser()?.name || authUser?.displayName || 'Someone';
     workspaceCache.teamNotes.unshift({ id:cryptoId(), text, authorName:author, authorId: currentUser()?.id||null, isStaff:canModerateWorkspace(), timestamp:new Date().toISOString() });
+    logWorkspaceActivity('note', 'posted a team note');
     document.getElementById('teamNoteText').value = '';
     renderTeamNotes(dep, depState);
     await saveWorkspaceData();
@@ -2720,31 +3018,59 @@ function renderWorkspaceSub(content, dep, depState){
   document.getElementById('addStickyBtn').addEventListener('click', async ()=>{
     const author = currentUser()?.name || authUser?.displayName || 'Someone';
     workspaceCache.stickyNotes.push({
-      id:cryptoId(), text:'', color:selectedColor,
+      id:cryptoId(), text:'', color:STICKY_COLORS[Math.floor(Math.random()*STICKY_COLORS.length)],
       x: 20 + Math.round(Math.random()*300), y: 20 + Math.round(Math.random()*200),
       authorName:author, authorId: currentUser()?.id||null, timestamp:new Date().toISOString()
     });
+    logWorkspaceActivity('sticky', 'added a sticky note');
     renderWhiteboard(dep, depState);
     await saveWorkspaceData();
+  });
+
+  document.getElementById('clearBoardBtn').addEventListener('click', async ()=>{
+    if(!canModerateWorkspace()) return;
+    if(!confirm('Clear every sticky note, sketch, and image from this whiteboard? Team Notes are not affected.')) return;
+    workspaceCache.stickyNotes = []; workspaceCache.strokes = []; workspaceCache.images = [];
+    logWorkspaceActivity('clear', 'cleared the whole board');
+    renderWhiteboard(dep, depState); redrawStrokesCanvas();
+    await saveWorkspaceData();
+    toast('Board cleared');
   });
 
   startWorkspaceListener(dep, depState);
   renderTeamNotes(dep, depState);
   renderWhiteboard(dep, depState);
+  redrawStrokesCanvas();
+  renderWorkspaceActivityLog();
+  // Expose for the live-update path (defined below) to redraw ink without re-declaring the canvas.
+  content._redrawStrokesCanvas = redrawStrokesCanvas;
+}
+
+function renderWorkspaceActivityLog(){
+  const list = document.getElementById('wbActivityLog');
+  if(!list) return; // not rendered for non-staff viewers
+  const entries = workspaceCache.activityLog || [];
+  if(!entries.length){ list.innerHTML = `<div class="empty-state">No activity yet.</div>`; return; }
+  const icons = { sticky:'📝', image:'🖼️', note:'💬', draw:'✏️', clear:'🗑️' };
+  list.innerHTML = entries.slice(0,40).map(a=>`
+    <div class="list-item"><span>${icons[a.type]||'•'} <b>${a.authorName}</b> ${a.detail}</span><span class="d">${fmtDateTime(a.timestamp)}</span></div>
+  `).join('');
 }
 
 // Called when a live update arrives while this exact tab is open. Skips touching the DOM
-// for whatever the user is actively doing right now (typing in a sticky, dragging a sticky)
-// so an incoming update never yanks focus or a drag out from under them — it just re-renders
-// once they're done.
+// for whatever the user is actively doing right now (typing, dragging, drawing/erasing) so
+// an incoming update never yanks something out from under them — it just catches up after.
 function renderWorkspaceFromCache(dep, depState){
   const activeIsSticky = document.activeElement && document.activeElement.matches && document.activeElement.matches('.sticky-note textarea');
-  if(activeIsSticky || workspaceDraggingId){
+  if(activeIsSticky || workspaceDraggingId || workspaceDrawingActive){
     workspacePendingRerender = true;
     return;
   }
   renderTeamNotes(dep, depState);
   renderWhiteboard(dep, depState);
+  const content = document.getElementById('deptContent');
+  if(content && content._redrawStrokesCanvas) content._redrawStrokesCanvas();
+  renderWorkspaceActivityLog();
 }
 
 function renderTeamNotes(dep, depState){
@@ -2781,7 +3107,7 @@ function renderTeamNotes(dep, depState){
     ta.className = 'full-width'; ta.style.minHeight = '54px'; ta.value = n.text;
     textEl.replaceWith(ta);
     btn.textContent = 'Save';
-    btn.replaceWith(btn.cloneNode(true)); // strip old listener
+    btn.replaceWith(btn.cloneNode(true));
     const newBtn = list.querySelector(`[data-edit-note="${n.id}"]`);
     newBtn.textContent = 'Save';
     newBtn.addEventListener('click', async ()=>{
@@ -2800,21 +3126,22 @@ function renderWhiteboard(dep, depState){
   if(!canvas) return;
   canvas.innerHTML = '';
   const u = currentUser();
+
   (workspaceCache.stickyNotes||[]).forEach(sn=>{
     const canEditText = canModerateWorkspace() || (u && sn.authorId===u.id);
     const el = document.createElement('div');
     el.className = 'sticky-note';
     el.style.left = sn.x+'px'; el.style.top = sn.y+'px'; el.style.background = sn.color;
     el.innerHTML = `
+      <div class="sn-handle" title="Drag to move">⠿⠿ drag</div>
       <textarea placeholder="Write something..." ${canEditText?'':'readonly'}>${sn.text}</textarea>
       <div class="sn-meta">${sn.authorName}</div>
       ${canEditText?`<button class="sn-del">✕</button>`:''}
     `;
     canvas.appendChild(el);
-
+    const handle = el.querySelector('.sn-handle');
     const ta = el.querySelector('textarea');
     if(canEditText){
-      ta.addEventListener('focus', ()=>{ workspaceDraggingId = workspaceDraggingId || null; });
       ta.addEventListener('blur', async ()=>{
         sn.text = ta.value;
         await saveWorkspaceData();
@@ -2830,24 +3157,20 @@ function renderWhiteboard(dep, depState){
         await saveWorkspaceData();
       });
     }
-
-    // Dragging — anyone on the team can reposition any note (collaborative rearranging),
-    // even if they can't edit its text. Position only commits (saves) on release.
     let dragging = false, startX=0, startY=0, origX=sn.x, origY=sn.y;
-    el.addEventListener('pointerdown', (e)=>{
-      if(e.target === ta || e.target === delBtn) return;
+    handle.addEventListener('pointerdown', (e)=>{
       dragging = true; workspaceDraggingId = sn.id; el.classList.add('dragging');
       startX = e.clientX; startY = e.clientY; origX = sn.x; origY = sn.y;
-      el.setPointerCapture(e.pointerId);
+      handle.setPointerCapture(e.pointerId);
     });
-    el.addEventListener('pointermove', (e)=>{
+    handle.addEventListener('pointermove', (e)=>{
       if(!dragging) return;
       const dx = e.clientX - startX, dy = e.clientY - startY;
       const newX = Math.max(0, origX + dx), newY = Math.max(0, origY + dy);
       el.style.left = newX+'px'; el.style.top = newY+'px';
       sn._pendingX = newX; sn._pendingY = newY;
     });
-    el.addEventListener('pointerup', async ()=>{
+    handle.addEventListener('pointerup', async ()=>{
       if(!dragging) return;
       dragging = false; workspaceDraggingId = null; el.classList.remove('dragging');
       if(sn._pendingX!==undefined){ sn.x = sn._pendingX; sn.y = sn._pendingY; delete sn._pendingX; delete sn._pendingY; }
@@ -2855,8 +3178,73 @@ function renderWhiteboard(dep, depState){
       if(workspacePendingRerender){ workspacePendingRerender = false; renderWorkspaceFromCache(dep, depState); }
     });
   });
-}
 
+  (workspaceCache.images||[]).forEach(im=>{
+    const canEdit = canModerateWorkspace() || (u && im.authorId===u.id);
+    const el = document.createElement('div');
+    el.className = 'wb-image';
+    el.style.left = im.x+'px'; el.style.top = im.y+'px'; el.style.width = im.width+'px'; el.style.height = im.height+'px';
+    el.innerHTML = `
+      ${canEdit?`<div class="sn-handle" title="Drag to move">⠿⠿ drag</div>`:''}
+      <img src="${escapeAttr(im.src)}" draggable="false">
+      ${canEdit?`<button class="sn-del">✕</button><div class="img-resize-handle" title="Drag to resize"></div>`:''}
+    `;
+    canvas.appendChild(el);
+    if(!canEdit) return;
+    const handle = el.querySelector('.sn-handle');
+    const delBtn = el.querySelector('.sn-del');
+    delBtn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      workspaceCache.images = workspaceCache.images.filter(x=>x.id!==im.id);
+      renderWhiteboard(dep, depState);
+      await saveWorkspaceData();
+    });
+    let dragging = false, startX=0, startY=0, origX=im.x, origY=im.y;
+    handle.addEventListener('pointerdown', (e)=>{
+      dragging = true; workspaceDraggingId = im.id; el.classList.add('dragging');
+      startX = e.clientX; startY = e.clientY; origX = im.x; origY = im.y;
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener('pointermove', (e)=>{
+      if(!dragging) return;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      const newX = Math.max(0, origX + dx), newY = Math.max(0, origY + dy);
+      el.style.left = newX+'px'; el.style.top = newY+'px';
+      im._pendingX = newX; im._pendingY = newY;
+    });
+    handle.addEventListener('pointerup', async ()=>{
+      if(!dragging) return;
+      dragging = false; workspaceDraggingId = null; el.classList.remove('dragging');
+      if(im._pendingX!==undefined){ im.x = im._pendingX; im.y = im._pendingY; delete im._pendingX; delete im._pendingY; }
+      await saveWorkspaceData();
+      if(workspacePendingRerender){ workspacePendingRerender = false; renderWorkspaceFromCache(dep, depState); }
+    });
+
+    const resizeHandle = el.querySelector('.img-resize-handle');
+    const aspect = im.height / im.width;
+    let resizing = false, rStartX=0, origW=im.width;
+    resizeHandle.addEventListener('pointerdown', (e)=>{
+      e.stopPropagation();
+      resizing = true; workspaceDraggingId = im.id;
+      rStartX = e.clientX; origW = im.width;
+      resizeHandle.setPointerCapture(e.pointerId);
+    });
+    resizeHandle.addEventListener('pointermove', (e)=>{
+      if(!resizing) return;
+      const dx = e.clientX - rStartX;
+      const newW = Math.max(60, origW + dx), newH = Math.round(newW*aspect);
+      el.style.width = newW+'px'; el.style.height = newH+'px';
+      im._pendingW = newW; im._pendingH = newH;
+    });
+    resizeHandle.addEventListener('pointerup', async ()=>{
+      if(!resizing) return;
+      resizing = false; workspaceDraggingId = null;
+      if(im._pendingW!==undefined){ im.width = im._pendingW; im.height = im._pendingH; delete im._pendingW; delete im._pendingH; }
+      await saveWorkspaceData();
+      if(workspacePendingRerender){ workspacePendingRerender = false; renderWorkspaceFromCache(dep, depState); }
+    });
+  });
+}
 function renderReportDetail(r, dep, depState, container){
   const teamNames = r.teamMemberIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'—'; });
   const nonContribNames = r.nonContributorIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'—'; });
@@ -2865,9 +3253,9 @@ function renderReportDetail(r, dep, depState, container){
     ${(nonContribNames.length && isDirector())?`<div class="summary-line" style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--line); font-size:13px; color:var(--red);"><span>Flagged non-contributors</span><span class="mono">${nonContribNames.join(', ')}</span></div>`:''}
     ${r.completedTasks?`<p style="font-size:13px; margin-top:10px;"><b>Completed:</b><br>${r.completedTasks.replace(/\\n/g,'<br>')}</p>`:''}
     ${r.inProgressTasks?`<p style="font-size:13px;"><b>In progress:</b><br>${r.inProgressTasks.replace(/\\n/g,'<br>')}</p>`:''}
-    ${r.notes?`<p style="font-size:13px;"><b>Notes:</b> ${r.notes}</p>`:''}
-    ${r.challenges?`<p style="font-size:13px;"><b>Challenges:</b> ${r.challenges}</p>`:''}
-    ${r.teacherFeedback?`<div class="card" style="margin-top:10px;"><h3>Teacher Feedback</h3><p style="font-size:13px;">${r.teacherFeedback}</p></div>`:''}
+    ${r.notes?`<p style="font-size:13px;"><b>Notes:</b> ${escapeHtml(r.notes)}</p>`:''}
+    ${r.challenges?`<p style="font-size:13px;"><b>Challenges:</b> ${escapeHtml(r.challenges)}</p>`:''}
+    ${r.teacherFeedback?`<div class="card" style="margin-top:10px;"><h3>Teacher Feedback</h3><p style="font-size:13px;">${escapeHtml(r.teacherFeedback)}</p></div>`:''}
     <div id="adjWrap-${r.id}"></div>
     <div id="actionsWrap-${r.id}" style="margin-top:12px;"></div>
   `;
@@ -2938,7 +3326,7 @@ function renderCostumeMeasureGrid(){
 }
 function renderCostumePieces(){
   document.getElementById('cPiecesList').innerHTML = costumeDraft.pieces.map((p,idx)=>`
-    <span class="piece-chip">${p.name} <span class="piece-status" data-idx="${idx}">${p.status}</span> <button data-del="${idx}" style="background:none;border:none;color:var(--paper-dim);cursor:pointer;">✕</button></span>
+    <span class="piece-chip">${escapeHtml(p.name)} <span class="piece-status" data-idx="${idx}">${p.status}</span> <button data-del="${idx}" style="background:none;border:none;color:var(--paper-dim);cursor:pointer;">✕</button></span>
   `).join('');
   document.querySelectorAll('.piece-status').forEach(el=>el.addEventListener('click', ()=>{
     const idx = parseInt(el.dataset.idx);
@@ -2965,8 +3353,8 @@ function renderCostumesView(){
         ${isDirector() ? `<button class="task-del" data-id="${rec.id}">✕</button>` : ''}
       </div>
       <div class="costume-grid">${MEASURE_FIELDS.map(m=>rec[m.key]?`<div><label>${m.label}</label>${rec[m.key]}</div>`:'').join('')}</div>
-      ${rec.pieces.length?`<div>${rec.pieces.map(p=>`<span class="piece-chip">${p.name} <span class="piece-status">${p.status}</span></span>`).join('')}</div>`:''}
-      ${rec.notes?`<p style="font-size:12.5px;color:var(--paper-dim);margin-top:8px;">${rec.notes}</p>`:''}
+      ${rec.pieces.length?`<div>${rec.pieces.map(p=>`<span class="piece-chip">${escapeHtml(p.name)} <span class="piece-status">${p.status}</span></span>`).join('')}</div>`:''}
+      ${rec.notes?`<p style="font-size:12.5px;color:var(--paper-dim);margin-top:8px;">${escapeHtml(rec.notes)}</p>`:''}
     `;
     if(isDirector()){
       card.querySelector('.task-del').addEventListener('click', async ()=>{
@@ -2988,15 +3376,23 @@ function unreadCount(){
 function renderNotifBadge(){ const n = unreadCount(); const badge = document.getElementById('notifBadge'); if(n>0){ badge.style.display='flex'; badge.textContent = n>9?'9+':n; } else badge.style.display='none'; }
 function renderNotifications(){
   renderNotifBadge();
+  document.getElementById('clearAllNotifsBtn').style.display = isDirector() ? 'inline-block' : 'none';
   const list = document.getElementById('notifList'); list.innerHTML = '';
   const visible = visibleChangelog();
   if(!visible.length){ list.innerHTML = `<div class="empty-state">No changes yet.</div>`; return; }
   visible.forEach(n=>{
     const unread = !device.lastSeenChangelog || n.timestamp > device.lastSeenChangelog;
     const item = document.createElement('div'); item.className = 'notif-item ' + (unread?'unread':'read');
-    item.innerHTML = `<div class="notif-dot"></div><div><div>${n.message}</div><div class="notif-time">${fmtDateTime(n.timestamp)}</div></div>`;
+    item.style.display = 'flex'; item.style.justifyContent = 'space-between'; item.style.alignItems = 'flex-start'; item.style.gap = '8px';
+    item.innerHTML = `<div style="display:flex; gap:10px;"><div class="notif-dot"></div><div><div>${escapeHtml(n.message)}</div><div class="notif-time">${fmtDateTime(n.timestamp)}</div></div></div>${isDirector()?`<button class="task-del" data-del-notif="${n.id}">✕</button>`:''}`;
     list.appendChild(item);
   });
+  if(isDirector()){
+    list.querySelectorAll('[data-del-notif]').forEach(btn=>btn.addEventListener('click', async ()=>{
+      state.changelog = state.changelog.filter(n=>n.id!==btn.dataset.delNotif);
+      await saveState(); renderNotifications();
+    }));
+  }
 }
 
 // ---------------- SETUP ----------------
@@ -3004,6 +3400,7 @@ function renderSetup(){
   const noDirectorsYet = !(globalState.directorEmails||[]).length;
   document.getElementById('claimDirectorCard').style.display = (noDirectorsYet && authUser) ? 'block' : 'none';
   document.getElementById('dirAccessCard').style.display = isDirector() ? 'block' : 'none';
+  document.getElementById('dirRecoveryWarning').style.display = (globalState.directorEmails||[]).length < 2 ? 'block' : 'none';
   document.getElementById('attendanceThreshold').value = globalState.attendanceAlertThreshold || 3;
   const behCfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
   document.getElementById('behPointsPerDay').value = behCfg.pointsPerDay;
@@ -3045,6 +3442,16 @@ function renderSetup(){
     document.getElementById('allPartWeekLabel').textContent = fmtWeekLabel(ui.allPartWeekCursor);
   }
   document.getElementById('resetCard').style.display = isDirector() ? 'block' : 'none';
+  document.getElementById('archiveCard').style.display = isDirector() ? 'block' : 'none';
+  if(isDirector()){
+    const sizeBytes = new Blob([JSON.stringify(state)]).size;
+    const sizeKB = Math.round(sizeBytes/1024);
+    const pct = Math.min(100, Math.round(sizeBytes/1024/1024*100));
+    document.getElementById('dataSizeLabel').textContent = `${sizeKB} KB / 1024 KB (${pct}%)`;
+    const bar = document.getElementById('dataSizeBar');
+    bar.style.width = pct+'%';
+    bar.style.background = pct>=80 ? 'var(--red)' : pct>=50 ? 'var(--amber)' : 'var(--sage)';
+  }
 
   const deptWrap = document.getElementById('rosterDeptChecks');
   deptWrap.innerHTML = DEPARTMENTS.map(d=>`<label><input type="checkbox" value="${d.key}"> ${d.label}</label>`).join('');
@@ -3217,6 +3624,11 @@ async function init(){
     if(!email || !password){ toast('Enter both email and password'); return; }
     signUpWithEmailPassword(email, password);
   });
+  document.getElementById('epForgotBtn').addEventListener('click', ()=>{
+    const email = document.getElementById('epEmail').value.trim();
+    if(!email){ toast('Enter your email above first, then click Forgot password'); return; }
+    sendPasswordReset(email);
+  });
   document.getElementById('manualEmailBtn').addEventListener('click', ()=>{
     const val = document.getElementById('manualEmailInput').value.trim();
     if(!val || !val.includes('@')){ toast('Enter a valid email'); return; }
@@ -3355,6 +3767,13 @@ async function init(){
   });
   document.getElementById('bulkImportBtn').addEventListener('click', bulkImportCrew);
   document.getElementById('markReadBtn').addEventListener('click', ()=>{ device.lastSeenChangelog = new Date().toISOString(); saveDevice(); renderNotifications(); toast('Marked read'); });
+  document.getElementById('clearAllNotifsBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can clear notifications'); return; }
+    if(!confirm('Clear all notifications? This only affects the notification log, not the underlying tasks/grades/records.')) return;
+    state.changelog = [];
+    await saveState(); renderNotifications();
+    toast('Notifications cleared');
+  });
   document.getElementById('exportAllGradesBtn').addEventListener('click', ()=>{
     if(!isDirector()){ toast('Only the Director can export grades'); return; }
     exportAllDeptGradesCsv();
@@ -3384,6 +3803,39 @@ async function init(){
     });
     if(!rows.length){ toast('No students to export'); return; }
     downloadCsvRows(['Student','Class Period','Teams','Points Earned','Points Possible','Average Score (%)','Week Of'], rows, `weekly-participation-averages-${weekLabel}.csv`);
+  });
+  document.getElementById('downloadBackupBtn').addEventListener('click', ()=>{
+    if(!isDirector()){ toast('Only the Director can download a backup'); return; }
+    const backup = { exportedAt:new Date().toISOString(), productionName:state.productionName, production:state, globalConfig:{ directorEmails:globalState.directorEmails, attendanceAlertThreshold:globalState.attendanceAlertThreshold } };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${state.productionName.replace(/\s+/g,'-').toLowerCase()}-backup-${todayISO()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Backup downloaded');
+  });
+  document.getElementById('archiveDeleteBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can archive records'); return; }
+    const cutoff = document.getElementById('archiveCutoffDate').value;
+    if(!cutoff){ toast('Pick a cutoff date first'); return; }
+    let reportCount = 0, incidentCount = 0;
+    const keptReportsByDept = {};
+    DEPARTMENTS.forEach(d=>{
+      const dep = state.departments[d.key];
+      const kept = dep.reports.filter(r=>r.date >= cutoff);
+      reportCount += dep.reports.length - kept.length;
+      keptReportsByDept[d.key] = kept;
+    });
+    const keptIncidents = state.behaviorIncidents.filter(i=>i.date >= cutoff);
+    incidentCount = state.behaviorIncidents.length - keptIncidents.length;
+    if(reportCount===0 && incidentCount===0){ toast('Nothing to delete before that date'); return; }
+    if(!confirm(`This will permanently delete ${reportCount} report(s) and ${incidentCount} behavior record(s) dated before ${fmtDate(cutoff)}. Make sure you've already exported the CSV(s) you need. This cannot be undone. Continue?`)) return;
+    DEPARTMENTS.forEach(d=>{ state.departments[d.key].reports = keptReportsByDept[d.key]; });
+    state.behaviorIncidents = keptIncidents;
+    await saveState();
+    renderSetup(); renderDashboard();
+    toast(`Deleted ${reportCount} report(s) and ${incidentCount} behavior record(s)`);
   });
   document.getElementById('resetAllBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can reset production data'); return; }
@@ -3435,5 +3887,4 @@ init();
 })();
 </script>
 </body>
-</html>
-    
+</html>    
