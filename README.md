@@ -297,6 +297,22 @@
   .wb-width-row{ display:flex; gap:5px; }
   .wb-width-btn.active{ background:var(--amber); color:var(--ink); }
   .wb-image-add-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+
+  .sd-layout{ display:flex; gap:14px; flex-wrap:wrap; }
+  .sd-canvas-wrap{ flex:1; min-width:300px; height:520px; position:relative; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:#0c0d10; }
+  .sd-canvas-wrap canvas{ display:block; width:100%; height:100%; touch-action:none; }
+  .sd-hint{ position:absolute; bottom:8px; left:10px; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:rgba(255,255,255,0.5); pointer-events:none; }
+  .sd-side-panel{ width:250px; flex-shrink:0; }
+  .sd-piece-list{ max-height:180px; overflow-y:auto; border:1px solid var(--line); border-radius:3px; margin-bottom:14px; }
+  .sd-piece-row{ display:flex; justify-content:space-between; align-items:center; padding:7px 10px; font-size:12px; border-bottom:1px dashed var(--line); cursor:pointer; }
+  .sd-piece-row:last-child{ border-bottom:none; }
+  .sd-piece-row.active{ background:rgba(232,163,61,0.15); }
+  .sd-piece-row .sw{ width:9px; height:9px; border-radius:2px; display:inline-block; margin-right:6px; flex-shrink:0; }
+  .sd-props label{ font-size:10.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; display:block; margin:8px 0 3px; }
+  .sd-props input[type=text], .sd-props input[type=number]{ width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:6px 8px; border-radius:3px; font-size:12.5px; }
+  .sd-props input[type=color]{ width:100%; height:28px; border:1px solid var(--line); border-radius:3px; background:none; padding:2px; }
+  .sd-dims-row{ display:flex; gap:6px; }
+  .sd-dims-row > div{ flex:1; }
   .wb-image-add-row input{ flex:1; min-width:200px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:8px 10px; border-radius:3px; font-size:12.5px; }
   #wbDrawCanvas{ position:absolute; top:0; left:0; width:1400px; height:900px; z-index:40; pointer-events:none; }
 
@@ -323,6 +339,14 @@
     padding:11px 20px; border-radius:4px; font-size:13px; font-weight:600; box-shadow:var(--shadow); opacity:0; transition:all .25s; pointer-events:none; z-index:50; }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -370,6 +394,7 @@
   <button data-view="behavior">Behavior</button>
   <button data-view="departments">Departments</button>
   <button data-view="costumes">Costumes</button>
+  <button data-view="stagedesign">3D Set Design</button>
   <button data-view="notifications">Notifications<span class="badge" id="notifBadge" style="display:none;">0</span></button>
   <button data-view="setup">Roster / Setup</button>
 </nav>
@@ -432,6 +457,9 @@
           <button class="btn ghost small" id="calTodayBtn">Today</button>
           <button class="btn ghost small" id="calNextBtn">Next ›</button>
         </div>
+        <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+          <button class="btn ghost small" id="printCalendarBtn2">🖨 Print Calendar</button>
+        </div>
         <div class="cal-legend" id="calLegend"></div>
         <div class="cal-grid" id="calGrid"></div>
       </div>
@@ -468,6 +496,9 @@
           <button class="btn small" id="groupmeSendAnnounceBtn">Send Announcement</button>
           <button class="btn ghost small" id="groupmeSendScheduleBtn">Send This Week's Schedule</button>
         </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+        <button class="btn ghost small" id="printCalendarBtn">🖨 Print Calendar</button>
       </div>
       <div id="calList"></div>
     </div>
@@ -629,6 +660,55 @@
         </div>
       </div>
       <div id="costumeList"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-stagedesign">
+    <div id="stageDesignLockedMsg" class="empty-state" style="display:none;">
+      <div class="lamp">🔒</div>Sign in to view the 3D set design.
+    </div>
+    <div id="stageDesignWrap" style="display:none;">
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">A simple 3D layout tool for blocking the set — platforms, flats, stairs, and basic furniture, not photorealistic models. Visible to the whole cast and crew; editable by Set Design, Director, and Stage Management. Drag on the empty background to orbit the camera, scroll to zoom.</p>
+      <div class="wb-toolbar" id="sdToolbar" style="display:none; margin-bottom:12px;">
+        <button class="wb-tool-btn" data-piece="platform">▭ Platform</button>
+        <button class="wb-tool-btn" data-piece="flat">▯ Flat</button>
+        <button class="wb-tool-btn" data-piece="stairs">▲ Stairs</button>
+        <button class="wb-tool-btn" data-piece="riser">▪ Riser</button>
+        <button class="wb-tool-btn" data-piece="table">▤ Table</button>
+        <button class="wb-tool-btn" data-piece="chair">◪ Chair</button>
+        <button class="wb-tool-btn" data-piece="bench">▬ Bench</button>
+        <button class="wb-tool-btn" data-piece="door">▮ Doorway</button>
+        <span class="wb-sep"></span>
+        <button class="btn danger small" id="sdClearBtn">Clear All Pieces</button>
+      </div>
+      <div class="sd-layout">
+        <div class="sd-canvas-wrap" id="sdCanvasWrap">
+          <canvas id="sdCanvas"></canvas>
+          <div class="sd-hint">Drag background to orbit · scroll to zoom · click a piece to select</div>
+        </div>
+        <div class="sd-side-panel">
+          <h3 style="margin-top:0;">Pieces on Stage</h3>
+          <div class="sd-piece-list" id="sdPieceList"></div>
+          <div id="sdPropsPanel" class="sd-props" style="display:none;">
+            <h3>Selected Piece</h3>
+            <label>Label</label>
+            <input type="text" id="sdPropLabel">
+            <label>Color</label>
+            <input type="color" id="sdPropColor">
+            <label>Dimensions (ft)</label>
+            <div class="sd-dims-row">
+              <div><input type="number" id="sdPropWidth" min="0.5" step="0.5" placeholder="W"></div>
+              <div><input type="number" id="sdPropDepth" min="0.5" step="0.5" placeholder="D"></div>
+              <div><input type="number" id="sdPropHeight" min="0.5" step="0.5" placeholder="H"></div>
+            </div>
+            <label>Rotation (°)</label>
+            <input type="number" id="sdPropRotation" min="0" max="359" step="5">
+            <label>Base Height Off Floor (ft)</label>
+            <input type="number" id="sdPropBaseY" min="0" step="0.5">
+            <button class="btn danger small" id="sdDeletePieceBtn" style="margin-top:12px; width:100%;">Delete Piece</button>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1425,6 +1505,7 @@ async function deleteProductionCompletely(prodId){
   await Promise.all(DEPARTMENTS.map(d=>
     window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'workspaces', prodId+'_'+d.key)).catch(()=>{})
   ));
+  await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'stagedesigns', prodId)).catch(()=>{});
 }
 
 function renderAnnouncements(){
@@ -1628,6 +1709,71 @@ function renderCalMonth(){
 
 function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ---------------- PRINTING ----------------
+// Opens a clean, white-background, ink-friendly version in a new tab rather than trying to
+// print the app's dark interactive screen directly — checklists get expanded, buttons/toolbars
+// disappear, and it reads like a real handout instead of a screenshot.
+function openPrintWindow(title, bodyHtml){
+  const win = window.open('', '_blank');
+  if(!win){ toast('Your browser blocked the print window — allow pop-ups for this site and try again'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title><style>
+    body{ font-family: Arial, Helvetica, sans-serif; color:#111; padding:24px; max-width:800px; margin:0 auto; }
+    h1{ font-size:20px; margin:0 0 2px; }
+    .meta{ font-size:11px; color:#555; margin-bottom:18px; border-bottom:2px solid #333; padding-bottom:10px; }
+    table{ width:100%; border-collapse:collapse; margin-bottom:14px; font-size:12px; }
+    th, td{ text-align:left; padding:6px 8px; border-bottom:1px solid #ddd; vertical-align:top; }
+    th{ background:#f0f0f0; }
+    ul.checklist{ list-style:none; padding-left:2px; margin:5px 0 0; }
+    ul.checklist li{ font-size:11.5px; padding:2px 0; }
+    ul.checklist li.done::before{ content:"\\2611  "; }
+    ul.checklist li:not(.done)::before{ content:"\\2610  "; }
+    .note-item{ margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #eee; font-size:12.5px; }
+    .note-meta{ font-size:10.5px; color:#777; }
+    @media print{ body{ padding:0; } }
+  </style></head><body>${bodyHtml}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{ win.print(); }, 300);
+}
+function printCalendar(){
+  const events = [...state.calendar].filter(visibleToCurrentUser).sort((a,b)=>a.date.localeCompare(b.date));
+  const rows = events.map(e=>{
+    const who = e.isSpecificCall
+      ? escapeHtml([...(e.calledDepartments||[]).map(k=>deptInfo(k).label), ...(e.calledStudentIds||[]).map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:''; })].filter(Boolean).join(', ') || 'Specific call')
+      : 'Everyone';
+    return `<tr><td>${fmtDate(e.date)}</td><td>${e.startTime||''}${e.endTime?'–'+e.endTime:''}</td><td>${escapeHtml(e.title)}</td><td>${escapeHtml(e.location||'')}</td><td>${who}</td><td>${escapeHtml(e.notes||'')}</td></tr>`;
+  }).join('');
+  const body = `<h1>${escapeHtml(state.productionName)}</h1><div class="meta">Rehearsal / Build Calendar — Printed ${new Date().toLocaleDateString()}</div>
+    <table><thead><tr><th>Date</th><th>Time</th><th>Call</th><th>Location</th><th>Who's Called</th><th>Notes</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="6">No calls scheduled.</td></tr>'}</tbody></table>`;
+  openPrintWindow(`${state.productionName} — Calendar`, body);
+}
+function printTaskList(deptKey){
+  const dep = deptInfo(deptKey);
+  const depState = state.departments[deptKey];
+  const rows = depState.tasks.map(t=>{
+    const checklistHtml = (t.checklist && t.checklist.length) ? `<ul class="checklist">${t.checklist.map(i=>`<li class="${i.done?'done':''}">${escapeHtml(i.text)}</li>`).join('')}</ul>` : '';
+    return `<tr><td style="font-size:14px;">${t.status==='done'?'\u2611':'\u2610'}</td><td>
+      <b>${escapeHtml(t.title)}</b><br>
+      <span style="font-size:10.5px;color:#666;">${escapeHtml(t.workType)} \u00b7 ${escapeHtml(t.priority)} priority \u00b7 Due ${t.dueDate} \u00b7 ${t.estimatedHours}h${t.assignedTo?' \u00b7 Assigned to '+escapeHtml(t.assignedTo):''}</span>
+      ${t.description?`<div style="font-size:11px; margin-top:4px;">${escapeHtml(t.description)}</div>`:''}
+      ${checklistHtml}
+    </td></tr>`;
+  }).join('');
+  const body = `<h1>${escapeHtml(state.productionName)}</h1><div class="meta">${escapeHtml(dep.label)} Task List — Printed ${new Date().toLocaleDateString()}</div>
+    <table><thead><tr><th style="width:26px;"></th><th>Task</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="2">No tasks yet.</td></tr>'}</tbody></table>`;
+  openPrintWindow(`${dep.label} Task List`, body);
+}
+function printTeamNotes(deptKey){
+  const dep = deptInfo(deptKey);
+  const notes = workspaceCache.teamNotes || [];
+  const rows = notes.map(n=>`<div class="note-item"><div><b>${escapeHtml(n.authorName)}</b>${n.isStaff?' (Staff)':''}</div><div>${escapeHtml(n.text).replace(/\n/g,'<br>')}</div><div class="note-meta">${fmtDateTime(n.timestamp)}</div></div>`).join('');
+  const body = `<h1>${escapeHtml(state.productionName)}</h1><div class="meta">${escapeHtml(dep.label)} \u2014 Team Notes \u2014 Printed ${new Date().toLocaleDateString()}</div>
+    ${rows || '<p>No notes yet.</p>'}`;
+  openPrintWindow(`${dep.label} Team Notes`, body);
+}
 
 // Builds one calendar event card as a DOM element — either its normal display,
 // or (if the Director has clicked Edit on it) a full inline edit form.
@@ -2285,6 +2431,9 @@ function renderTasksSub(content, dep, depState){
       <div class="progress-top"><span class="stencil" style="font-size:17px;">${dep.label} Tasks</span><span class="mono" style="font-size:12px;color:var(--paper-dim);">${done} / ${total} done</span></div>
       <div class="bar"><div class="bar-fill" style="width:${total?done/total*100:0}%; background:${dep.color}"></div></div>
     </div>
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button class="btn ghost small" id="printTaskListBtn">🖨 Print Task List</button>
+    </div>
     <div class="task-row" id="taskRow"></div>
     <div class="add-form" id="addForm">
       <div class="add-form-row">
@@ -2309,6 +2458,7 @@ function renderTasksSub(content, dep, depState){
   if(!depState.tasks.length){ row.innerHTML = `<div class="empty-state"><div class="lamp">🔦</div>Nothing on the ${dep.label} board yet.</div>`; }
   depState.tasks.forEach(t=>row.appendChild(renderTaskCard(t, dep, depState)));
   document.getElementById('toggleAddForm').addEventListener('click', ()=>document.getElementById('addForm').classList.toggle('open'));
+  document.getElementById('printTaskListBtn').addEventListener('click', ()=>printTaskList(dep.key));
   document.getElementById('addTaskConfirm').addEventListener('click', async ()=>{
     const form = document.getElementById('addForm');
     const title = form.querySelector('[name=title]').value.trim();
@@ -2811,6 +2961,7 @@ function renderWorkspaceSub(content, dep, depState){
       <h2>Team Notes</h2>
       <textarea id="teamNoteText" class="full-width" style="min-height:54px;" placeholder="Leave a note for the rest of the team — what you're working on, what's blocking you, questions for other class periods..."></textarea>
       <button class="btn small" id="teamNotePostBtn">Post Note</button>
+      <button class="btn ghost small" id="printTeamNotesBtn">🖨 Print Notes</button>
       <div id="teamNotesList" style="margin-top:14px;"></div>
     </div>
     <div class="card">
@@ -2843,7 +2994,7 @@ function renderWorkspaceSub(content, dep, depState){
         <canvas id="wbDrawCanvas" width="1400" height="900"></canvas>
       </div>
     </div>
-    ${staff ? `<div class="card"><h2>Activity Log</h2><p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Who added what, and when — visible only to Director and Stage Management, so you can check even if nobody was watching live.</p><div id="wbActivityLog"></div></div>` : ''}
+    ${staff ? `<div class="card"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h2 style="margin:0;">Activity Log</h2>${isDirector()?'<button class="btn danger small" id="wbClearLogBtn">Clear Log</button>':''}</div><p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Who added what, and when — visible only to Director and Stage Management, so you can check even if nobody was watching live.</p><div id="wbActivityLog"></div></div>` : ''}
   `;
 
   document.getElementById('wbReportBtn').addEventListener('click', ()=>{
@@ -2851,6 +3002,15 @@ function renderWorkspaceSub(content, dep, depState){
     logChange(`🚩 ${reporter} reported something inappropriate on the ${dep.label} workspace — please review it.`, {type:'directorOnly'});
     toast('Reported — Director and Stage Management have been notified');
   });
+  if(isDirector()){
+    document.getElementById('wbClearLogBtn').addEventListener('click', async ()=>{
+      if(!confirm('Clear this workspace\'s activity log? This only clears the log itself — sticky notes, sketches, images, and Team Notes are not affected.')) return;
+      workspaceCache.activityLog = [];
+      renderWorkspaceActivityLog();
+      await saveWorkspaceData();
+      toast('Activity log cleared');
+    });
+  }
 
   if(staff){
     document.getElementById('wbRestrictToggle').addEventListener('change', async (e)=>{
@@ -3016,6 +3176,7 @@ function renderWorkspaceSub(content, dep, depState){
     await saveWorkspaceData();
     toast('Note posted');
   });
+  document.getElementById('printTeamNotesBtn').addEventListener('click', ()=>printTeamNotes(dep.key));
 
   document.getElementById('addStickyBtn').addEventListener('click', async ()=>{
     const author = currentUser()?.name || authUser?.displayName || 'Someone';
@@ -3247,6 +3408,278 @@ function renderWhiteboard(dep, depState){
     });
   });
 }
+// ---------------- 3D SET DESIGN STUDIO (Three.js, live-synced) ----------------
+const PIECE_TYPES = {
+  platform: { label:'Platform',  defaultW:6,   defaultD:4,   defaultH:1,   color:'#8B7355' },
+  flat:     { label:'Flat',      defaultW:4,   defaultD:0.3, defaultH:8,   color:'#D9D2C5' },
+  stairs:   { label:'Stairs',    defaultW:3,   defaultD:3,   defaultH:2,   color:'#6E7B8B' },
+  riser:    { label:'Riser',     defaultW:2,   defaultD:2,   defaultH:1,   color:'#4C7A93' },
+  table:    { label:'Table',     defaultW:3,   defaultD:2,   defaultH:2.5, color:'#7A5C3E' },
+  chair:    { label:'Chair',     defaultW:1.5, defaultD:1.5, defaultH:3,   color:'#9C5A88' },
+  bench:    { label:'Bench',     defaultW:4,   defaultD:1.2, defaultH:1.5, color:'#6B8F71' },
+  door:     { label:'Doorway',   defaultW:3,   defaultD:0.3, defaultH:7,   color:'#C97B84' },
+};
+function canViewStageDesign(){ return isDirector() || !!currentUser(); }
+function canEditStageDesign(){ return isDirectorOrStageMgmt() || canViewDept('set_design'); }
+
+let stageDesignUnsubscribe = null;
+let stageDesignCache = { pieces:[] };
+let stageDesignDraggingId = null;
+let stageDesignPendingRerender = false;
+function stageDesignDocId(){ return currentProductionId; }
+function normalizeStageDesignCache(){ if(!stageDesignCache.pieces) stageDesignCache.pieces = []; }
+function stopStageDesignListener(){ if(stageDesignUnsubscribe){ stageDesignUnsubscribe(); stageDesignUnsubscribe = null; } }
+async function startStageDesignListener(){
+  stopStageDesignListener();
+  if(!window.__fb || !currentProductionId) return;
+  const ref = window.__fb.doc(window.__fb.db, 'stagedesigns', stageDesignDocId());
+  stageDesignUnsubscribe = window.__fb.onSnapshot(ref, (snap)=>{
+    stageDesignCache = snap.exists() ? snap.data() : { pieces:[] };
+    normalizeStageDesignCache();
+    if(!document.getElementById('view-stagedesign').classList.contains('active')) return;
+    if(stageDesignDraggingId){ stageDesignPendingRerender = true; return; }
+    syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
+  }, (err)=>console.warn('Stage design live listener failed (check Firestore rules include "stagedesigns")', err));
+}
+async function saveStageDesignData(){
+  try{ if(window.__fb && currentProductionId){ const ref = window.__fb.doc(window.__fb.db, 'stagedesigns', stageDesignDocId()); await window.__fb.setDoc(ref, JSON.parse(JSON.stringify(stageDesignCache))); } }
+  catch(e){ console.warn('Stage design save failed', e); }
+}
+
+let THREE_MOD=null, OrbitControlsClass=null;
+let sdScene=null, sdCamera=null, sdRenderer=null, sdControls=null, sdRaycaster=null;
+let sdPieceMeshes={}, sdAnimFrame=null, sdResizeObs=null, sdSelectedId=null;
+
+async function ensureThreeLoaded(){
+  if(THREE_MOD) return;
+  THREE_MOD = await import('three');
+  const mod = await import('three/addons/controls/OrbitControls.js');
+  OrbitControlsClass = mod.OrbitControls;
+}
+function tagPieceId(obj, id){ obj.userData.pieceId = id; obj.children.forEach(c=>tagPieceId(c, id)); }
+function disposePieceGroup(group){ group.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+function buildPieceMesh(THREE, type, w, d, h, color){
+  const mat = new THREE.MeshStandardMaterial({ color, roughness:0.85, metalness:0.05 });
+  const group = new THREE.Group();
+  if(type==='stairs'){
+    const steps=5, stepH=h/steps, stepD=d/steps;
+    for(let i=0;i<steps;i++){
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, stepH, stepD*(steps-i)), mat);
+      m.position.set(0, stepH*i+stepH/2, -d/2+stepD*(steps-i)/2);
+      group.add(m);
+    }
+  } else if(type==='table'){
+    const top = new THREE.Mesh(new THREE.BoxGeometry(w, h*0.12, d), mat);
+    top.position.set(0, h*0.94, 0); group.add(top);
+    const legR = Math.min(w,d)*0.05, legH = h*0.88;
+    const legGeo = new THREE.CylinderGeometry(legR, legR, legH, 8);
+    [[w/2-legR*2,d/2-legR*2],[-(w/2-legR*2),d/2-legR*2],[w/2-legR*2,-(d/2-legR*2)],[-(w/2-legR*2),-(d/2-legR*2)]].forEach(([lx,lz])=>{
+      const leg = new THREE.Mesh(legGeo, mat); leg.position.set(lx, legH/2, lz); group.add(leg);
+    });
+  } else if(type==='chair'){
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(w, h*0.15, d), mat);
+    seat.position.set(0, h*0.45, 0); group.add(seat);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(w, h*0.55, d*0.15), mat);
+    back.position.set(0, h*0.72, -d/2+d*0.075); group.add(back);
+    const legGeo = new THREE.BoxGeometry(w*0.08, h*0.45, d*0.08);
+    [[w/2-w*0.06,d/2-d*0.06],[-(w/2-w*0.06),d/2-d*0.06],[w/2-w*0.06,-(d/2-d*0.06)],[-(w/2-w*0.06),-(d/2-d*0.06)]].forEach(([lx,lz])=>{
+      const leg = new THREE.Mesh(legGeo, mat); leg.position.set(lx, h*0.225, lz); group.add(leg);
+    });
+  } else {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    mesh.position.set(0, h/2, 0); group.add(mesh);
+  }
+  return group;
+}
+
+function sdAnimateFrame(){
+  sdAnimFrame = requestAnimationFrame(sdAnimateFrame);
+  if(sdControls) sdControls.update();
+  if(sdRenderer && sdScene && sdCamera) sdRenderer.render(sdScene, sdCamera);
+}
+
+async function initStageDesignSceneIfNeeded(){
+  await ensureThreeLoaded();
+  if(sdScene) return;
+  const THREE = THREE_MOD;
+  const canvas = document.getElementById('sdCanvas');
+  const wrap = document.getElementById('sdCanvasWrap');
+
+  sdScene = new THREE.Scene();
+  sdScene.background = new THREE.Color(0x0c0d10);
+  sdCamera = new THREE.PerspectiveCamera(50, Math.max(wrap.clientWidth,1)/Math.max(wrap.clientHeight,1), 0.1, 500);
+  sdCamera.position.set(0, 26, 34);
+  sdRenderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+  sdRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  sdRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
+
+  sdControls = new OrbitControlsClass(sdCamera, sdRenderer.domElement);
+  sdControls.target.set(0,2,0);
+  sdControls.enableDamping = true;
+  sdControls.maxPolarAngle = Math.PI/2 - 0.03;
+  sdControls.minDistance = 8; sdControls.maxDistance = 90;
+
+  sdScene.add(new THREE.HemisphereLight(0xffffff, 0x33362e, 1.1));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9); dir.position.set(15,25,10); sdScene.add(dir);
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(50,34), new THREE.MeshStandardMaterial({ color:0x1b2a4a, roughness:1 }));
+  floor.rotation.x = -Math.PI/2; sdScene.add(floor);
+  const grid = new THREE.GridHelper(50, 50, 0xE8A33D, 0x30364a); grid.position.y = 0.01; sdScene.add(grid);
+
+  sdRaycaster = new THREE.Raycaster();
+  const dragPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+  const dragOffset = new THREE.Vector3();
+  let dragPieceId = null;
+
+  function ndc(e){
+    const rect = canvas.getBoundingClientRect();
+    return new THREE.Vector2(((e.clientX-rect.left)/rect.width)*2-1, -((e.clientY-rect.top)/rect.height)*2+1);
+  }
+  function pieceIdAt(e){
+    sdRaycaster.setFromCamera(ndc(e), sdCamera);
+    const hits = sdRaycaster.intersectObjects(Object.values(sdPieceMeshes), true);
+    if(!hits.length) return null;
+    let obj = hits[0].object;
+    while(obj && !obj.userData.pieceId) obj = obj.parent;
+    return obj ? obj.userData.pieceId : null;
+  }
+  canvas.addEventListener('pointerdown', (e)=>{
+    if(!canEditStageDesign()) return;
+    const id = pieceIdAt(e);
+    if(id){
+      selectPiece(id);
+      dragPieceId = id; stageDesignDraggingId = id;
+      sdControls.enabled = false;
+      sdRaycaster.setFromCamera(ndc(e), sdCamera);
+      const hitPoint = new THREE.Vector3();
+      sdRaycaster.ray.intersectPlane(dragPlane, hitPoint);
+      const mesh = sdPieceMeshes[id];
+      dragOffset.copy(mesh.position).sub(hitPoint);
+      canvas.setPointerCapture(e.pointerId);
+    } else {
+      selectPiece(null);
+    }
+  });
+  canvas.addEventListener('pointermove', (e)=>{
+    if(!dragPieceId) return;
+    sdRaycaster.setFromCamera(ndc(e), sdCamera);
+    const hitPoint = new THREE.Vector3();
+    if(sdRaycaster.ray.intersectPlane(dragPlane, hitPoint)){
+      const mesh = sdPieceMeshes[dragPieceId];
+      const nx = hitPoint.x+dragOffset.x, nz = hitPoint.z+dragOffset.z;
+      mesh.position.x = nx; mesh.position.z = nz;
+      const piece = stageDesignCache.pieces.find(p=>p.id===dragPieceId);
+      if(piece){ piece._pendingX = nx; piece._pendingZ = nz; }
+    }
+  });
+  canvas.addEventListener('pointerup', async ()=>{
+    if(!dragPieceId) return;
+    const piece = stageDesignCache.pieces.find(p=>p.id===dragPieceId);
+    if(piece && piece._pendingX!==undefined){ piece.x = piece._pendingX; piece.z = piece._pendingZ; delete piece._pendingX; delete piece._pendingZ; }
+    dragPieceId = null; stageDesignDraggingId = null;
+    sdControls.enabled = true;
+    await saveStageDesignData();
+    if(stageDesignPendingRerender){ stageDesignPendingRerender=false; syncStageDesignScene(); renderSdPieceList(); }
+  });
+
+  sdResizeObs = new ResizeObserver(()=>{
+    if(!wrap.clientWidth || !wrap.clientHeight || !sdCamera || !sdRenderer) return;
+    sdCamera.aspect = wrap.clientWidth/wrap.clientHeight;
+    sdCamera.updateProjectionMatrix();
+    sdRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
+  });
+  sdResizeObs.observe(wrap);
+}
+function pauseStageDesignScene(){
+  if(sdAnimFrame){ cancelAnimationFrame(sdAnimFrame); sdAnimFrame=null; }
+  stopStageDesignListener();
+}
+function syncStageDesignScene(){
+  if(!sdScene) return;
+  const THREE = THREE_MOD;
+  const ids = new Set(stageDesignCache.pieces.map(p=>p.id));
+  Object.keys(sdPieceMeshes).forEach(id=>{
+    if(!ids.has(id)){ sdScene.remove(sdPieceMeshes[id]); disposePieceGroup(sdPieceMeshes[id]); delete sdPieceMeshes[id]; }
+  });
+  stageDesignCache.pieces.forEach(p=>{
+    let group = sdPieceMeshes[p.id];
+    const sig = `${p.type}|${p.width}|${p.depth}|${p.height}|${p.color}`;
+    if(!group || group.userData.sig !== sig){
+      if(group){ sdScene.remove(group); disposePieceGroup(group); }
+      group = buildPieceMesh(THREE, p.type, p.width, p.depth, p.height, p.color);
+      group.userData.sig = sig;
+      tagPieceId(group, p.id);
+      sdScene.add(group);
+      sdPieceMeshes[p.id] = group;
+    }
+    group.position.set(p.x, p.y||0, p.z);
+    group.rotation.y = (p.rotationY||0) * Math.PI/180;
+    group.traverse(o=>{ if(o.material) o.material.emissive = new THREE.Color(p.id===sdSelectedId ? 0x333333 : 0x000000); });
+  });
+}
+async function addStagePiece(type){
+  if(!canEditStageDesign()){ toast('Only Set Design, Stage Management, or the Director can edit the set'); return; }
+  const def = PIECE_TYPES[type]; if(!def) return;
+  const author = currentUser()?.name || authUser?.displayName || 'Someone';
+  const piece = { id:cryptoId(), type, label:def.label, x:(Math.random()-0.5)*10, y:0, z:(Math.random()-0.5)*6,
+    rotationY:0, width:def.defaultW, depth:def.defaultD, height:def.defaultH, color:def.color,
+    authorName:author, authorId: currentUser()?.id||null };
+  stageDesignCache.pieces.push(piece);
+  syncStageDesignScene(); renderSdPieceList(); selectPiece(piece.id);
+  await saveStageDesignData();
+}
+function selectPiece(id){
+  sdSelectedId = id;
+  syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
+}
+function renderSdPieceList(){
+  const list = document.getElementById('sdPieceList'); if(!list) return;
+  if(!stageDesignCache.pieces.length){ list.innerHTML = `<div class="empty-state" style="font-size:11.5px;">No pieces yet.</div>`; return; }
+  list.innerHTML = stageDesignCache.pieces.map(p=>`
+    <div class="sd-piece-row ${p.id===sdSelectedId?'active':''}" data-select-piece="${p.id}">
+      <span><span class="sw" style="background:${p.color}"></span>${escapeHtml(p.label||PIECE_TYPES[p.type]?.label||p.type)}</span>
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-select-piece]').forEach(row=>row.addEventListener('click', ()=>selectPiece(row.dataset.selectPiece)));
+}
+function renderSdPropsPanel(){
+  const panel = document.getElementById('sdPropsPanel'); if(!panel) return;
+  const piece = stageDesignCache.pieces.find(p=>p.id===sdSelectedId);
+  if(!piece || !canEditStageDesign()){ panel.style.display='none'; return; }
+  panel.style.display = 'block';
+  document.getElementById('sdPropLabel').value = piece.label||'';
+  document.getElementById('sdPropColor').value = piece.color||'#888888';
+  document.getElementById('sdPropWidth').value = piece.width;
+  document.getElementById('sdPropDepth').value = piece.depth;
+  document.getElementById('sdPropHeight').value = piece.height;
+  document.getElementById('sdPropRotation').value = piece.rotationY||0;
+  document.getElementById('sdPropBaseY').value = piece.y||0;
+}
+async function updateSelectedPieceProp(field, value){
+  const piece = stageDesignCache.pieces.find(p=>p.id===sdSelectedId); if(!piece) return;
+  piece[field] = value;
+  syncStageDesignScene(); renderSdPieceList();
+  await saveStageDesignData();
+}
+async function deleteSelectedPiece(){
+  if(!sdSelectedId) return;
+  stageDesignCache.pieces = stageDesignCache.pieces.filter(p=>p.id!==sdSelectedId);
+  sdSelectedId = null;
+  syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
+  await saveStageDesignData();
+}
+async function renderStageDesignView(){
+  const canView = canViewStageDesign();
+  document.getElementById('stageDesignLockedMsg').style.display = canView ? 'none' : 'block';
+  document.getElementById('stageDesignWrap').style.display = canView ? 'block' : 'none';
+  if(!canView){ pauseStageDesignScene(); return; }
+  document.getElementById('sdToolbar').style.display = canEditStageDesign() ? 'flex' : 'none';
+  await initStageDesignSceneIfNeeded();
+  if(!sdAnimFrame) sdAnimFrame = requestAnimationFrame(sdAnimateFrame);
+  await startStageDesignListener();
+  syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
+}
+
 function renderReportDetail(r, dep, depState, container){
   const teamNames = r.teamMemberIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'—'; });
   const nonContribNames = r.nonContributorIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'—'; });
@@ -3558,6 +3991,7 @@ function switchView(view){
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
   if(view!=='departments') stopWorkspaceListener();
+  if(view!=='stagedesign') pauseStageDesignScene();
   if(view==='dashboard') renderDashboard();
   if(view==='productions') renderProductionsView();
   if(view==='calendar'){ renderCalendarForm(); switchCalSub(ui.calSub); }
@@ -3566,6 +4000,7 @@ function switchView(view){
   if(view==='behavior') renderBehaviorView();
   if(view==='departments') renderDepartments();
   if(view==='costumes') renderCostumesView();
+  if(view==='stagedesign') renderStageDesignView();
   if(view==='notifications') renderNotifications();
   if(view==='setup') renderSetup();
 }
@@ -3691,6 +4126,8 @@ async function init(){
   document.querySelectorAll('#behaviorSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchBehaviorSub(b.dataset.behSub)));
 
   document.getElementById('calAddBtn').addEventListener('click', addCalendarEvent);
+  document.getElementById('printCalendarBtn').addEventListener('click', printCalendar);
+  document.getElementById('printCalendarBtn2').addEventListener('click', printCalendar);
   document.getElementById('groupmeSendAnnounceBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can post to GroupMe'); return; }
     if(!globalState.groupme || !globalState.groupme.botId){ toast('Add your GroupMe Bot ID in Setup first'); return; }
@@ -3795,6 +4232,23 @@ async function init(){
     await saveState(); renderNotifications();
     toast('Notifications cleared');
   });
+  document.querySelectorAll('#sdToolbar [data-piece]').forEach(btn=>btn.addEventListener('click', ()=>addStagePiece(btn.dataset.piece)));
+  document.getElementById('sdClearBtn').addEventListener('click', async ()=>{
+    if(!canEditStageDesign()){ toast('Only Set Design, Stage Management, or the Director can edit the set'); return; }
+    if(!confirm('Remove every piece from the 3D set design? This cannot be undone.')) return;
+    stageDesignCache.pieces = []; sdSelectedId = null;
+    syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
+    await saveStageDesignData();
+    toast('Set cleared');
+  });
+  document.getElementById('sdPropLabel').addEventListener('change', e=>updateSelectedPieceProp('label', e.target.value));
+  document.getElementById('sdPropColor').addEventListener('input', e=>updateSelectedPieceProp('color', e.target.value));
+  document.getElementById('sdPropWidth').addEventListener('change', e=>updateSelectedPieceProp('width', parseFloat(e.target.value)||1));
+  document.getElementById('sdPropDepth').addEventListener('change', e=>updateSelectedPieceProp('depth', parseFloat(e.target.value)||1));
+  document.getElementById('sdPropHeight').addEventListener('change', e=>updateSelectedPieceProp('height', parseFloat(e.target.value)||1));
+  document.getElementById('sdPropRotation').addEventListener('change', e=>updateSelectedPieceProp('rotationY', parseFloat(e.target.value)||0));
+  document.getElementById('sdPropBaseY').addEventListener('change', e=>updateSelectedPieceProp('y', parseFloat(e.target.value)||0));
+  document.getElementById('sdDeletePieceBtn').addEventListener('click', deleteSelectedPiece);
   document.getElementById('exportAllGradesBtn').addEventListener('click', ()=>{
     if(!isDirector()){ toast('Only the Director can export grades'); return; }
     exportAllDeptGradesCsv();
