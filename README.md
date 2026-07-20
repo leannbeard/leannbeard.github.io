@@ -488,6 +488,12 @@
         </div>
         <textarea id="calNotes" class="full-width" style="min-height:50px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:9px 10px; border-radius:3px;" placeholder="Notes (optional)"></textarea>
         <button class="btn" id="calAddBtn">Add to Calendar</button>
+        <button class="btn ghost small" id="toggleCalBulkImport" style="margin-left:8px;">Bulk Import Calendar</button>
+        <div id="calBulkImportWrap" style="display:none; margin-top:14px;">
+          <p style="font-size:11.5px;color:var(--paper-dim);">One call per line, fields separated by <code>|</code>: <code>Date|Start|End|Title|Location|Departments|Notes</code>. Date as <code>YYYY-MM-DD</code>, times as <code>HH:MM</code> (24-hour, blank if none), Departments comma-separated (Set Design, Props, Costumes, Hair &amp; Makeup, Lighting Design, Sound Design, Stage Management, Run Crew, Marketing, Cast — blank means everyone). This does not post to GroupMe or send emails; use the normal schedule-send buttons afterward if you want to announce it.</p>
+          <textarea id="calBulkImportText" class="full-width" style="min-height:140px; font-family:'IBM Plex Mono',monospace; font-size:11.5px;" placeholder="2026-09-08|16:00|17:45|Company launch, table read|Main Stage|Stage Management, Sound Design, Set Design, Props, Cast|First after-school rehearsal"></textarea>
+          <button class="btn small" id="calBulkImportBtn" style="margin-top:8px;">Import Calls</button>
+        </div>
       </div>
       <div class="card" id="groupmeAnnounceCard" style="display:none;">
         <h2>Post to GroupMe</h2>
@@ -1919,6 +1925,35 @@ async function addCalendarEvent(){
   if(ui.calSub==='month') renderCalMonth();
   sendGroupMe(`🗓️ New call added: "${title}" on ${fmtDate(date)}${startTime?' at '+startTime:''}${location?' — '+location:''}${groupMeCallInfo({isSpecificCall, calledDepartments, calledStudentIds})}.`);
   toast('Added to calendar');
+}
+async function bulkImportCalendar(){
+  if(!isDirectorOrStageMgmt()){ toast('Only the Director or Stage Management can import calendar entries'); return; }
+  const raw = document.getElementById('calBulkImportText').value;
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!lines.length){ toast('Paste at least one line first'); return; }
+  let count = 0, errors = [];
+  lines.forEach((line, idx)=>{
+    const parts = line.split('|').map(p=>p.trim());
+    const [date, startTime='', endTime='', title='', location='', deptsStr='', notes=''] = parts;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')){ errors.push(`Line ${idx+1}: bad date "${date||''}" (need YYYY-MM-DD)`); return; }
+    if(!title){ errors.push(`Line ${idx+1}: missing title`); return; }
+    const calledDepartments = deptsStr ? deptsStr.split(',').map(s=>s.trim().toLowerCase()).map(name=>{
+      const match = DEPARTMENTS.find(d=>d.label.toLowerCase()===name || d.key===name);
+      return match ? match.key : null;
+    }).filter(Boolean) : [];
+    const isSpecificCall = calledDepartments.length > 0;
+    state.calendar.push({ id:cryptoId(), title, date, startTime, endTime, location, notes, isSpecificCall, calledDepartments, calledStudentIds:[], reminderSent:false });
+    count++;
+  });
+  if(count){
+    logChange(`Bulk imported ${count} calendar call(s).`, {type:'all'});
+    await saveState();
+    document.getElementById('calBulkImportText').value = '';
+    renderCalendarForm(); renderCalendar(); renderNotifications(); renderDashboard();
+    if(ui.calSub==='month') renderCalMonth();
+  }
+  if(errors.length){ toast(`Imported ${count}, skipped ${errors.length} — check console for details`); console.warn('Bulk calendar import issues:\n'+errors.join('\n')); }
+  else toast(`Imported ${count} call(s)`);
 }
 
 // ---------------- CONFLICTS ----------------
@@ -4126,6 +4161,11 @@ async function init(){
   document.querySelectorAll('#behaviorSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchBehaviorSub(b.dataset.behSub)));
 
   document.getElementById('calAddBtn').addEventListener('click', addCalendarEvent);
+  document.getElementById('toggleCalBulkImport').addEventListener('click', ()=>{
+    const wrap = document.getElementById('calBulkImportWrap');
+    wrap.style.display = wrap.style.display==='none' ? 'block' : 'none';
+  });
+  document.getElementById('calBulkImportBtn').addEventListener('click', bulkImportCalendar);
   document.getElementById('printCalendarBtn').addEventListener('click', printCalendar);
   document.getElementById('printCalendarBtn2').addEventListener('click', printCalendar);
   document.getElementById('groupmeSendAnnounceBtn').addEventListener('click', async ()=>{
