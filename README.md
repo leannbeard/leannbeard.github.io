@@ -313,6 +313,24 @@
   .sd-props input[type=color]{ width:100%; height:28px; border:1px solid var(--line); border-radius:3px; background:none; padding:2px; }
   .sd-dims-row{ display:flex; gap:6px; }
   .sd-dims-row > div{ flex:1; }
+
+  .ll-layout{ display:flex; gap:16px; flex-wrap:wrap; }
+  .ll-board{ flex:2; min-width:520px; background:rgba(0,0,0,0.25); border:1px solid var(--line); border-radius:var(--radius); padding:14px; }
+  .ll-board-group-label{ font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; margin:10px 0 6px; }
+  .ll-channels-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .ll-channel{ width:64px; background:rgba(0,0,0,0.2); border:1px solid var(--line); border-radius:6px; padding:8px 6px; display:flex; flex-direction:column; align-items:center; }
+  .ll-channel-label{ font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--paper-dim); margin-bottom:6px; text-align:center; min-height:24px; }
+  .ll-fader-track{ height:130px; display:flex; align-items:center; justify-content:center; width:100%; }
+  .ll-fader-track input[type=range]{ width:120px; height:20px; transform:rotate(-90deg); accent-color:var(--amber); }
+  .ll-channel-pct{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--paper); margin-top:6px; }
+  .ll-channel-color{ width:36px; height:20px; border:1px solid var(--line); border-radius:4px; background:none; padding:0; margin-top:6px; cursor:pointer; }
+  .ll-swatch-row{ display:flex; gap:3px; flex-wrap:wrap; justify-content:center; margin-top:5px; max-width:56px; }
+  .ll-swatch{ width:11px; height:11px; border-radius:2px; cursor:pointer; border:1px solid rgba(255,255,255,0.3); }
+  .ll-stage-panel{ flex:1; min-width:360px; }
+  .ll-canvas-wrap{ width:100%; height:420px; position:relative; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:#050608; }
+  .ll-canvas-wrap canvas{ display:block; width:100%; height:100%; touch-action:none; }
+  .ll-cue-item{ display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px dashed var(--line); font-size:12.5px; }
+  .ll-cue-item:last-child{ border-bottom:none; }
   .wb-image-add-row input{ flex:1; min-width:200px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:8px 10px; border-radius:3px; font-size:12.5px; }
   #wbDrawCanvas{ position:absolute; top:0; left:0; width:1400px; height:900px; z-index:40; pointer-events:none; }
 
@@ -395,6 +413,7 @@
   <button data-view="departments">Departments</button>
   <button data-view="costumes">Costumes</button>
   <button data-view="stagedesign">3D Set Design</button>
+  <button data-view="lightinglab">Lighting Lab</button>
   <button data-view="notifications">Notifications<span class="badge" id="notifBadge" style="display:none;">0</span></button>
   <button data-view="setup">Roster / Setup</button>
 </nav>
@@ -402,6 +421,12 @@
 <div id="signedOutShell" style="display:none; max-width:520px; margin:70px auto; text-align:center; padding:0 24px;">
   <div class="lamp" style="font-size:30px; margin-bottom:10px;">🔒</div>
   <p style="font-size:15px; color:var(--paper-dim); line-height:1.6;">Sign in above — with Google, or Email &amp; Password if your school blocks Google sign-in — to view this production. A real account is required now, even just to look around.</p>
+</div>
+
+<div id="pendingApprovalShell" style="display:none; max-width:520px; margin:70px auto; text-align:center; padding:0 24px;">
+  <div class="lamp" style="font-size:30px; margin-bottom:10px;">⏳</div>
+  <h2 style="margin-bottom:6px;">Waiting for approval</h2>
+  <p style="font-size:15px; color:var(--paper-dim); line-height:1.6;">You're signed in as <b id="pendingApprovalEmail" style="color:var(--paper);"></b>, but you're not on the roster yet. Your Director needs to approve your account before you can get in — let them know you're waiting, then check back and refresh this page.</p>
 </div>
 
 <main id="mainContent" style="display:none;">
@@ -675,18 +700,46 @@
       <div class="lamp">🔒</div>Sign in to view the 3D set design.
     </div>
     <div id="stageDesignWrap" style="display:none;">
-      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">A simple 3D layout tool for blocking the set — platforms, flats, stairs, and basic furniture, not photorealistic models. Visible to the whole cast and crew; editable by Set Design, Director, and Stage Management. Drag on the empty background to orbit the camera, scroll to zoom.</p>
-      <div class="wb-toolbar" id="sdToolbar" style="display:none; margin-bottom:12px;">
-        <button class="wb-tool-btn" data-piece="platform">▭ Platform</button>
-        <button class="wb-tool-btn" data-piece="flat">▯ Flat</button>
-        <button class="wb-tool-btn" data-piece="stairs">▲ Stairs</button>
-        <button class="wb-tool-btn" data-piece="riser">▪ Riser</button>
-        <button class="wb-tool-btn" data-piece="table">▤ Table</button>
-        <button class="wb-tool-btn" data-piece="chair">◪ Chair</button>
-        <button class="wb-tool-btn" data-piece="bench">▬ Bench</button>
-        <button class="wb-tool-btn" data-piece="door">▮ Doorway</button>
-        <span class="wb-sep"></span>
-        <button class="btn danger small" id="sdClearBtn">Clear All Pieces</button>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">A simple 3D layout tool for blocking the set — not photorealistic models. Drag on the empty background to orbit the camera, scroll to zoom. Grid lines are 1-foot squares — check your own contest venue's actual playing space, since that varies by site.</p>
+      <div class="subtabs" id="sdBoardTabs">
+        <button data-board="production" class="active">Production Set</button>
+        <button data-board="sandbox">My Practice Sandbox</button>
+      </div>
+      <div id="sdSandboxBrowseWrap" style="display:none; margin-bottom:10px;">
+        <select id="sdSandboxBrowseSelect" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:3px; font-size:12.5px;"></select>
+        <span style="font-size:11px; color:var(--paper-dim); margin-left:8px;">Director/Stage Mgmt view — browse any student's sandbox</span>
+      </div>
+      <div id="sdToolbarWrap" style="display:none;">
+        <p style="font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; margin:10px 0 4px;">Standard UIL One-Act Play Set (32-piece)</p>
+        <div class="wb-toolbar" id="sdToolbarUil">
+          <button class="wb-tool-btn" data-piece="uil_platform_4x8">▭ 4×8 Platform</button>
+          <button class="wb-tool-btn" data-piece="uil_platform_4x4">▭ 4×4 Platform</button>
+          <button class="wb-tool-btn" data-piece="uil_platform_1x1">▪ 1×1 Platform</button>
+          <button class="wb-tool-btn" data-piece="uil_ramp_4x4">◺ 4×4 Ramp</button>
+          <button class="wb-tool-btn" data-piece="uil_step_4">▲ 4' Steps</button>
+          <button class="wb-tool-btn" data-piece="uil_step_2">▲ 2' Steps</button>
+          <button class="wb-tool-btn" data-piece="uil_pylon_8">▮ 8' Pylon</button>
+          <button class="wb-tool-btn" data-piece="uil_pylon_6">▮ 6' Pylon</button>
+          <button class="wb-tool-btn" data-piece="uil_pylon_4">▮ 4' Pylon</button>
+          <button class="wb-tool-btn" data-piece="uil_door">▯ Door Unit</button>
+          <button class="wb-tool-btn" data-piece="uil_window">▯ Window Unit</button>
+          <button class="wb-tool-btn" data-piece="uil_french_door">▯ French Door</button>
+          <button class="wb-tool-btn" data-piece="uil_bifold_flat">▯ Bifold Flat</button>
+          <button class="wb-tool-btn" data-piece="uil_trifold_flat">▯ Trifold Flat</button>
+        </div>
+        <p style="font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; margin:12px 0 4px;">Extra Furniture &amp; Set Dressing</p>
+        <div class="wb-toolbar" id="sdToolbar">
+          <button class="wb-tool-btn" data-piece="platform">▭ Platform</button>
+          <button class="wb-tool-btn" data-piece="flat">▯ Flat</button>
+          <button class="wb-tool-btn" data-piece="stairs">▲ Stairs</button>
+          <button class="wb-tool-btn" data-piece="riser">▪ Riser</button>
+          <button class="wb-tool-btn" data-piece="table">▤ Table</button>
+          <button class="wb-tool-btn" data-piece="chair">◪ Chair</button>
+          <button class="wb-tool-btn" data-piece="bench">▬ Bench</button>
+          <button class="wb-tool-btn" data-piece="door">▮ Doorway</button>
+          <span class="wb-sep"></span>
+          <button class="btn danger small" id="sdClearBtn">Clear All Pieces</button>
+        </div>
       </div>
       <div class="sd-layout">
         <div class="sd-canvas-wrap" id="sdCanvasWrap">
@@ -719,6 +772,38 @@
     </div>
   </section>
 
+  <section class="view" id="view-lightinglab">
+    <div id="lightingLabLockedMsg" class="empty-state" style="display:none;">
+      <div class="lamp">🔒</div>Sign in to use the Lighting Lab.
+    </div>
+    <div id="lightingLabWrap" style="display:none;">
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Practice lighting areas & cues on a virtual board — areas numbered 1-15 (1-5 front row, 6-10 middle, 11-15 back, left to right), matching how your program lays them out, plus 3 cyclorama zones. Board changes reset when you leave the tab; saved cues stick around for the whole team.</p>
+      <div class="ll-layout">
+        <div class="ll-board">
+          <div class="ll-board-group-label">Stage Areas</div>
+          <div class="ll-channels-row" id="llAreaChannels"></div>
+          <div class="ll-board-group-label">Cyclorama</div>
+          <div class="ll-channels-row" id="llCycChannels"></div>
+        </div>
+        <div class="ll-stage-panel">
+          <div class="ll-canvas-wrap" id="llCanvasWrap">
+            <canvas id="llCanvas"></canvas>
+            <div class="sd-hint">Drag to orbit · scroll to zoom</div>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">Cues</h3>
+            <div class="form-grid">
+              <input type="text" id="llCueName" placeholder="Cue name (e.g. Cue 1 - Opening)">
+              <button class="btn small" id="llSaveCueBtn">Save Current Look as Cue</button>
+            </div>
+            <button class="btn ghost small" id="llBlackoutBtn">Blackout (all to 0%)</button>
+            <div id="llCueList" style="margin-top:10px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="view" id="view-notifications">
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
@@ -737,6 +822,11 @@
       <h2>No Director Assigned Yet</h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">Nobody has Director access on this production yet. If that's you, claim it now — after that, only existing Directors can add or remove Director access for others.</p>
       <button class="btn" id="claimDirectorBtn">Make me the Director</button>
+    </div>
+    <div class="card" id="pendingApprovalsCard" style="display:none;">
+      <h2>Pending Approvals <span id="pendingApprovalsBadge" style="display:none; background:var(--red); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; vertical-align:middle;">0</span></h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">People who signed in but aren't on your roster yet — they can't see anything until you approve or deny them. Approve pre-fills the roster form below with their name and email; finish it out and add them like normal to grant access.</p>
+      <div id="pendingApprovalsList"></div>
     </div>
     <div class="card" id="dirAccessCard" style="display:none;">
       <h2>Director Access</h2>
@@ -961,6 +1051,9 @@ function defaultProductionState(name, seeded){
     behaviorConfig: { pointsPerDay:20, daysPerWeek:5 },
     participationConfig: { pointsPerDay:20, daysPerWeek:5 },
     announcements:[],
+    pendingApprovals:[],
+    lightingCues:[],
+    sandboxOwners:[],
     departments: freshDepartments(seeded)
   };
 }
@@ -1126,11 +1219,70 @@ function showSignedOutShell(){
   document.getElementById('mainTabs').style.display = 'none';
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('signedOutShell').style.display = 'block';
+  document.getElementById('pendingApprovalShell').style.display = 'none';
 }
 function showAppShell(){
   document.getElementById('mainTabs').style.display = 'flex';
   document.getElementById('mainContent').style.display = 'block';
   document.getElementById('signedOutShell').style.display = 'none';
+  document.getElementById('pendingApprovalShell').style.display = 'none';
+}
+function showPendingApprovalShell(){
+  document.getElementById('mainTabs').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('signedOutShell').style.display = 'none';
+  document.getElementById('pendingApprovalShell').style.display = 'block';
+  const emailEl = document.getElementById('pendingApprovalEmail');
+  if(emailEl) emailEl.textContent = activeEmail() || '';
+}
+// True once someone is allowed to actually see the app: Director, matched to the roster by
+// email, or — bootstrap case — nobody has claimed Director yet, so the very first sign-in
+// needs through to find the "Make me the Director" button.
+function isApprovedUser(){
+  return isDirector() || !!currentUser() || !(globalState.directorEmails||[]).length;
+}
+async function registerPendingApproval(){
+  const email = activeEmail();
+  if(!email) return;
+  if(!state.pendingApprovals) state.pendingApprovals = [];
+  if(state.pendingApprovals.some(p=>p.email.toLowerCase()===email.toLowerCase())) return;
+  state.pendingApprovals.push({ id:cryptoId(), email, displayName: (authUser&&authUser.displayName)||email, requestedAt:new Date().toISOString() });
+  logChange(`🔔 New account request awaiting approval: ${(authUser&&authUser.displayName)||email} (${email}).`, {type:'directorOnly'});
+  await saveState();
+}
+function renderPendingApprovals(){
+  const card = document.getElementById('pendingApprovalsCard');
+  card.style.display = isDirector() ? 'block' : 'none';
+  if(!isDirector()) return;
+  const pending = state.pendingApprovals || [];
+  const badge = document.getElementById('pendingApprovalsBadge');
+  badge.style.display = pending.length ? 'inline-block' : 'none';
+  badge.textContent = pending.length;
+  const list = document.getElementById('pendingApprovalsList');
+  if(!pending.length){ list.innerHTML = `<div class="empty-state">No pending requests right now.</div>`; return; }
+  list.innerHTML = pending.map(p=>`
+    <div class="list-item">
+      <span><b>${escapeHtml(p.displayName)}</b><br><span class="mono" style="font-size:11px;color:var(--paper-dim);">${escapeHtml(p.email)} · requested ${fmtDateTime(p.requestedAt)}</span></span>
+      <span style="display:flex; gap:6px;">
+        <button class="btn small" data-approve="${p.id}">Approve</button>
+        <button class="btn danger small" data-deny="${p.id}">Deny</button>
+      </span>
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-approve]').forEach(btn=>btn.addEventListener('click', ()=>{
+    const p = pending.find(x=>x.id===btn.dataset.approve);
+    if(!p) return;
+    document.getElementById('rosterName').value = p.displayName;
+    document.getElementById('rosterEmail').value = p.email;
+    document.getElementById('rosterName').scrollIntoView({behavior:'smooth', block:'center'});
+    toast('Fill in their team & class period below, then click "Add Cast / Crew Member" to finish approving');
+  }));
+  list.querySelectorAll('[data-deny]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if(!confirm('Deny this request? They\'ll stay blocked from the app.')) return;
+    state.pendingApprovals = state.pendingApprovals.filter(x=>x.id!==btn.dataset.deny);
+    await saveState(); renderPendingApprovals();
+    toast('Request denied');
+  }));
 }
 
 let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set(), behaviorSub:'log', behaviorWeekCursor:null, myBehaviorWeekCursor:null, editingEventId:null, editingAnnouncementId:null, participationWeekCursor:null, allPartWeekCursor:null };
@@ -1612,6 +1764,7 @@ function renderDashboard(){
   const items = [];
   if(pendingConflicts) items.push(`<div class="list-item"><span>⚠ ${pendingConflicts} conflict(s) awaiting a decision</span><span class="d">Conflicts tab</span></div>`);
   if(reportsToGrade) items.push(`<div class="list-item"><span>📋 ${reportsToGrade} report(s) awaiting review/grade</span><span class="d">Departments tab</span></div>`);
+  if(isDirector() && (state.pendingApprovals||[]).length) items.push(`<div class="list-item" style="color:var(--amber);"><span>🔔 ${state.pendingApprovals.length} account(s) awaiting approval</span><span class="d">Setup tab</span></div>`);
   if(isDirectorOrStageMgmt()){
     attendanceAlerts().forEach(a=>{
       items.push(`<div class="list-item" style="color:var(--red);"><span>🚩 ${a.crew.name} has ${a.count} unexcused absence${a.count!==1?'s':''}</span><span class="d">${a.crew.classPeriod||''}</span></div>`);
@@ -3451,6 +3604,23 @@ function renderWhiteboard(dep, depState){
 }
 // ---------------- 3D SET DESIGN STUDIO (Three.js, live-synced) ----------------
 const PIECE_TYPES = {
+  // Standard 32-piece UIL One-Act Play scale set — the same piece list used by the scale
+  // model kits schools buy for exactly this purpose. Dimensions match the standard kit.
+  uil_platform_4x8: { label:'4×8 Platform',    defaultW:8,    defaultD:4,   defaultH:1, color:'#8B7355', uil:true },
+  uil_platform_4x4: { label:'4×4 Platform',    defaultW:4,    defaultD:4,   defaultH:1, color:'#8B7355', uil:true },
+  uil_platform_1x1: { label:'1×1 Platform',    defaultW:1,    defaultD:1,   defaultH:1, color:'#8B7355', uil:true },
+  uil_ramp_4x4:     { label:'4×4 Ramp',        defaultW:4,    defaultD:4,   defaultH:1, color:'#A78B6C', uil:true },
+  uil_step_4:       { label:"4' Step Unit",    defaultW:4,    defaultD:2,   defaultH:1, color:'#6E7B8B', uil:true },
+  uil_step_2:       { label:"2' Step Unit",    defaultW:2,    defaultD:2,   defaultH:1, color:'#6E7B8B', uil:true },
+  uil_pylon_8:      { label:"8' Pylon",        defaultW:1,    defaultD:1,   defaultH:8, color:'#4C7A93', uil:true },
+  uil_pylon_6:      { label:"6' Pylon",        defaultW:1,    defaultD:1,   defaultH:6, color:'#4C7A93', uil:true },
+  uil_pylon_4:      { label:"4' Pylon",        defaultW:1,    defaultD:1,   defaultH:4, color:'#4C7A93', uil:true },
+  uil_door:         { label:'Door Unit',       defaultW:3.58, defaultD:0.3, defaultH:8, color:'#C97B84', uil:true },
+  uil_window:       { label:'Window Unit',     defaultW:3,    defaultD:0.3, defaultH:8, color:'#9BB8D3', uil:true },
+  uil_french_door:  { label:'French Door',     defaultW:4.96, defaultD:0.3, defaultH:8, color:'#C97B84', uil:true },
+  uil_bifold_flat:  { label:'Bifold Flat',     defaultW:4,    defaultD:0.3, defaultH:8, color:'#D9D2C5', uil:true },
+  uil_trifold_flat: { label:'Trifold Flat',    defaultW:6,    defaultD:0.3, defaultH:8, color:'#D9D2C5', uil:true },
+  // General furniture / extras — not part of the standard UIL set, but useful for blocking.
   platform: { label:'Platform',  defaultW:6,   defaultD:4,   defaultH:1,   color:'#8B7355' },
   flat:     { label:'Flat',      defaultW:4,   defaultD:0.3, defaultH:8,   color:'#D9D2C5' },
   stairs:   { label:'Stairs',    defaultW:3,   defaultD:3,   defaultH:2,   color:'#6E7B8B' },
@@ -3463,28 +3633,65 @@ const PIECE_TYPES = {
 function canViewStageDesign(){ return isDirector() || !!currentUser(); }
 function canEditStageDesign(){ return isDirectorOrStageMgmt() || canViewDept('set_design'); }
 
+// A student's practice sandbox is a completely separate board from the real production set —
+// same 3D engine and piece palette, but its own Firestore doc, so students can freely practice
+// without colliding with each other or with the real show's plan. sdBoardMode picks which one
+// is currently loaded into the scene; switching boards swaps the data source, not the renderer.
+let sdBoardMode = 'production'; // 'production' | 'sandbox'
+let sdBoardOwnerId = null;      // crewId whose sandbox is loaded, when sdBoardMode==='sandbox'
+function stageDesignCollectionName(){ return sdBoardMode==='sandbox' ? 'stagedesign_sandboxes' : 'stagedesigns'; }
+function canEditActiveBoard(){
+  if(sdBoardMode==='production') return canEditStageDesign();
+  const u = currentUser();
+  return isDirectorOrStageMgmt() || (u && u.id===sdBoardOwnerId);
+}
+
 let stageDesignUnsubscribe = null;
 let stageDesignCache = { pieces:[] };
 let stageDesignDraggingId = null;
 let stageDesignPendingRerender = false;
-function stageDesignDocId(){ return currentProductionId; }
+function stageDesignDocId(){ return sdBoardMode==='sandbox' ? currentProductionId+'_'+sdBoardOwnerId : currentProductionId; }
 function normalizeStageDesignCache(){ if(!stageDesignCache.pieces) stageDesignCache.pieces = []; }
 function stopStageDesignListener(){ if(stageDesignUnsubscribe){ stageDesignUnsubscribe(); stageDesignUnsubscribe = null; } }
 async function startStageDesignListener(){
   stopStageDesignListener();
   if(!window.__fb || !currentProductionId) return;
-  const ref = window.__fb.doc(window.__fb.db, 'stagedesigns', stageDesignDocId());
+  const ref = window.__fb.doc(window.__fb.db, stageDesignCollectionName(), stageDesignDocId());
   stageDesignUnsubscribe = window.__fb.onSnapshot(ref, (snap)=>{
     stageDesignCache = snap.exists() ? snap.data() : { pieces:[] };
     normalizeStageDesignCache();
     if(!document.getElementById('view-stagedesign').classList.contains('active')) return;
     if(stageDesignDraggingId){ stageDesignPendingRerender = true; return; }
     syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
-  }, (err)=>console.warn('Stage design live listener failed (check Firestore rules include "stagedesigns")', err));
+  }, (err)=>console.warn('Stage design live listener failed (check Firestore rules include "'+stageDesignCollectionName()+'")', err));
 }
 async function saveStageDesignData(){
-  try{ if(window.__fb && currentProductionId){ const ref = window.__fb.doc(window.__fb.db, 'stagedesigns', stageDesignDocId()); await window.__fb.setDoc(ref, JSON.parse(JSON.stringify(stageDesignCache))); } }
-  catch(e){ console.warn('Stage design save failed', e); }
+  try{
+    if(window.__fb && currentProductionId){
+      const ref = window.__fb.doc(window.__fb.db, stageDesignCollectionName(), stageDesignDocId());
+      await window.__fb.setDoc(ref, JSON.parse(JSON.stringify(stageDesignCache)));
+      if(sdBoardMode==='sandbox'){
+        const u = currentUser();
+        if(u && !(state.sandboxOwners||[]).some(o=>o.crewId===u.id)){
+          if(!state.sandboxOwners) state.sandboxOwners = [];
+          state.sandboxOwners.push({ crewId:u.id, name:u.name, updatedAt:new Date().toISOString() });
+          await saveState();
+        }
+      }
+    }
+  }catch(e){ console.warn('Stage design save failed', e); }
+}
+// Switches which board is loaded into the (already-running) 3D scene — stops the old live
+// listener, clears the currently-rendered pieces, and starts a fresh listener on the new one.
+async function switchStageDesignBoard(mode, ownerId){
+  stopStageDesignListener();
+  sdBoardMode = mode; sdBoardOwnerId = ownerId || null;
+  sdSelectedId = null;
+  stageDesignCache = { pieces:[] };
+  if(sdScene) syncStageDesignScene();
+  document.getElementById('sdToolbarWrap').style.display = canEditActiveBoard() ? 'block' : 'none';
+  await startStageDesignListener();
+  renderSdPieceList(); renderSdPropsPanel();
 }
 
 let THREE_MOD=null, OrbitControlsClass=null;
@@ -3499,16 +3706,41 @@ async function ensureThreeLoaded(){
 }
 function tagPieceId(obj, id){ obj.userData.pieceId = id; obj.children.forEach(c=>tagPieceId(c, id)); }
 function disposePieceGroup(group){ group.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+// A real sloped wedge (not a box) — closed 6-vertex solid, low edge at +Z rising to the
+// full platform height at -Z. DoubleSide on its material means even if a face winds the
+// "wrong" way it still renders, so the ramp can't come out with an invisible face.
+function buildRampGeometry(THREE, w, d, h){
+  const hw=w/2, hd=d/2;
+  const positions = new Float32Array([
+    -hw,0,-hd,  hw,0,-hd,  hw,0,hd,  -hw,0,hd,  -hw,h,-hd,  hw,h,-hd
+  ]);
+  const indices = [
+    0,1,2, 0,2,3,   // bottom
+    0,1,5, 0,5,4,   // back vertical riser (high end)
+    3,2,5, 3,5,4,   // ramp slope surface
+    0,4,3,          // left end cap
+    1,2,5           // right end cap
+  ];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
 function buildPieceMesh(THREE, type, w, d, h, color){
   const mat = new THREE.MeshStandardMaterial({ color, roughness:0.85, metalness:0.05 });
   const group = new THREE.Group();
-  if(type==='stairs'){
+  if(type==='stairs' || type==='uil_step_4' || type==='uil_step_2'){
     const steps=5, stepH=h/steps, stepD=d/steps;
     for(let i=0;i<steps;i++){
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, stepH, stepD*(steps-i)), mat);
       m.position.set(0, stepH*i+stepH/2, -d/2+stepD*(steps-i)/2);
       group.add(m);
     }
+  } else if(type==='uil_ramp_4x4' || type.indexOf('ramp')>=0){
+    const rampMat = new THREE.MeshStandardMaterial({ color, roughness:0.85, metalness:0.05, side:THREE.DoubleSide });
+    const m = new THREE.Mesh(buildRampGeometry(THREE, w, d, h), rampMat);
+    group.add(m);
   } else if(type==='table'){
     const top = new THREE.Mesh(new THREE.BoxGeometry(w, h*0.12, d), mat);
     top.position.set(0, h*0.94, 0); group.add(top);
@@ -3585,7 +3817,7 @@ async function initStageDesignSceneIfNeeded(){
     return obj ? obj.userData.pieceId : null;
   }
   canvas.addEventListener('pointerdown', (e)=>{
-    if(!canEditStageDesign()) return;
+    if(!canEditActiveBoard()) return;
     const id = pieceIdAt(e);
     if(id){
       selectPiece(id);
@@ -3659,7 +3891,7 @@ function syncStageDesignScene(){
   });
 }
 async function addStagePiece(type){
-  if(!canEditStageDesign()){ toast('Only Set Design, Stage Management, or the Director can edit the set'); return; }
+  if(!canEditActiveBoard()){ toast('Only Set Design, Stage Management, or the Director can edit the set'); return; }
   const def = PIECE_TYPES[type]; if(!def) return;
   const author = currentUser()?.name || authUser?.displayName || 'Someone';
   const piece = { id:cryptoId(), type, label:def.label, x:(Math.random()-0.5)*10, y:0, z:(Math.random()-0.5)*6,
@@ -3686,7 +3918,7 @@ function renderSdPieceList(){
 function renderSdPropsPanel(){
   const panel = document.getElementById('sdPropsPanel'); if(!panel) return;
   const piece = stageDesignCache.pieces.find(p=>p.id===sdSelectedId);
-  if(!piece || !canEditStageDesign()){ panel.style.display='none'; return; }
+  if(!piece || !canEditActiveBoard()){ panel.style.display='none'; return; }
   panel.style.display = 'block';
   document.getElementById('sdPropLabel').value = piece.label||'';
   document.getElementById('sdPropColor').value = piece.color||'#888888';
@@ -3714,11 +3946,277 @@ async function renderStageDesignView(){
   document.getElementById('stageDesignLockedMsg').style.display = canView ? 'none' : 'block';
   document.getElementById('stageDesignWrap').style.display = canView ? 'block' : 'none';
   if(!canView){ pauseStageDesignScene(); return; }
-  document.getElementById('sdToolbar').style.display = canEditStageDesign() ? 'flex' : 'none';
+  document.getElementById('sdToolbarWrap').style.display = canEditActiveBoard() ? 'block' : 'none';
+
+  const sandboxTabBtn = document.querySelector('#sdBoardTabs [data-board="sandbox"]');
+  const u = currentUser();
+  sandboxTabBtn.style.display = u ? 'inline-block' : 'none';
+  document.getElementById('sdSandboxBrowseWrap').style.display = (sdBoardMode==='sandbox' && isDirectorOrStageMgmt()) ? 'block' : 'none';
+  if(sdBoardMode==='sandbox' && isDirectorOrStageMgmt()){
+    const sel = document.getElementById('sdSandboxBrowseSelect');
+    const owners = state.sandboxOwners || [];
+    const myId = u ? u.id : null;
+    const options = [{crewId: myId||'me', name:'My own sandbox'}, ...owners.filter(o=>o.crewId!==myId)];
+    sel.innerHTML = options.map(o=>`<option value="${o.crewId}" ${o.crewId===sdBoardOwnerId?'selected':''}>${escapeHtml(o.name)}</option>`).join('');
+  }
+
   await initStageDesignSceneIfNeeded();
   if(!sdAnimFrame) sdAnimFrame = requestAnimationFrame(sdAnimateFrame);
   await startStageDesignListener();
   syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
+}
+
+// ---------------- LIGHTING LAB (Three.js virtual light board + digital stage) ----------------
+// Practice tool, not tied to real production planning — open to any signed-in team member,
+// same as viewing the 3D set. Live board position is per-session only (not saved); saved
+// cues persist for the whole team via normal saveState(), no live-sync needed here.
+// User's actual area numbering: 1-5 front row, 6-10 middle row, 11-15 back row (left to
+// right in each row). Assuming 1-5 is downstage (closest to audience) since that's how it
+// was written — flip LL_AREA_ROWS' z order below if that's backwards for your stage.
+const LL_AREA_ROWS = [
+  { z: 8,  nums:[1,2,3,4,5] },
+  { z: 0,  nums:[6,7,8,9,10] },
+  { z: -8, nums:[11,12,13,14,15] },
+];
+const LL_COL_X = [-12,-6,0,6,12];
+const LL_AREA_DEFS = [];
+LL_AREA_ROWS.forEach(row=>{ row.nums.forEach((num,colIdx)=>{ LL_AREA_DEFS.push({ key:'A'+num, label:String(num), x:LL_COL_X[colIdx], z:row.z, isCyc:false, num }); }); });
+LL_AREA_DEFS.sort((a,b)=>a.num-b.num);
+const LL_CYC_DEFS = [
+  { key:'CYCL', label:'Cyc L', x:-10, z:-13, isCyc:true },
+  { key:'CYCC', label:'Cyc C', x:0,   z:-13, isCyc:true },
+  { key:'CYCR', label:'Cyc R', x:10,  z:-13, isCyc:true },
+];
+const LL_CHANNELS = [...LL_AREA_DEFS, ...LL_CYC_DEFS];
+const LL_SWATCHES = ['#ffffff','#ffcf8a','#a6c8ff','#ff5c5c','#5cff8a','#c78aff','#ffe45c','#5cf0ff'];
+const LL_INTENSITY_SCALE = 40; // best-effort brightness scale — tell me if it reads too dim/bright once you test it
+
+function canUseLightingLab(){ return isDirector() || !!currentUser(); }
+
+let llScene=null, llCamera=null, llRenderer=null, llControls=null, llResizeObs=null, llAnimFrame=null;
+let llLights=[], llActors=[], llCycMesh=null;
+let llCrossfade = null;
+
+async function initLightingLabSceneIfNeeded(){
+  await ensureThreeLoaded();
+  if(llScene) return;
+  const THREE = THREE_MOD;
+  const canvas = document.getElementById('llCanvas');
+  const wrap = document.getElementById('llCanvasWrap');
+
+  llScene = new THREE.Scene();
+  llScene.background = new THREE.Color(0x050608);
+  llCamera = new THREE.PerspectiveCamera(50, Math.max(wrap.clientWidth,1)/Math.max(wrap.clientHeight,1), 0.1, 500);
+  llCamera.position.set(0, 16, 24);
+  llRenderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+  llRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  llRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
+
+  llControls = new OrbitControlsClass(llCamera, llRenderer.domElement);
+  llControls.target.set(0,3,-2);
+  llControls.enableDamping = true;
+  llControls.maxPolarAngle = Math.PI/2 - 0.02;
+  llControls.minDistance = 8; llControls.maxDistance = 60;
+
+  llScene.add(new THREE.AmbientLight(0xffffff, 0.06)); // faint ambient so blackout isn't pure void
+
+  // Floor
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(34,24), new THREE.MeshStandardMaterial({ color:0x2a2c33, roughness:1 }));
+  floor.rotation.x = -Math.PI/2; floor.position.z = -1; llScene.add(floor);
+  const grid = new THREE.GridHelper(34, 34, 0x555555, 0x333333); grid.position.y=0.01; grid.position.z=-1; llScene.add(grid);
+
+  // Cyclorama backdrop
+  llCycMesh = new THREE.Mesh(new THREE.PlaneGeometry(30,14), new THREE.MeshStandardMaterial({ color:0x111111, roughness:1 }));
+  llCycMesh.position.set(0, 7, -14); llScene.add(llCycMesh);
+
+  // Simple actor placeholders, one per stage area
+  const actorMat = new THREE.MeshStandardMaterial({ color:0xcfc6b8, roughness:0.9 });
+  LL_AREA_DEFS.forEach(def=>{
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.65,3.2,10), actorMat.clone());
+    body.position.y = 1.9; g.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.5,12,10), actorMat.clone());
+    head.position.y = 3.9; g.add(head);
+    g.position.set(def.x, 0, def.z);
+    llScene.add(g);
+    llActors.push(g);
+  });
+
+  // One light per channel (areas get SpotLights aimed down at their area; cyc channels get
+  // SpotLights aimed at the backdrop). decay:0 so brightness doesn't require guessing large
+  // physically-based candela numbers — a straightforward 0-100% maps predictably to dark-to-bright.
+  llLights = LL_CHANNELS.map(def=>{
+    const light = new THREE.SpotLight(0xffffff, 0, 40, def.isCyc ? Math.PI/5 : Math.PI/7, 0.5, 0);
+    if(def.isCyc){ light.position.set(def.x, 3, -9); } else { light.position.set(def.x, 14, def.z+1); }
+    light.castShadow = false;
+    llScene.add(light);
+    const target = new THREE.Object3D();
+    target.position.set(def.x, def.isCyc?7:0, def.isCyc?-14:def.z);
+    llScene.add(target);
+    light.target = target;
+    return light;
+  });
+
+  llResizeObs = new ResizeObserver(()=>{
+    if(!wrap.clientWidth || !wrap.clientHeight || !llCamera || !llRenderer) return;
+    llCamera.aspect = wrap.clientWidth/wrap.clientHeight;
+    llCamera.updateProjectionMatrix();
+    llRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
+  });
+  llResizeObs.observe(wrap);
+}
+function llAnimateFrame(){
+  llAnimFrame = requestAnimationFrame(llAnimateFrame);
+  if(llControls) llControls.update();
+  if(llCrossfade){
+    const t = Math.min(1, (performance.now()-llCrossfade.startTime)/llCrossfade.duration);
+    LL_CHANNELS.forEach((def,i)=>{
+      const from = llCrossfade.fromIntensity[i], to = llCrossfade.toIntensity[i];
+      ui.llState[i].intensity = Math.round(from + (to-from)*t);
+      llLights[i].intensity = (ui.llState[i].intensity/100) * LL_INTENSITY_SCALE;
+    });
+    llRefreshChannelUI();
+    if(t>=1) llCrossfade = null;
+  }
+  if(llRenderer && llScene && llCamera) llRenderer.render(llScene, llCamera);
+}
+function pauseLightingLabScene(){
+  if(llAnimFrame){ cancelAnimationFrame(llAnimFrame); llAnimFrame=null; }
+  llCrossfade = null;
+}
+
+function llApplyChannel(i){
+  const st = ui.llState[i];
+  if(llLights[i]){
+    llLights[i].intensity = (st.intensity/100) * LL_INTENSITY_SCALE;
+    llLights[i].color.set(st.color);
+  }
+}
+function llRefreshChannelUI(){
+  LL_CHANNELS.forEach((def,i)=>{
+    const fader = document.getElementById('llFader-'+i);
+    const pct = document.getElementById('llPct-'+i);
+    if(fader) fader.value = ui.llState[i].intensity;
+    if(pct) pct.textContent = Math.round(ui.llState[i].intensity)+'%';
+  });
+}
+function llChannelStripHtml(def, i){
+  return `
+    <div class="ll-channel">
+      <div class="ll-channel-label">${escapeHtml(def.label)}</div>
+      <div class="ll-fader-track"><input type="range" id="llFader-${i}" min="0" max="100" value="0"></div>
+      <div class="ll-channel-pct" id="llPct-${i}">0%</div>
+      <input type="color" class="ll-channel-color" id="llColor-${i}" value="#ffffff">
+      <div class="ll-swatch-row">${LL_SWATCHES.map(c=>`<span class="ll-swatch" style="background:${c}" data-swatch="${i}" data-color="${c}"></span>`).join('')}</div>
+    </div>
+  `;
+}
+function renderLightingChannels(){
+  const areaWrap = document.getElementById('llAreaChannels');
+  const cycWrap = document.getElementById('llCycChannels');
+  areaWrap.innerHTML = LL_AREA_DEFS.map((def,i)=>llChannelStripHtml(def,i)).join('');
+  cycWrap.innerHTML = LL_CYC_DEFS.map((def,j)=>llChannelStripHtml(def, LL_AREA_DEFS.length+j)).join('');
+  const editable = canUseLightingLab();
+  LL_CHANNELS.forEach((def,i)=>{
+    const fader = document.getElementById('llFader-'+i);
+    const colorInput = document.getElementById('llColor-'+i);
+    fader.disabled = !editable; colorInput.disabled = !editable;
+    fader.value = ui.llState[i].intensity;
+    colorInput.value = ui.llState[i].color;
+    fader.addEventListener('input', ()=>{
+      ui.llState[i].intensity = parseInt(fader.value);
+      document.getElementById('llPct-'+i).textContent = fader.value+'%';
+      llApplyChannel(i);
+    });
+    colorInput.addEventListener('input', ()=>{
+      ui.llState[i].color = colorInput.value;
+      llApplyChannel(i);
+    });
+  });
+  document.querySelectorAll('[data-swatch]').forEach(sw=>sw.addEventListener('click', ()=>{
+    if(!editable) return;
+    const i = parseInt(sw.dataset.swatch);
+    ui.llState[i].color = sw.dataset.color;
+    document.getElementById('llColor-'+i).value = sw.dataset.color;
+    llApplyChannel(i);
+  }));
+}
+async function llSaveCue(){
+  if(!canUseLightingLab()){ toast('Sign in to save a cue'); return; }
+  const name = document.getElementById('llCueName').value.trim();
+  if(!name){ toast('Give the cue a name'); return; }
+  const author = currentUser()?.name || authUser?.displayName || 'Someone';
+  state.lightingCues.push({
+    id:cryptoId(), name, channels: JSON.parse(JSON.stringify(ui.llState)),
+    authorName:author, createdAt:new Date().toISOString()
+  });
+  await saveState();
+  document.getElementById('llCueName').value = '';
+  renderLightingCueList();
+  toast('Cue saved');
+}
+function renderLightingCueList(){
+  const list = document.getElementById('llCueList');
+  const cues = state.lightingCues || [];
+  if(!cues.length){ list.innerHTML = `<div class="empty-state">No cues saved yet.</div>`; return; }
+  const editable = canUseLightingLab();
+  list.innerHTML = [...cues].reverse().map(c=>`
+    <div class="ll-cue-item">
+      <span><b>${escapeHtml(c.name)}</b><br><span class="mono" style="font-size:10.5px;color:var(--paper-dim);">${escapeHtml(c.authorName)} · ${fmtDateTime(c.createdAt)}${c.updatedAt?' · edited '+fmtDateTime(c.updatedAt):''}</span></span>
+      <span style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+        ${editable?`<button class="btn ghost small" data-go="${c.id}">Go</button><button class="btn ghost small" data-snap="${c.id}">Snap</button><button class="btn ghost small" data-update="${c.id}">Update</button><button class="btn ghost small" data-rename="${c.id}">Rename</button><button class="btn danger small" data-delcue="${c.id}">✕</button>`:''}
+      </span>
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-go]').forEach(btn=>btn.addEventListener('click', ()=>{
+    const c = cues.find(x=>x.id===btn.dataset.go); if(!c) return;
+    LL_CHANNELS.forEach((def,i)=>{ ui.llState[i].color = c.channels[i].color; llLights[i].color.set(c.channels[i].color); });
+    llRefreshChannelUI();
+    llCrossfade = { fromIntensity: ui.llState.map(s=>s.intensity), toIntensity: c.channels.map(s=>s.intensity), startTime:performance.now(), duration:2200 };
+    toast(`Going to "${c.name}"…`);
+  }));
+  list.querySelectorAll('[data-snap]').forEach(btn=>btn.addEventListener('click', ()=>{
+    const c = cues.find(x=>x.id===btn.dataset.snap); if(!c) return;
+    LL_CHANNELS.forEach((def,i)=>{ ui.llState[i] = JSON.parse(JSON.stringify(c.channels[i])); llApplyChannel(i); });
+    llRefreshChannelUI();
+    toast(`Snapped to "${c.name}"`);
+  }));
+  list.querySelectorAll('[data-update]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    const c = cues.find(x=>x.id===btn.dataset.update); if(!c) return;
+    if(!confirm(`Overwrite "${c.name}" with the board's current look? This replaces its saved levels and colors.`)) return;
+    c.channels = JSON.parse(JSON.stringify(ui.llState));
+    c.updatedAt = new Date().toISOString();
+    await saveState(); renderLightingCueList();
+    toast(`"${c.name}" updated to the current look`);
+  }));
+  list.querySelectorAll('[data-rename]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    const c = cues.find(x=>x.id===btn.dataset.rename); if(!c) return;
+    const newName = prompt('Rename cue:', c.name);
+    if(newName===null) return;
+    const trimmed = newName.trim();
+    if(!trimmed){ toast('Name cannot be empty'); return; }
+    c.name = trimmed;
+    await saveState(); renderLightingCueList();
+    toast('Cue renamed');
+  }));
+  list.querySelectorAll('[data-delcue]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if(!confirm('Delete this cue?')) return;
+    state.lightingCues = state.lightingCues.filter(x=>x.id!==btn.dataset.delcue);
+    await saveState(); renderLightingCueList();
+    toast('Cue deleted');
+  }));
+}
+async function renderLightingLabView(){
+  const canView = canUseLightingLab();
+  document.getElementById('lightingLabLockedMsg').style.display = canView ? 'none' : 'block';
+  document.getElementById('lightingLabWrap').style.display = canView ? 'block' : 'none';
+  if(!canView){ pauseLightingLabScene(); return; }
+  if(!ui.llState) ui.llState = LL_CHANNELS.map(()=>({ intensity:0, color:'#ffffff' }));
+  await initLightingLabSceneIfNeeded();
+  if(!llAnimFrame) llAnimFrame = requestAnimationFrame(llAnimateFrame);
+  renderLightingChannels();
+  LL_CHANNELS.forEach((def,i)=>llApplyChannel(i));
+  renderLightingCueList();
 }
 
 function renderReportDetail(r, dep, depState, container){
@@ -3877,6 +4375,7 @@ function renderSetup(){
   document.getElementById('claimDirectorCard').style.display = (noDirectorsYet && authUser) ? 'block' : 'none';
   document.getElementById('dirAccessCard').style.display = isDirector() ? 'block' : 'none';
   document.getElementById('dirRecoveryWarning').style.display = (globalState.directorEmails||[]).length < 2 ? 'block' : 'none';
+  renderPendingApprovals();
   document.getElementById('attendanceThreshold').value = globalState.attendanceAlertThreshold || 3;
   const behCfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
   document.getElementById('behPointsPerDay').value = behCfg.pointsPerDay;
@@ -4020,6 +4519,9 @@ async function addCrew(){
   const parentEmail = document.getElementById('rosterParentEmail').value.trim();
   const parentPhone = document.getElementById('rosterParentPhone').value.trim();
   state.crew.push({ id:cryptoId(), name, role, classPeriod, departments, castRole, email, parentEmail, parentPhone });
+  if(email && state.pendingApprovals && state.pendingApprovals.length){
+    state.pendingApprovals = state.pendingApprovals.filter(p=>p.email.toLowerCase()!==email.toLowerCase());
+  }
   await saveState();
   document.getElementById('rosterName').value=''; document.getElementById('rosterCastRole').value=''; document.getElementById('rosterEmail').value=''; document.getElementById('rosterParentEmail').value=''; document.getElementById('rosterParentPhone').value='';
   document.querySelectorAll('#rosterDeptChecks input').forEach(i=>i.checked=false);
@@ -4033,6 +4535,7 @@ function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
   if(view!=='departments') stopWorkspaceListener();
   if(view!=='stagedesign') pauseStageDesignScene();
+  if(view!=='lightinglab') pauseLightingLabScene();
   if(view==='dashboard') renderDashboard();
   if(view==='productions') renderProductionsView();
   if(view==='calendar'){ renderCalendarForm(); switchCalSub(ui.calSub); }
@@ -4042,6 +4545,7 @@ function switchView(view){
   if(view==='departments') renderDepartments();
   if(view==='costumes') renderCostumesView();
   if(view==='stagedesign') renderStageDesignView();
+  if(view==='lightinglab') renderLightingLabView();
   if(view==='notifications') renderNotifications();
   if(view==='setup') renderSetup();
 }
@@ -4060,10 +4564,20 @@ async function loadEverythingAndRender(){
   if(!state.behaviorConfig) state.behaviorConfig = { pointsPerDay:20, daysPerWeek:5 };
   if(!state.participationConfig) state.participationConfig = { pointsPerDay:20, daysPerWeek:5 };
   if(!state.announcements) state.announcements = [];
+  if(!state.pendingApprovals) state.pendingApprovals = [];
+  if(!state.lightingCues) state.lightingCues = [];
+  if(!state.sandboxOwners) state.sandboxOwners = [];
   if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
   if(globalState.emailjs.templateBehavior === undefined) globalState.emailjs.templateBehavior = '';
   if(globalState.emailjs.templateFailingGrade === undefined) globalState.emailjs.templateFailingGrade = '';
   if(!globalState.groupme) globalState.groupme = { botId:'' };
+
+  if(!isApprovedUser()){
+    await registerPendingApproval();
+    showPendingApprovalShell();
+    return;
+  }
+
   showAppShell();
   renderAll();
   renderCostumeMeasureGrid(); renderCostumePieces();
@@ -4290,14 +4804,31 @@ async function init(){
     await saveState(); renderNotifications();
     toast('Notifications cleared');
   });
-  document.querySelectorAll('#sdToolbar [data-piece]').forEach(btn=>btn.addEventListener('click', ()=>addStagePiece(btn.dataset.piece)));
+  document.querySelectorAll('#sdToolbarWrap [data-piece]').forEach(btn=>btn.addEventListener('click', ()=>addStagePiece(btn.dataset.piece)));
   document.getElementById('sdClearBtn').addEventListener('click', async ()=>{
-    if(!canEditStageDesign()){ toast('Only Set Design, Stage Management, or the Director can edit the set'); return; }
+    if(!canEditActiveBoard()){ toast('Only Set Design, Stage Management, or the Director can edit the set'); return; }
     if(!confirm('Remove every piece from the 3D set design? This cannot be undone.')) return;
     stageDesignCache.pieces = []; sdSelectedId = null;
     syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
     await saveStageDesignData();
     toast('Set cleared');
+  });
+  document.querySelectorAll('#sdBoardTabs button').forEach(btn=>btn.addEventListener('click', async ()=>{
+    document.querySelectorAll('#sdBoardTabs button').forEach(b=>b.classList.toggle('active', b===btn));
+    if(btn.dataset.board==='production'){
+      await switchStageDesignBoard('production', null);
+    } else {
+      const u = currentUser();
+      if(!u){ toast('Sign in to get your own practice sandbox'); return; }
+      await switchStageDesignBoard('sandbox', u.id);
+    }
+    renderStageDesignView();
+  }));
+  document.getElementById('sdSandboxBrowseSelect').addEventListener('change', async (e)=>{
+    if(!isDirectorOrStageMgmt()) return;
+    const u = currentUser();
+    const ownerId = (e.target.value==='me' && u) ? u.id : e.target.value;
+    await switchStageDesignBoard('sandbox', ownerId);
   });
   document.getElementById('sdPropLabel').addEventListener('change', e=>updateSelectedPieceProp('label', e.target.value));
   document.getElementById('sdPropColor').addEventListener('input', e=>updateSelectedPieceProp('color', e.target.value));
@@ -4307,6 +4838,14 @@ async function init(){
   document.getElementById('sdPropRotation').addEventListener('change', e=>updateSelectedPieceProp('rotationY', parseFloat(e.target.value)||0));
   document.getElementById('sdPropBaseY').addEventListener('change', e=>updateSelectedPieceProp('y', parseFloat(e.target.value)||0));
   document.getElementById('sdDeletePieceBtn').addEventListener('click', deleteSelectedPiece);
+  document.getElementById('llSaveCueBtn').addEventListener('click', llSaveCue);
+  document.getElementById('llBlackoutBtn').addEventListener('click', ()=>{
+    if(!canUseLightingLab()) return;
+    if(!ui.llState) return;
+    LL_CHANNELS.forEach((def,i)=>{ ui.llState[i].intensity = 0; llApplyChannel(i); });
+    llRefreshChannelUI();
+    toast('Blackout');
+  });
   document.getElementById('exportAllGradesBtn').addEventListener('click', ()=>{
     if(!isDirector()){ toast('Only the Director can export grades'); return; }
     exportAllDeptGradesCsv();
@@ -4420,4 +4959,4 @@ init();
 })();
 </script>
 </body>
-</html>  
+</html> 
