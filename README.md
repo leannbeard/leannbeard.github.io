@@ -493,6 +493,7 @@
           <p style="font-size:11.5px;color:var(--paper-dim);">One call per line, fields separated by <code>|</code>: <code>Date|Start|End|Title|Location|Departments|Notes</code>. Date as <code>YYYY-MM-DD</code>, times as <code>HH:MM</code> (24-hour, blank if none), Departments comma-separated (Set Design, Props, Costumes, Hair &amp; Makeup, Lighting Design, Sound Design, Stage Management, Run Crew, Marketing, Cast — blank means everyone). This does not post to GroupMe or send emails; use the normal schedule-send buttons afterward if you want to announce it.</p>
           <textarea id="calBulkImportText" class="full-width" style="min-height:140px; font-family:'IBM Plex Mono',monospace; font-size:11.5px;" placeholder="2026-09-08|16:00|17:45|Company launch, table read|Main Stage|Stage Management, Sound Design, Set Design, Props, Cast|First after-school rehearsal"></textarea>
           <button class="btn small" id="calBulkImportBtn" style="margin-top:8px;">Import Calls</button>
+          <button class="btn danger small" id="calClearAllBtn" style="margin-top:8px;">Clear All Calendar Entries</button>
         </div>
       </div>
       <div class="card" id="groupmeAnnounceCard" style="display:none;">
@@ -2177,15 +2178,20 @@ function participationScoreForStudent(crewId, deptKey, weekStart){
   const deduction = Math.min(dockedDates.length * cfg.pointsPerDay, maxScore);
   return { score: Math.max(0, maxScore - deduction), maxScore, dockedDates, reportsCount: reportsThisWeek.length };
 }
-// A student's overall weekly participation across every department they're on, averaged
-// to a 0-100 percentage — this is the "average score" used in the combined CSV export.
+// A student's overall weekly participation across every department they're actually on,
+// averaged to a 0-100 percentage. A department with zero reports still counts at full
+// credit (same "no flag = full marks" rule as the per-department score) — this is what
+// makes it safe to skip reports on a light week without students' averages coming up blank.
 function combinedParticipationForStudent(crewId, weekStart){
-  let earned = 0, max = 0, anyReports = false;
-  DEPARTMENTS.forEach(dep=>{
-    const r = participationScoreForStudent(crewId, dep.key, weekStart);
-    if(r.reportsCount>0){ earned += r.score; max += r.maxScore; anyReports = true; }
+  const crewMember = state.crew.find(c=>c.id===crewId);
+  const memberDepts = crewMember ? (crewMember.departments||[]) : [];
+  let earned = 0, max = 0;
+  memberDepts.forEach(deptKey=>{
+    if(!DEPARTMENTS.some(d=>d.key===deptKey)) return;
+    const r = participationScoreForStudent(crewId, deptKey, weekStart);
+    earned += r.score; max += r.maxScore;
   });
-  return { earned, max, pct: (anyReports && max) ? Math.round(earned/max*100) : null };
+  return { earned, max, pct: max ? Math.round(earned/max*100) : null };
 }
 
 function switchBehaviorSub(sub){
@@ -4166,6 +4172,18 @@ async function init(){
     wrap.style.display = wrap.style.display==='none' ? 'block' : 'none';
   });
   document.getElementById('calBulkImportBtn').addEventListener('click', bulkImportCalendar);
+  document.getElementById('calClearAllBtn').addEventListener('click', async ()=>{
+    if(!isDirectorOrStageMgmt()){ toast('Only the Director or Stage Management can clear the calendar'); return; }
+    const count = state.calendar.length;
+    if(!count){ toast('Calendar is already empty'); return; }
+    if(!confirm(`Permanently delete all ${count} calendar entries (including any attendance already recorded on them)? This cannot be undone — do this before re-importing corrected data, not after.`)) return;
+    state.calendar = [];
+    logChange(`Cleared all ${count} calendar entries.`, {type:'all'});
+    await saveState();
+    renderCalendarForm(); renderCalendar(); renderNotifications(); renderDashboard();
+    if(ui.calSub==='month') renderCalMonth();
+    toast(`Cleared ${count} calendar entries`);
+  });
   document.getElementById('printCalendarBtn').addEventListener('click', printCalendar);
   document.getElementById('printCalendarBtn2').addEventListener('click', printCalendar);
   document.getElementById('groupmeSendAnnounceBtn').addEventListener('click', async ()=>{
