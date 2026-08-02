@@ -1,3 +1,4 @@
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -342,6 +343,23 @@
   .mk-gallery-item:last-child{ border-bottom:none; }
   .mk-gallery-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
   .mk-gallery-actions{ display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; }
+
+  .bk-stage-wrap{ position:relative; width:100%; height:520px; overflow:auto; border:1px solid var(--line); border-radius:var(--radius); background:rgba(0,0,0,0.15); }
+  .bk-stage{ position:relative; width:900px; height:560px; background-color:#16233f;
+    background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size:20px 20px; }
+  .bk-centerline{ position:absolute; left:450px; top:0; bottom:0; width:1px; background:rgba(232,163,61,0.5); border-left:1px dashed rgba(232,163,61,0.5); }
+  .bk-marker{ position:absolute; display:flex; flex-direction:column; align-items:center; width:70px; }
+  .bk-marker-shape{ width:36px; height:36px; border:2px solid #14161a; cursor:grab; touch-action:none; display:flex; align-items:center; justify-content:center; font-size:9px; color:#14161a; font-weight:700; }
+  .bk-marker-shape:active{ cursor:grabbing; }
+  .bk-marker[data-type="actor"] .bk-marker-shape{ border-radius:50%; background:#E8A33D; }
+  .bk-marker[data-type="cube"] .bk-marker-shape{ border-radius:5px; background:#9BB8D3; }
+  .bk-marker-label{ margin-top:3px; font-size:10px; background:rgba(0,0,0,0.75); color:#fff; padding:1px 6px; border-radius:8px; max-width:100%; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  .bk-marker-del{ position:absolute; top:-6px; right:14px; width:16px; height:16px; border-radius:50%; background:var(--red); color:#fff; border:none; font-size:10px; line-height:1; cursor:pointer; padding:0; }
+  .bk-sticky{ position:absolute; width:120px; }
+  .bk-sticky .sn-handle{ background:rgba(0,0,0,0.15); }
+  .bk-note-item{ padding:8px 0; border-bottom:1px dashed var(--line); font-size:12px; }
+  .bk-note-item:last-child{ border-bottom:none; }
   .wb-image-add-row input{ flex:1; min-width:200px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:8px 10px; border-radius:3px; font-size:12.5px; }
   #wbDrawCanvas{ position:absolute; top:0; left:0; width:1400px; height:900px; z-index:40; pointer-events:none; }
 
@@ -428,6 +446,7 @@
     <button data-view="stagedesign">3D Set Design</button>
     <button data-view="lightinglab">Lighting Lab</button>
     <button data-view="makeuplab">Makeup Lab</button>
+    <button data-view="blocking">Blocking Assistant</button>
     <button data-view="notifications">Notifications<span class="badge" id="notifBadge" style="display:none;">0</span></button>
     <button data-view="setup">Roster / Setup</button>
   </nav>
@@ -854,12 +873,26 @@
       </div>
       <div class="wb-toolbar" id="mkToolWrap" style="display:none;">
         <button class="wb-tool-btn active" data-tool="pen">✏️ Pen</button>
+        <button class="wb-tool-btn" data-tool="soft">🖌️ Soft Blend</button>
         <button class="wb-tool-btn" data-tool="eraser">🧹 Eraser</button>
+        <button class="wb-tool-btn" data-tool="move">🖐 Select/Move</button>
         <span class="wb-sep"></span>
         <span class="wb-color-row" id="mkColorRow"></span>
         <span class="wb-width-row" id="mkWidthRow"></span>
         <span class="wb-sep"></span>
         <label style="font-size:11px;color:var(--paper-dim); display:flex; align-items:center; gap:6px;">Opacity <input type="range" id="mkOpacitySlider" min="10" max="100" value="100"></label>
+      </div>
+      <div class="wb-toolbar" id="mkEffectToolbar" style="display:none;">
+        <button class="wb-tool-btn" id="mkAddWoundBtn">🩸 Add Wound</button>
+        <button class="wb-tool-btn" id="mkAddBruiseBtn">🟣 Add Bruise</button>
+        <button class="wb-tool-btn" id="mkAddScarBtn">➰ Add Scar</button>
+        <span class="wb-sep"></span>
+        <div id="mkEffectPanel" style="display:none; align-items:center; gap:8px;">
+          <label style="font-size:11px;color:var(--paper-dim);">W <input type="number" id="mkFxWidth" min="10" max="300" style="width:55px;"></label>
+          <label style="font-size:11px;color:var(--paper-dim);">H <input type="number" id="mkFxHeight" min="10" max="300" style="width:55px;"></label>
+          <label style="font-size:11px;color:var(--paper-dim);">Rotate <input type="range" id="mkFxRotation" min="0" max="359" step="5" style="width:80px;"></label>
+          <button class="btn danger small" id="mkFxDeleteBtn">Delete Effect</button>
+        </div>
       </div>
       <div class="sd-layout">
         <div style="flex:1; min-width:300px;">
@@ -882,6 +915,40 @@
             <div id="mkGallery"></div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-blocking">
+    <div id="blockingLockedMsg" class="empty-state" style="display:none;">
+      <div class="lamp">🔒</div>The Blocking Assistant is only visible to the Director and Stage Management.
+    </div>
+    <div id="blockingWrap" style="display:none;">
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">A blank top-down stage for blocking scenes — drag actor markers, rehearsal cubes, and sticky notes into place, then save the whole layout as a blocking note tied to a page number. Live-shared between Director and Stage Management while this tab is open.</p>
+      <div class="wb-toolbar" id="bkToolbar">
+        <button class="wb-tool-btn" id="bkAddActorBtn">🟠 Add Actor</button>
+        <button class="wb-tool-btn" id="bkAddCubeBtn">◻ Add Rehearsal Cube</button>
+        <button class="wb-tool-btn" id="bkAddStickyBtn">🗒️ Add Sticky Note</button>
+        <span class="wb-sep"></span>
+        <button class="btn danger small" id="bkClearBoardBtn">Clear Board</button>
+      </div>
+      <div class="bk-stage-wrap" id="bkStageWrap">
+        <div class="bk-stage" id="bkStage">
+          <div class="bk-centerline"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3 style="margin-top:0;">Save as Blocking Note</h3>
+        <div class="form-grid">
+          <input type="text" id="bkPageNumber" placeholder="Page # (e.g. 14 or 14-16)">
+          <input type="text" id="bkSceneLabel" placeholder="Scene / moment (e.g. Confrontation)">
+        </div>
+        <textarea id="bkNoteText" class="full-width" style="min-height:50px;" placeholder="Additional blocking notes (optional)"></textarea>
+        <button class="btn small" id="bkSaveNoteBtn">Save This Layout as a Blocking Note</button>
+      </div>
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Saved Blocking Notes</h3>
+        <div id="bkNoteList"></div>
       </div>
     </div>
   </section>
@@ -1138,6 +1205,7 @@ function defaultProductionState(name, seeded){
     sandboxOwners:[],
     makeupLooks:[],
     makeupRestricted:false,
+    blockingNotes:[],
     departments: freshDepartments(seeded)
   };
 }
@@ -1758,6 +1826,7 @@ async function deleteProductionCompletely(prodId){
     window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'workspaces', prodId+'_'+d.key)).catch(()=>{})
   ));
   await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'stagedesigns', prodId)).catch(()=>{});
+  await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'blocking_boards', prodId)).catch(()=>{});
 }
 
 function renderAnnouncements(){
@@ -4581,36 +4650,64 @@ async function renderLightingLabView(){
 const MK_TEMPLATE_DIMS = { face_front:[300,380], face_profile:[300,380], body_front:[300,600] };
 const MK_TEMPLATES = {
   face_front: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 380">
-    <ellipse cx="150" cy="150" rx="95" ry="120" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <ellipse cx="58" cy="155" rx="14" ry="22" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <ellipse cx="242" cy="155" rx="14" ry="22" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <ellipse cx="112" cy="130" rx="18" ry="10" fill="none" stroke="#333" stroke-width="2"/>
-    <ellipse cx="188" cy="130" rx="18" ry="10" fill="none" stroke="#333" stroke-width="2"/>
-    <circle cx="112" cy="130" r="4" fill="#333"/>
-    <circle cx="188" cy="130" r="4" fill="#333"/>
-    <path d="M 95 105 Q 112 95 129 105" fill="none" stroke="#333" stroke-width="2"/>
-    <path d="M 171 105 Q 188 95 205 105" fill="none" stroke="#333" stroke-width="2"/>
-    <path d="M 150 135 L 143 178 Q 150 185 157 178" fill="none" stroke="#333" stroke-width="2"/>
-    <path d="M 118 208 Q 150 224 182 208" fill="none" stroke="#333" stroke-width="2"/>
-    <rect x="120" y="255" width="60" height="50" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <path d="M 90 300 L 55 345 L 245 345 L 210 300 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <defs>
+      <radialGradient id="cheekL" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#e8a88a" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="#e8a88a" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="faceShade" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#f3ddc6"/>
+        <stop offset="100%" stop-color="#ecd2b8"/>
+      </linearGradient>
+    </defs>
+    <path d="M 150 24 C 205 24 232 68 232 128 C 232 178 224 214 205 248 C 190 274 172 292 150 296 C 128 292 110 274 95 248 C 76 214 68 178 68 128 C 68 68 95 24 150 24 Z" fill="url(#faceShade)" stroke="#3a2e28" stroke-width="2"/>
+    <ellipse cx="68" cy="150" rx="12" ry="20" fill="#f3ddc6" stroke="#3a2e28" stroke-width="2"/>
+    <ellipse cx="232" cy="150" rx="12" ry="20" fill="#f3ddc6" stroke="#3a2e28" stroke-width="2"/>
+    <circle cx="100" cy="150" r="34" fill="url(#cheekL)"/>
+    <circle cx="200" cy="150" r="34" fill="url(#cheekL)"/>
+    <path d="M 88 108 Q 108 96 130 104" fill="none" stroke="#3a2e28" stroke-width="3" stroke-linecap="round"/>
+    <path d="M 170 104 Q 192 96 212 108" fill="none" stroke="#3a2e28" stroke-width="3" stroke-linecap="round"/>
+    <path d="M 92 133 Q 109 122 128 132 Q 109 142 92 133 Z" fill="#fff" stroke="#3a2e28" stroke-width="2"/>
+    <path d="M 172 132 Q 191 122 208 133 Q 191 142 172 132 Z" fill="#fff" stroke="#3a2e28" stroke-width="2"/>
+    <circle cx="109" cy="133" r="6" fill="#5a4535"/>
+    <circle cx="191" cy="133" r="6" fill="#5a4535"/>
+    <circle cx="107" cy="131" r="2" fill="#fff"/>
+    <circle cx="189" cy="131" r="2" fill="#fff"/>
+    <path d="M 148 140 Q 140 168 136 182 Q 136 190 150 190 Q 164 190 164 182 Q 160 168 152 140" fill="none" stroke="#3a2e28" stroke-width="2" stroke-linecap="round"/>
+    <path d="M 118 214 Q 150 208 182 214 Q 168 232 150 233 Q 132 232 118 214 Z" fill="#c97b6f" stroke="#3a2e28" stroke-width="2"/>
+    <path d="M 122 216 Q 150 222 178 216" fill="none" stroke="#3a2e28" stroke-width="1.5"/>
+    <rect x="122" y="258" width="56" height="42" fill="url(#faceShade)" stroke="#3a2e28" stroke-width="2"/>
+    <path d="M 92 300 L 58 344 L 242 344 L 208 300 Z" fill="url(#faceShade)" stroke="#3a2e28" stroke-width="2"/>
   </svg>`,
   face_profile: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 380">
-    <path d="M 100 60 Q 180 50 200 110 Q 215 130 205 150 Q 225 155 215 175 Q 235 185 210 200 Q 220 215 195 220 Q 190 240 165 245 L 150 270 Q 145 285 120 290 L 100 330 L 230 330 L 230 380 L 60 380 L 60 150 Q 60 90 100 60 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <ellipse cx="130" cy="140" rx="10" ry="7" fill="none" stroke="#333" stroke-width="2"/>
-    <circle cx="130" cy="140" r="2.5" fill="#333"/>
-    <path d="M 110 120 Q 125 113 140 120" fill="none" stroke="#333" stroke-width="2"/>
-    <path d="M 75 175 Q 65 195 75 210" fill="none" stroke="#333" stroke-width="1.5"/>
+    <defs>
+      <linearGradient id="profShade" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#ecd2b8"/>
+        <stop offset="100%" stop-color="#f3ddc6"/>
+      </linearGradient>
+    </defs>
+    <path d="M 95 70 C 150 40 195 55 205 100 C 208 112 204 122 196 128 C 208 132 214 142 208 154 C 222 160 224 174 212 184 Q 222 196 208 206 Q 214 220 196 226 C 192 244 178 252 168 254 L 156 276 C 152 290 140 298 122 300 L 100 336 L 235 336 L 235 380 L 55 380 L 55 150 C 55 115 70 88 95 70 Z" fill="url(#profShade)" stroke="#3a2e28" stroke-width="2"/>
+    <ellipse cx="72" cy="182" rx="13" ry="22" fill="#f3ddc6" stroke="#3a2e28" stroke-width="1.5"/>
+    <path d="M 100 130 Q 118 120 136 128" fill="none" stroke="#3a2e28" stroke-width="3" stroke-linecap="round"/>
+    <path d="M 105 148 Q 122 138 140 148 Q 122 157 105 148 Z" fill="#fff" stroke="#3a2e28" stroke-width="2"/>
+    <circle cx="124" cy="148" r="5.5" fill="#5a4535"/>
+    <path d="M 60 210 Q 50 232 62 250" fill="none" stroke="#3a2e28" stroke-width="1.5"/>
   </svg>`,
   body_front: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 600">
-    <ellipse cx="150" cy="55" rx="40" ry="48" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <rect x="130" y="95" width="40" height="30" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <path d="M 90 125 Q 150 105 210 125 L 225 230 L 75 230 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <path d="M 90 130 L 40 260 L 55 270 L 100 160 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <path d="M 210 130 L 260 260 L 245 270 L 200 160 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <path d="M 100 230 L 90 420 L 130 420 L 140 300 L 150 300 L 160 420 L 200 420 L 190 230 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <rect x="85" y="420" width="45" height="140" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
-    <rect x="170" y="420" width="45" height="140" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <defs>
+      <linearGradient id="bodyShade" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#f3ddc6"/>
+        <stop offset="100%" stop-color="#ecd2b8"/>
+      </linearGradient>
+    </defs>
+    <ellipse cx="150" cy="52" rx="36" ry="44" fill="url(#bodyShade)" stroke="#3a2e28" stroke-width="2"/>
+    <rect x="133" y="90" width="34" height="28" fill="url(#bodyShade)" stroke="#3a2e28" stroke-width="2"/>
+    <path d="M 95 118 Q 150 100 205 118 L 222 145 L 205 225 L 95 225 L 78 145 Z" fill="url(#bodyShade)" stroke="#3a2e28" stroke-width="2"/>
+    <path d="M 96 122 Q 60 150 46 255 L 62 262 Q 78 175 108 148 Z" fill="url(#bodyShade)" stroke="#3a2e28" stroke-width="2"/>
+    <path d="M 204 122 Q 240 150 254 255 L 238 262 Q 222 175 192 148 Z" fill="url(#bodyShade)" stroke="#3a2e28" stroke-width="2"/>
+    <path d="M 100 225 Q 96 300 92 415 L 133 415 Q 138 340 145 300 L 155 300 Q 162 340 167 415 L 208 415 Q 204 300 200 225 Z" fill="url(#bodyShade)" stroke="#3a2e28" stroke-width="2"/>
+    <rect x="86" y="415" width="42" height="150" rx="6" fill="url(#bodyShade)" stroke="#3a2e28" stroke-width="2"/>
+    <rect x="172" y="415" width="42" height="150" rx="6" fill="url(#bodyShade)" stroke="#3a2e28" stroke-width="2"/>
   </svg>`,
 };
 function mkTemplateDataUri(key){ return 'data:image/svg+xml;utf8,' + encodeURIComponent(MK_TEMPLATES[key]); }
@@ -4625,21 +4722,84 @@ function canDrawMakeupLab(){
 
 let mkCtx = null, mkCanvasInitialized = false;
 let mkDrawing = false, mkCurrentStroke = null;
+let mkDragEffect = null;
+
+function mkHexToRgb(hex){
+  const num = parseInt(String(hex).replace('#',''),16);
+  return { r:(num>>16)&255, g:(num>>8)&255, b:num&255 };
+}
+function mkStampSoftDab(ctx, x, y, radius, color, opacity){
+  const rgb = mkHexToRgb(color);
+  const grad = ctx.createRadialGradient(x,y,0, x,y,radius);
+  grad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},${opacity})`);
+  grad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.fill();
+}
+function mkDrawWound(ctx, x, y, w, h, rot){
+  ctx.save(); ctx.translate(x,y); ctx.rotate((rot||0)*Math.PI/180);
+  ctx.beginPath();
+  ctx.moveTo(-w/2,0); ctx.lineTo(-w/4,-h/3); ctx.lineTo(0,-h/2); ctx.lineTo(w/4,-h/3);
+  ctx.lineTo(w/2,0); ctx.lineTo(w/4,h/3); ctx.lineTo(0,h/2); ctx.lineTo(-w/4,h/3);
+  ctx.closePath(); ctx.fillStyle='#3a0a0a'; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0,0,w*0.32,h*0.38,0,0,Math.PI*2);
+  ctx.fillStyle='#8a1010'; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-w*0.08,-h*0.08,w*0.12,h*0.14,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,120,120,0.5)'; ctx.fill();
+  ctx.restore();
+}
+function mkDrawBruise(ctx, x, y, w, h, rot){
+  ctx.save(); ctx.translate(x,y); ctx.rotate((rot||0)*Math.PI/180);
+  [['#5b8a3c',1.0],['#c99a3c',0.7],['#8e44ad',0.5]].forEach(([col,scale])=>{
+    const rgb = mkHexToRgb(col);
+    const grad = ctx.createRadialGradient(0,0,0, 0,0, Math.max(w,h)/2*scale);
+    grad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0.55)`);
+    grad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(0,0,w/2*scale,h/2*scale,0,0,Math.PI*2); ctx.fill();
+  });
+  ctx.restore();
+}
+function mkDrawScar(ctx, x, y, w, h, rot){
+  ctx.save(); ctx.translate(x,y); ctx.rotate((rot||0)*Math.PI/180);
+  ctx.beginPath(); ctx.moveTo(-w/2,0); ctx.quadraticCurveTo(0,-h/2,w/2,0);
+  ctx.lineWidth = Math.max(2,h*0.15); ctx.strokeStyle='#c98a8a'; ctx.lineCap='round'; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-w/2,0); ctx.quadraticCurveTo(0,-h/2,w/2,0);
+  ctx.lineWidth = Math.max(1,h*0.06); ctx.strokeStyle='#7a3a3a'; ctx.stroke();
+  ctx.restore();
+}
+const MK_EFFECT_DRAW = { wound: mkDrawWound, bruise: mkDrawBruise, scar: mkDrawScar };
+const MK_EFFECT_DEFAULTS = { wound:{w:60,h:75}, bruise:{w:80,h:60}, scar:{w:90,h:36} };
 
 function mkRedrawCanvas(){
   const canvas = document.getElementById('mkCanvas');
   if(!canvas || !mkCtx) return;
   mkCtx.clearRect(0,0,canvas.width,canvas.height);
-  (ui.mkStrokes||[]).forEach(s=>{
-    if(!s.points || s.points.length<2) return;
-    mkCtx.globalAlpha = s.opacity!=null ? s.opacity : 1;
-    mkCtx.beginPath();
-    mkCtx.strokeStyle = s.color; mkCtx.lineWidth = s.width; mkCtx.lineCap='round'; mkCtx.lineJoin='round';
-    mkCtx.moveTo(s.points[0].x, s.points[0].y);
-    for(let i=1;i<s.points.length;i++) mkCtx.lineTo(s.points[i].x, s.points[i].y);
-    mkCtx.stroke();
+  (ui.mkEffects||[]).forEach(fx=>{
+    const draw = MK_EFFECT_DRAW[fx.type]; if(!draw) return;
+    draw(mkCtx, fx.x, fx.y, fx.w, fx.h, fx.rotation||0);
+    if(fx.id===ui.mkSelectedEffectId){
+      mkCtx.save();
+      mkCtx.strokeStyle='#00e5ff'; mkCtx.setLineDash([4,3]); mkCtx.lineWidth=1.5;
+      mkCtx.strokeRect(fx.x-fx.w/2-4, fx.y-fx.h/2-4, fx.w+8, fx.h+8);
+      mkCtx.restore();
+    }
   });
-  mkCtx.globalAlpha = 1;
+  (ui.mkStrokes||[]).forEach(s=>{
+    if(!s.points || s.points.length<1) return;
+    if(s.tool==='soft'){
+      s.points.forEach(p=>mkStampSoftDab(mkCtx, p.x, p.y, s.width*2.2, s.color, (s.opacity!=null?s.opacity:1)*0.45));
+    } else {
+      if(s.points.length<2) return;
+      mkCtx.globalAlpha = s.opacity!=null ? s.opacity : 1;
+      mkCtx.beginPath();
+      mkCtx.strokeStyle = s.color; mkCtx.lineWidth = s.width; mkCtx.lineCap='round'; mkCtx.lineJoin='round';
+      mkCtx.moveTo(s.points[0].x, s.points[0].y);
+      for(let i=1;i<s.points.length;i++) mkCtx.lineTo(s.points[i].x, s.points[i].y);
+      mkCtx.stroke();
+      mkCtx.globalAlpha = 1;
+    }
+  });
 }
 function mkSetTemplate(key){
   ui.mkTemplate = key;
@@ -4658,6 +4818,37 @@ function mkEraseAtPoint(p){
   ui.mkStrokes = (ui.mkStrokes||[]).filter(s=> !s.points.some(pt => Math.hypot(pt.x-p.x, pt.y-p.y) < threshold));
   if(ui.mkStrokes.length !== before) mkRedrawCanvas();
 }
+function mkHitTestEffect(p){
+  const list = ui.mkEffects||[];
+  for(let i=list.length-1;i>=0;i--){
+    const fx = list[i];
+    if(Math.abs(p.x-fx.x)<=fx.w/2+6 && Math.abs(p.y-fx.y)<=fx.h/2+6) return fx;
+  }
+  return null;
+}
+function mkAddEffect(type){
+  if(!canDrawMakeupLab()) return;
+  const d = MK_EFFECT_DEFAULTS[type];
+  const [w,h] = MK_TEMPLATE_DIMS[ui.mkTemplate];
+  const fx = { id:cryptoId(), type, x:w/2, y:h/3, w:d.w, h:d.h, rotation:0 };
+  if(!ui.mkEffects) ui.mkEffects = [];
+  ui.mkEffects.push(fx);
+  ui.mkSelectedEffectId = fx.id;
+  ui.mkTool = 'move';
+  document.querySelectorAll('#mkToolWrap [data-tool]').forEach(b=>b.classList.toggle('active', b.dataset.tool==='move'));
+  mkRedrawCanvas();
+  mkRenderEffectPanel();
+}
+function mkRenderEffectPanel(){
+  const panel = document.getElementById('mkEffectPanel');
+  if(!panel) return;
+  const fx = (ui.mkEffects||[]).find(e=>e.id===ui.mkSelectedEffectId);
+  if(!fx){ panel.style.display = 'none'; return; }
+  panel.style.display = 'flex';
+  document.getElementById('mkFxWidth').value = Math.round(fx.w);
+  document.getElementById('mkFxHeight').value = Math.round(fx.h);
+  document.getElementById('mkFxRotation').value = fx.rotation||0;
+}
 function initMakeupCanvasIfNeeded(){
   if(mkCanvasInitialized) return;
   mkCanvasInitialized = true;
@@ -4671,11 +4862,22 @@ function initMakeupCanvasIfNeeded(){
   }
   canvas.addEventListener('pointerdown', (e)=>{
     if(!canDrawMakeupLab()) return;
-    mkDrawing = true;
     const p = canvasPoint(e);
+    if(ui.mkTool==='move'){
+      const hit = mkHitTestEffect(p);
+      ui.mkSelectedEffectId = hit ? hit.id : null;
+      if(hit) mkDragEffect = { id:hit.id, startX:p.x, startY:p.y, origX:hit.x, origY:hit.y };
+      mkRedrawCanvas(); mkRenderEffectPanel();
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+    mkDrawing = true;
     if(ui.mkTool==='eraser'){ mkEraseAtPoint(p); }
-    else {
-      mkCurrentStroke = [p];
+    else if(ui.mkTool==='soft'){
+      mkCurrentStroke = { tool:'soft', points:[p], color:ui.mkColor, width:ui.mkWidth, opacity:ui.mkOpacity };
+      mkStampSoftDab(mkCtx, p.x, p.y, ui.mkWidth*2.2, ui.mkColor, ui.mkOpacity*0.45);
+    } else {
+      mkCurrentStroke = { tool:'pen', points:[p], color:ui.mkColor, width:ui.mkWidth, opacity:ui.mkOpacity };
       mkCtx.beginPath(); mkCtx.strokeStyle=ui.mkColor; mkCtx.lineWidth=ui.mkWidth; mkCtx.lineCap='round'; mkCtx.lineJoin='round';
       mkCtx.globalAlpha = ui.mkOpacity;
       mkCtx.moveTo(p.x,p.y);
@@ -4683,17 +4885,27 @@ function initMakeupCanvasIfNeeded(){
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', (e)=>{
-    if(!mkDrawing) return;
     const p = canvasPoint(e);
+    if(ui.mkTool==='move'){
+      if(!mkDragEffect) return;
+      const fx = (ui.mkEffects||[]).find(x=>x.id===mkDragEffect.id); if(!fx) return;
+      fx.x = mkDragEffect.origX + (p.x-mkDragEffect.startX);
+      fx.y = mkDragEffect.origY + (p.y-mkDragEffect.startY);
+      mkRedrawCanvas();
+      return;
+    }
+    if(!mkDrawing) return;
     if(ui.mkTool==='eraser'){ mkEraseAtPoint(p); }
-    else if(mkCurrentStroke){ mkCurrentStroke.push(p); mkCtx.lineTo(p.x,p.y); mkCtx.stroke(); }
+    else if(ui.mkTool==='soft' && mkCurrentStroke){ mkCurrentStroke.points.push(p); mkStampSoftDab(mkCtx, p.x, p.y, ui.mkWidth*2.2, ui.mkColor, ui.mkOpacity*0.45); }
+    else if(mkCurrentStroke){ mkCurrentStroke.points.push(p); mkCtx.lineTo(p.x,p.y); mkCtx.stroke(); }
   });
   canvas.addEventListener('pointerup', ()=>{
+    if(ui.mkTool==='move'){ mkDragEffect = null; return; }
     mkDrawing = false;
     mkCtx.globalAlpha = 1;
-    if(mkCurrentStroke && mkCurrentStroke.length>1){
+    if(mkCurrentStroke && mkCurrentStroke.points.length>0){
       if(!ui.mkStrokes) ui.mkStrokes = [];
-      ui.mkStrokes.push({ id:cryptoId(), points:mkCurrentStroke, color:ui.mkColor, width:ui.mkWidth, opacity:ui.mkOpacity });
+      if(mkCurrentStroke.tool==='soft' || mkCurrentStroke.points.length>1) ui.mkStrokes.push(mkCurrentStroke);
     }
     mkCurrentStroke = null;
   });
@@ -4715,6 +4927,7 @@ function renderMakeupToolbar(){
     btn.classList.add('active');
   }));
   document.getElementById('mkOpacitySlider').value = Math.round(ui.mkOpacity*100);
+  mkRenderEffectPanel();
 }
 function mkGalleryCard(look){
   const d = MK_TEMPLATE_DIMS[look.template];
@@ -4740,10 +4953,13 @@ function renderMakeupGallery(){
   list.innerHTML = [...looks].reverse().map(mkGalleryCard).join('');
   list.querySelectorAll('[data-loadlook]').forEach(btn=>btn.addEventListener('click', ()=>{
     const look = looks.find(l=>l.id===btn.dataset.loadlook); if(!look) return;
-    if((ui.mkStrokes||[]).length && !confirm('Load this look? Your current unsaved canvas will be replaced.')) return;
-    ui.mkStrokes = JSON.parse(JSON.stringify(look.strokes));
+    if(((ui.mkStrokes||[]).length || (ui.mkEffects||[]).length) && !confirm('Load this look? Your current unsaved canvas will be replaced.')) return;
+    ui.mkStrokes = JSON.parse(JSON.stringify(look.strokes||[]));
+    ui.mkEffects = JSON.parse(JSON.stringify(look.effects||[]));
+    ui.mkSelectedEffectId = null;
     document.querySelectorAll('#mkTemplateTabs button').forEach(b=>b.classList.toggle('active', b.dataset.template===look.template));
     mkSetTemplate(look.template);
+    mkRenderEffectPanel();
     toast(`Loaded "${look.name}"`);
   }));
   list.querySelectorAll('[data-renamelook]').forEach(btn=>btn.addEventListener('click', async ()=>{
@@ -4767,10 +4983,12 @@ async function mkSaveLook(){
   if(!canDrawMakeupLab()){ toast('Sign in to save a look'); return; }
   const name = document.getElementById('mkLookName').value.trim();
   if(!name){ toast('Name this look first'); return; }
-  if(!(ui.mkStrokes||[]).length){ toast('Draw something first'); return; }
+  if(!(ui.mkStrokes||[]).length && !(ui.mkEffects||[]).length){ toast('Add something first'); return; }
   const author = currentUser()?.name || authUser?.displayName || 'Someone';
   state.makeupLooks.push({
-    id:cryptoId(), name, template: ui.mkTemplate, strokes: JSON.parse(JSON.stringify(ui.mkStrokes)),
+    id:cryptoId(), name, template: ui.mkTemplate,
+    strokes: JSON.parse(JSON.stringify(ui.mkStrokes||[])),
+    effects: JSON.parse(JSON.stringify(ui.mkEffects||[])),
     authorName:author, authorId: currentUser()?.id||null, createdAt:new Date().toISOString()
   });
   await saveState();
@@ -4782,14 +5000,17 @@ function mkLoadImage(src){
   return new Promise((resolve,reject)=>{ const img = new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src; });
 }
 async function printMakeupLook(){
-  if(!(ui.mkStrokes||[]).length){ toast('Nothing drawn yet'); return; }
+  if(!(ui.mkStrokes||[]).length && !(ui.mkEffects||[]).length){ toast('Nothing drawn yet'); return; }
   const [w,h] = MK_TEMPLATE_DIMS[ui.mkTemplate];
   const temp = document.createElement('canvas'); temp.width=w; temp.height=h;
   const tctx = temp.getContext('2d');
   tctx.fillStyle = '#fff'; tctx.fillRect(0,0,w,h);
   try{ const img = await mkLoadImage(mkTemplateDataUri(ui.mkTemplate)); tctx.drawImage(img,0,0,w,h); }catch(e){ console.warn('Template image failed to load for print', e); }
+  (ui.mkEffects||[]).forEach(fx=>{ const draw = MK_EFFECT_DRAW[fx.type]; if(draw) draw(tctx, fx.x, fx.y, fx.w, fx.h, fx.rotation||0); });
   (ui.mkStrokes||[]).forEach(s=>{
-    if(!s.points || s.points.length<2) return;
+    if(!s.points || !s.points.length) return;
+    if(s.tool==='soft'){ s.points.forEach(p=>mkStampSoftDab(tctx, p.x, p.y, s.width*2.2, s.color, (s.opacity!=null?s.opacity:1)*0.45)); return; }
+    if(s.points.length<2) return;
     tctx.globalAlpha = s.opacity!=null ? s.opacity : 1;
     tctx.beginPath(); tctx.strokeStyle=s.color; tctx.lineWidth=s.width; tctx.lineCap='round'; tctx.lineJoin='round';
     tctx.moveTo(s.points[0].x, s.points[0].y);
@@ -4808,6 +5029,8 @@ async function renderMakeupLabView(){
   if(!canView) return;
   if(!ui.mkTemplate) ui.mkTemplate = 'face_front';
   if(!ui.mkStrokes) ui.mkStrokes = [];
+  if(!ui.mkEffects) ui.mkEffects = [];
+  if(ui.mkSelectedEffectId===undefined) ui.mkSelectedEffectId = null;
   if(!ui.mkTool) ui.mkTool = 'pen';
   if(!ui.mkColor) ui.mkColor = MK_COLORS[0];
   if(!ui.mkWidth) ui.mkWidth = MK_WIDTHS[1];
@@ -4817,11 +5040,197 @@ async function renderMakeupLabView(){
   document.getElementById('mkRestrictToggle').checked = !!state.makeupRestricted;
   const canDraw = canDrawMakeupLab();
   document.getElementById('mkToolWrap').style.display = canDraw ? 'flex' : 'none';
+  document.getElementById('mkEffectToolbar').style.display = canDraw ? 'flex' : 'none';
 
   initMakeupCanvasIfNeeded();
   mkSetTemplate(ui.mkTemplate);
   renderMakeupToolbar();
   renderMakeupGallery();
+}
+
+// ---------------- BLOCKING ASSISTANT (live 2D top-down board, Director + Stage Mgmt only) ----------------
+function canUseBlockingAssistant(){ return isDirectorOrStageMgmt(); }
+
+let blockingUnsubscribe = null;
+let blockingCache = { pieces:[] };
+let blockingDraggingId = null;
+let blockingPendingRerender = false;
+function blockingDocId(){ return currentProductionId; }
+function normalizeBlockingCache(){ if(!blockingCache.pieces) blockingCache.pieces = []; }
+function stopBlockingListener(){ if(blockingUnsubscribe){ blockingUnsubscribe(); blockingUnsubscribe = null; } }
+async function startBlockingListener(){
+  stopBlockingListener();
+  if(!window.__fb || !currentProductionId) return;
+  const ref = window.__fb.doc(window.__fb.db, 'blocking_boards', blockingDocId());
+  blockingUnsubscribe = window.__fb.onSnapshot(ref, (snap)=>{
+    blockingCache = snap.exists() ? snap.data() : { pieces:[] };
+    normalizeBlockingCache();
+    if(!document.getElementById('view-blocking').classList.contains('active')) return;
+    if(blockingDraggingId){ blockingPendingRerender = true; return; }
+    renderBlockingBoard();
+  }, (err)=>console.warn('Blocking board live listener failed (check Firestore rules include "blocking_boards")', err));
+}
+async function saveBlockingData(){
+  try{ if(window.__fb && currentProductionId){ const ref = window.__fb.doc(window.__fb.db, 'blocking_boards', blockingDocId()); await window.__fb.setDoc(ref, JSON.parse(JSON.stringify(blockingCache))); } }
+  catch(e){ console.warn('Blocking board save failed', e); }
+}
+function bkAddPiece(type){
+  if(!canUseBlockingAssistant()) return;
+  const author = currentUser()?.name || authUser?.displayName || 'Someone';
+  const defaults = { actor:{label:'Actor', w:70, h:60}, cube:{label:'Cube', w:70, h:60}, sticky:{label:'', w:120, h:80} };
+  const d = defaults[type];
+  blockingCache.pieces.push({
+    id:cryptoId(), type, label:d.label, text:'',
+    x: 60+Math.round(Math.random()*300), y: 60+Math.round(Math.random()*200),
+    authorName:author, authorId: currentUser()?.id||null
+  });
+  renderBlockingBoard();
+  saveBlockingData();
+}
+function renderBlockingBoard(){
+  const stage = document.getElementById('bkStage');
+  if(!stage) return;
+  stage.querySelectorAll('.bk-marker, .bk-sticky').forEach(el=>el.remove());
+  const editable = canUseBlockingAssistant();
+  (blockingCache.pieces||[]).forEach(p=>{
+    if(p.type==='sticky'){
+      const el = document.createElement('div');
+      el.className = 'sticky-note bk-sticky';
+      el.style.left = p.x+'px'; el.style.top = p.y+'px'; el.style.background = '#E8C468';
+      el.innerHTML = `
+        <div class="sn-handle" title="Drag to move">⠿⠿ drag</div>
+        <textarea placeholder="Note..." ${editable?'':'readonly'}>${escapeHtml(p.text||'')}</textarea>
+        ${editable?`<button class="sn-del">✕</button>`:''}
+      `;
+      stage.appendChild(el);
+      const ta = el.querySelector('textarea');
+      if(editable) ta.addEventListener('change', async ()=>{ p.text = ta.value; await saveBlockingData(); });
+      const delBtn = el.querySelector('.sn-del');
+      if(delBtn) delBtn.addEventListener('click', async (e)=>{ e.stopPropagation(); blockingCache.pieces = blockingCache.pieces.filter(x=>x.id!==p.id); renderBlockingBoard(); await saveBlockingData(); });
+      bkWireDrag(el, p, editable, el.querySelector('.sn-handle'));
+    } else {
+      const el = document.createElement('div');
+      el.className = 'bk-marker'; el.dataset.type = p.type;
+      el.style.left = p.x+'px'; el.style.top = p.y+'px';
+      el.innerHTML = `
+        <div class="bk-marker-shape" title="Drag to move">${escapeHtml((p.label||'').slice(0,4))}</div>
+        <div class="bk-marker-label" title="Click to rename">${escapeHtml(p.label||(p.type==='actor'?'Actor':'Cube'))}</div>
+        ${editable?`<button class="bk-marker-del">✕</button>`:''}
+      `;
+      stage.appendChild(el);
+      const labelEl = el.querySelector('.bk-marker-label');
+      if(editable){
+        labelEl.addEventListener('click', async ()=>{
+          const val = prompt(p.type==='actor' ? 'Actor / character name:' : 'What does this cube represent?', p.label||'');
+          if(val===null) return;
+          p.label = val.trim(); renderBlockingBoard(); await saveBlockingData();
+        });
+      }
+      const delBtn = el.querySelector('.bk-marker-del');
+      if(delBtn) delBtn.addEventListener('click', async (e)=>{ e.stopPropagation(); blockingCache.pieces = blockingCache.pieces.filter(x=>x.id!==p.id); renderBlockingBoard(); await saveBlockingData(); });
+      bkWireDrag(el, p, editable, el.querySelector('.bk-marker-shape'));
+    }
+  });
+}
+function bkWireDrag(el, piece, editable, handle){
+  if(!editable || !handle) return;
+  let dragging=false, startX=0, startY=0, origX=piece.x, origY=piece.y;
+  handle.addEventListener('pointerdown', (e)=>{
+    dragging = true; blockingDraggingId = piece.id; el.classList.add('dragging');
+    startX = e.clientX; startY = e.clientY; origX = piece.x; origY = piece.y;
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e)=>{
+    if(!dragging) return;
+    const dx = e.clientX-startX, dy = e.clientY-startY;
+    const nx = Math.max(0, origX+dx), ny = Math.max(0, origY+dy);
+    el.style.left = nx+'px'; el.style.top = ny+'px';
+    piece._pendingX = nx; piece._pendingY = ny;
+  });
+  handle.addEventListener('pointerup', async ()=>{
+    if(!dragging) return;
+    dragging = false; blockingDraggingId = null; el.classList.remove('dragging');
+    if(piece._pendingX!==undefined){ piece.x = piece._pendingX; piece.y = piece._pendingY; delete piece._pendingX; delete piece._pendingY; }
+    await saveBlockingData();
+    if(blockingPendingRerender){ blockingPendingRerender=false; renderBlockingBoard(); }
+  });
+}
+function bkPiecesSnapshotHtml(pieces){
+  return `<div style="position:relative; width:900px; height:560px; border:2px solid #111; background:#eef2f7; margin:0 auto 16px;">
+    <div style="position:absolute; left:450px; top:0; bottom:0; width:1px; border-left:1px dashed #999;"></div>
+    ${(pieces||[]).map(p=>{
+      if(p.type==='sticky') return `<div style="position:absolute; left:${p.x}px; top:${p.y}px; width:110px; background:#fbe08a; border:1px solid #997; padding:5px; font-size:10px; white-space:pre-wrap;">${escapeHtml(p.text||'')}</div>`;
+      const shape = p.type==='actor' ? 'border-radius:50%; background:#f0c987;' : 'border-radius:4px; background:#c7cdd6;';
+      return `<div style="position:absolute; left:${p.x}px; top:${p.y}px; width:60px; height:50px; display:flex; align-items:center; justify-content:center; text-align:center; font-size:9px; border:2px solid #111; ${shape}">${escapeHtml(p.label||'')}</div>`;
+    }).join('')}
+  </div>`;
+}
+function printBlockingBoard(pieces, title){
+  const body = `<h1>${escapeHtml(state.productionName)}</h1><div class="meta">${escapeHtml(title)} — Printed ${new Date().toLocaleDateString()}</div>${bkPiecesSnapshotHtml(pieces)}`;
+  openPrintWindow(`${state.productionName} — ${title}`, body);
+}
+async function bkSaveNote(){
+  if(!canUseBlockingAssistant()) return;
+  const pageNumber = document.getElementById('bkPageNumber').value.trim();
+  const sceneLabel = document.getElementById('bkSceneLabel').value.trim();
+  if(!pageNumber && !sceneLabel){ toast('Give it a page number or scene label'); return; }
+  if(!(blockingCache.pieces||[]).length){ toast('Add something to the board first'); return; }
+  const author = currentUser()?.name || authUser?.displayName || 'Someone';
+  state.blockingNotes.push({
+    id:cryptoId(), pageNumber, sceneLabel, notes: document.getElementById('bkNoteText').value.trim(),
+    pieces: JSON.parse(JSON.stringify(blockingCache.pieces)),
+    authorName:author, createdAt:new Date().toISOString()
+  });
+  await saveState();
+  document.getElementById('bkPageNumber').value=''; document.getElementById('bkSceneLabel').value=''; document.getElementById('bkNoteText').value='';
+  renderBlockingNoteList();
+  toast('Blocking note saved');
+}
+function renderBlockingNoteList(){
+  const list = document.getElementById('bkNoteList');
+  const notes = [...(state.blockingNotes||[])].sort((a,b)=>(a.pageNumber||'').localeCompare(b.pageNumber||'', undefined, {numeric:true}));
+  if(!notes.length){ list.innerHTML = `<div class="empty-state">No blocking notes saved yet.</div>`; return; }
+  list.innerHTML = notes.map(n=>`
+    <div class="bk-note-item">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <span><b>${n.pageNumber?'Pg '+escapeHtml(n.pageNumber)+' — ':''}${escapeHtml(n.sceneLabel||'Untitled')}</b><br><span class="mono" style="font-size:10.5px;color:var(--paper-dim);">${escapeHtml(n.authorName)} · ${fmtDateTime(n.createdAt)}</span></span>
+        <span style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+          <button class="btn ghost small" data-loadnote="${n.id}">Load to Board</button>
+          <button class="btn ghost small" data-printnote="${n.id}">🖨 Print</button>
+          <button class="btn danger small" data-delnote="${n.id}">✕</button>
+        </span>
+      </div>
+      ${n.notes?`<div style="font-size:12px; margin-top:5px; color:var(--paper-dim);">${escapeHtml(n.notes)}</div>`:''}
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-loadnote]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    const n = notes.find(x=>x.id===btn.dataset.loadnote); if(!n) return;
+    if((blockingCache.pieces||[]).length && !confirm('Replace the current board with this saved layout?')) return;
+    blockingCache.pieces = JSON.parse(JSON.stringify(n.pieces));
+    renderBlockingBoard();
+    await saveBlockingData();
+    toast(`Loaded "${n.sceneLabel||n.pageNumber}" to the live board`);
+  }));
+  list.querySelectorAll('[data-printnote]').forEach(btn=>btn.addEventListener('click', ()=>{
+    const n = notes.find(x=>x.id===btn.dataset.printnote); if(!n) return;
+    printBlockingBoard(n.pieces, `Blocking — Pg ${n.pageNumber||'?'} — ${n.sceneLabel||''}`);
+  }));
+  list.querySelectorAll('[data-delnote]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if(!confirm('Delete this blocking note?')) return;
+    state.blockingNotes = state.blockingNotes.filter(x=>x.id!==btn.dataset.delnote);
+    await saveState(); renderBlockingNoteList();
+    toast('Blocking note deleted');
+  }));
+}
+function pauseBlockingScene(){ stopBlockingListener(); }
+async function renderBlockingView(){
+  const canView = canUseBlockingAssistant();
+  document.getElementById('blockingLockedMsg').style.display = canView ? 'none' : 'block';
+  document.getElementById('blockingWrap').style.display = canView ? 'block' : 'none';
+  if(!canView){ pauseBlockingScene(); return; }
+  await startBlockingListener();
+  renderBlockingBoard();
+  renderBlockingNoteList();
 }
 
 function renderReportDetail(r, dep, depState, container){
@@ -5142,6 +5551,7 @@ function switchView(view){
   if(view!=='departments') stopWorkspaceListener();
   if(view!=='stagedesign') pauseStageDesignScene();
   if(view!=='lightinglab') pauseLightingLabScene();
+  if(view!=='blocking') pauseBlockingScene();
   if(view==='dashboard') renderDashboard();
   if(view==='productions') renderProductionsView();
   if(view==='calendar'){ renderCalendarForm(); switchCalSub(ui.calSub); }
@@ -5153,6 +5563,7 @@ function switchView(view){
   if(view==='stagedesign') renderStageDesignView();
   if(view==='lightinglab') renderLightingLabView();
   if(view==='makeuplab') renderMakeupLabView();
+  if(view==='blocking') renderBlockingView();
   if(view==='notifications') renderNotifications();
   if(view==='setup') renderSetup();
 }
@@ -5176,6 +5587,7 @@ async function loadEverythingAndRender(){
   if(!state.sandboxOwners) state.sandboxOwners = [];
   if(!state.makeupLooks) state.makeupLooks = [];
   if(state.makeupRestricted===undefined) state.makeupRestricted = false;
+  if(!state.blockingNotes) state.blockingNotes = [];
   if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
   if(globalState.emailjs.templateBehavior === undefined) globalState.emailjs.templateBehavior = '';
   if(globalState.emailjs.templateFailingGrade === undefined) globalState.emailjs.templateFailingGrade = '';
@@ -5473,16 +5885,39 @@ async function init(){
   document.getElementById('llExportCuesBtn').addEventListener('click', exportLightingCuesCsv);
   document.getElementById('llPrintLookBtn').addEventListener('click', printLightingLook);
   document.querySelectorAll('#mkTemplateTabs button').forEach(btn=>btn.addEventListener('click', ()=>{
-    if((ui.mkStrokes||[]).length && !confirm('Switch templates? Your current unsaved canvas will be cleared.')) return;
+    if(((ui.mkStrokes||[]).length || (ui.mkEffects||[]).length) && !confirm('Switch templates? Your current unsaved canvas will be cleared.')) return;
     document.querySelectorAll('#mkTemplateTabs button').forEach(b=>b.classList.toggle('active', b===btn));
-    ui.mkStrokes = [];
+    ui.mkStrokes = []; ui.mkEffects = []; ui.mkSelectedEffectId = null;
     mkSetTemplate(btn.dataset.template);
+    mkRenderEffectPanel();
   }));
   document.querySelectorAll('#mkToolWrap [data-tool]').forEach(btn=>btn.addEventListener('click', ()=>{
     ui.mkTool = btn.dataset.tool;
     document.querySelectorAll('#mkToolWrap [data-tool]').forEach(b=>b.classList.toggle('active', b===btn));
+    if(ui.mkTool!=='move'){ ui.mkSelectedEffectId = null; mkRenderEffectPanel(); mkRedrawCanvas(); }
   }));
   document.getElementById('mkOpacitySlider').addEventListener('input', (e)=>{ ui.mkOpacity = parseInt(e.target.value)/100; });
+  document.getElementById('mkAddWoundBtn').addEventListener('click', ()=>mkAddEffect('wound'));
+  document.getElementById('mkAddBruiseBtn').addEventListener('click', ()=>mkAddEffect('bruise'));
+  document.getElementById('mkAddScarBtn').addEventListener('click', ()=>mkAddEffect('scar'));
+  document.getElementById('mkFxWidth').addEventListener('input', (e)=>{
+    const fx = (ui.mkEffects||[]).find(x=>x.id===ui.mkSelectedEffectId); if(!fx) return;
+    fx.w = Math.max(10, parseInt(e.target.value)||fx.w); mkRedrawCanvas();
+  });
+  document.getElementById('mkFxHeight').addEventListener('input', (e)=>{
+    const fx = (ui.mkEffects||[]).find(x=>x.id===ui.mkSelectedEffectId); if(!fx) return;
+    fx.h = Math.max(10, parseInt(e.target.value)||fx.h); mkRedrawCanvas();
+  });
+  document.getElementById('mkFxRotation').addEventListener('input', (e)=>{
+    const fx = (ui.mkEffects||[]).find(x=>x.id===ui.mkSelectedEffectId); if(!fx) return;
+    fx.rotation = parseInt(e.target.value)||0; mkRedrawCanvas();
+  });
+  document.getElementById('mkFxDeleteBtn').addEventListener('click', ()=>{
+    if(!ui.mkSelectedEffectId) return;
+    ui.mkEffects = (ui.mkEffects||[]).filter(x=>x.id!==ui.mkSelectedEffectId);
+    ui.mkSelectedEffectId = null;
+    mkRedrawCanvas(); mkRenderEffectPanel();
+  });
   document.getElementById('mkReportBtn').addEventListener('click', ()=>{
     const reporter = currentUser()?.name || authUser?.displayName || activeEmail() || 'Someone';
     logChange(`🚩 ${reporter} reported something inappropriate in the Makeup Design Lab — please review it.`, {type:'directorOnly'});
@@ -5497,12 +5932,24 @@ async function init(){
   });
   document.getElementById('mkClearCanvasBtn').addEventListener('click', ()=>{
     if(!canDrawMakeupLab()) return;
-    if((ui.mkStrokes||[]).length && !confirm('Clear the current canvas? Unsaved work will be lost.')) return;
-    ui.mkStrokes = [];
-    mkRedrawCanvas();
+    if(((ui.mkStrokes||[]).length || (ui.mkEffects||[]).length) && !confirm('Clear the current canvas? Unsaved work will be lost.')) return;
+    ui.mkStrokes = []; ui.mkEffects = []; ui.mkSelectedEffectId = null;
+    mkRedrawCanvas(); mkRenderEffectPanel();
   });
   document.getElementById('mkPrintBtn').addEventListener('click', printMakeupLook);
   document.getElementById('mkSaveLookBtn').addEventListener('click', mkSaveLook);
+  document.getElementById('bkAddActorBtn').addEventListener('click', ()=>bkAddPiece('actor'));
+  document.getElementById('bkAddCubeBtn').addEventListener('click', ()=>bkAddPiece('cube'));
+  document.getElementById('bkAddStickyBtn').addEventListener('click', ()=>bkAddPiece('sticky'));
+  document.getElementById('bkClearBoardBtn').addEventListener('click', async ()=>{
+    if(!canUseBlockingAssistant()) return;
+    if((blockingCache.pieces||[]).length && !confirm('Clear the live blocking board? This does not delete any saved blocking notes.')) return;
+    blockingCache.pieces = [];
+    renderBlockingBoard();
+    await saveBlockingData();
+    toast('Board cleared');
+  });
+  document.getElementById('bkSaveNoteBtn').addEventListener('click', bkSaveNote);
   document.getElementById('llAddCubeBtn').addEventListener('click', ()=>addLightingPiece('cube'));
   document.getElementById('llClearPiecesBtn').addEventListener('click', ()=>{
     if(!canUseLightingLab()) return;
