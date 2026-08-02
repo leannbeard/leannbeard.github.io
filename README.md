@@ -40,9 +40,13 @@
   .role-toggle button{ background:none; border:none; color:var(--paper-dim); padding:7px 14px; border-radius:16px; font-size:12.5px; letter-spacing:0.06em; cursor:pointer; font-weight:600; }
   .role-toggle button.active{ background:var(--amber); color:var(--ink); }
 
-  .tabs{ max-width:1240px; margin:0 auto; display:flex; gap:2px; padding:0 24px; border-bottom:1px solid var(--line); overflow-x:auto; }
+  .tabs-wrap{ max-width:1240px; margin:0 auto; padding:0 10px; border-bottom:1px solid var(--line); display:flex; align-items:stretch; gap:2px; }
+  .tabs{ display:flex; gap:2px; overflow-x:auto; scroll-behavior:smooth; flex:1; min-width:0; scrollbar-width:thin; }
+  .tabs-scroll-btn{ background:none; border:none; color:var(--paper-dim); width:24px; flex-shrink:0; cursor:pointer; font-size:18px; }
+  .tabs-scroll-btn:hover:not(:disabled){ color:var(--amber); }
+  .tabs-scroll-btn:disabled{ opacity:0.15; cursor:default; }
   .tabs button{ background:none; border:none; color:var(--paper-dim); padding:13px 14px; cursor:pointer; font-family:'Oswald',sans-serif;
-    letter-spacing:0.05em; text-transform:uppercase; font-size:12.5px; border-bottom:3px solid transparent; white-space:nowrap; position:relative; }
+    letter-spacing:0.05em; text-transform:uppercase; font-size:12.5px; border-bottom:3px solid transparent; white-space:nowrap; position:relative; flex-shrink:0; }
   .tabs button:hover{ color:var(--paper); }
   .tabs button.active{ color:var(--amber); border-bottom-color:var(--amber); }
   .badge{ position:absolute; top:6px; right:0; background:var(--red); color:#fff; font-size:10px; font-weight:700;
@@ -314,8 +318,8 @@
   .sd-dims-row{ display:flex; gap:6px; }
   .sd-dims-row > div{ flex:1; }
 
-  .ll-layout{ display:flex; gap:16px; flex-wrap:wrap; }
-  .ll-board{ flex:2; min-width:520px; background:rgba(0,0,0,0.25); border:1px solid var(--line); border-radius:var(--radius); padding:14px; }
+  .ll-layout{ display:flex; flex-direction:column; gap:16px; }
+  .ll-board{ width:100%; background:rgba(0,0,0,0.25); border:1px solid var(--line); border-radius:var(--radius); padding:14px; }
   .ll-board-group-label{ font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; margin:10px 0 6px; }
   .ll-channels-row{ display:flex; gap:8px; flex-wrap:wrap; }
   .ll-channel{ width:64px; background:rgba(0,0,0,0.2); border:1px solid var(--line); border-radius:6px; padding:8px 6px; display:flex; flex-direction:column; align-items:center; }
@@ -326,8 +330,8 @@
   .ll-channel-color{ width:36px; height:20px; border:1px solid var(--line); border-radius:4px; background:none; padding:0; margin-top:6px; cursor:pointer; }
   .ll-swatch-row{ display:flex; gap:3px; flex-wrap:wrap; justify-content:center; margin-top:5px; max-width:56px; }
   .ll-swatch{ width:11px; height:11px; border-radius:2px; cursor:pointer; border:1px solid rgba(255,255,255,0.3); }
-  .ll-stage-panel{ flex:1; min-width:360px; }
-  .ll-canvas-wrap{ width:100%; height:420px; position:relative; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:#050608; }
+  .ll-stage-panel{ width:100%; }
+  .ll-canvas-wrap{ width:100%; height:600px; position:relative; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:#050608; }
   .ll-canvas-wrap canvas{ display:block; width:100%; height:100%; touch-action:none; }
   .ll-cue-item{ display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px dashed var(--line); font-size:12.5px; }
   .ll-cue-item:last-child{ border-bottom:none; }
@@ -403,20 +407,24 @@
   </div>
 </div>
 
-<nav class="tabs" id="mainTabs" style="display:none;">
-  <button data-view="dashboard" class="active">Dashboard</button>
-  <button data-view="productions">Productions</button>
-  <button data-view="calendar">Calendar</button>
-  <button data-view="conflicts">Conflicts</button>
-  <button data-view="attendance">Attendance</button>
-  <button data-view="behavior">Behavior</button>
-  <button data-view="departments">Departments</button>
-  <button data-view="costumes">Costumes</button>
-  <button data-view="stagedesign">3D Set Design</button>
-  <button data-view="lightinglab">Lighting Lab</button>
-  <button data-view="notifications">Notifications<span class="badge" id="notifBadge" style="display:none;">0</span></button>
-  <button data-view="setup">Roster / Setup</button>
-</nav>
+<div class="tabs-wrap" id="tabsWrap" style="display:none;">
+  <button class="tabs-scroll-btn" id="tabsScrollLeft" aria-label="Scroll tabs left">‹</button>
+  <nav class="tabs" id="mainTabs">
+    <button data-view="dashboard" class="active">Dashboard</button>
+    <button data-view="productions">Productions</button>
+    <button data-view="calendar">Calendar</button>
+    <button data-view="conflicts">Conflicts</button>
+    <button data-view="attendance">Attendance</button>
+    <button data-view="behavior">Behavior</button>
+    <button data-view="departments">Departments</button>
+    <button data-view="costumes">Costumes</button>
+    <button data-view="stagedesign">3D Set Design</button>
+    <button data-view="lightinglab">Lighting Lab</button>
+    <button data-view="notifications">Notifications<span class="badge" id="notifBadge" style="display:none;">0</span></button>
+    <button data-view="setup">Roster / Setup</button>
+  </nav>
+  <button class="tabs-scroll-btn" id="tabsScrollRight" aria-label="Scroll tabs right">›</button>
+</div>
 
 <div id="signedOutShell" style="display:none; max-width:520px; margin:70px auto; text-align:center; padding:0 24px;">
   <div class="lamp" style="font-size:30px; margin-bottom:10px;">🔒</div>
@@ -779,26 +787,33 @@
     <div id="lightingLabWrap" style="display:none;">
       <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Practice lighting areas & cues on a virtual board — areas numbered 1-15 (1-5 front row, 6-10 middle, 11-15 back, left to right), matching how your program lays them out, plus 3 cyclorama zones. Board changes reset when you leave the tab; saved cues stick around for the whole team.</p>
       <div class="ll-layout">
+        <div class="ll-stage-panel">
+          <div class="wb-toolbar" id="llPieceToolbar" style="margin-bottom:10px;">
+            <button class="wb-tool-btn" id="llAddActorBtn">🧍 Add Actor</button>
+            <button class="wb-tool-btn" id="llAddCubeBtn">◼ Add Rehearsal Cube</button>
+            <span class="wb-sep"></span>
+            <button class="btn danger small" id="llClearPiecesBtn">Clear Actors/Cubes</button>
+          </div>
+          <div class="ll-canvas-wrap" id="llCanvasWrap">
+            <canvas id="llCanvas"></canvas>
+            <div class="sd-hint">Drag background to orbit · drag an actor/cube to move it · scroll to zoom</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;">Cues</h3>
+          <div class="form-grid">
+            <input type="text" id="llCueName" placeholder="Cue name (e.g. Cue 1 - Opening)">
+            <button class="btn small" id="llSaveCueBtn">Save Current Look as Cue</button>
+          </div>
+          <button class="btn ghost small" id="llBlackoutBtn">Blackout (all to 0%)</button>
+          <button class="btn ghost small" id="llExportCuesBtn">Export All Cues (CSV)</button>
+          <div id="llCueList" style="margin-top:10px;"></div>
+        </div>
         <div class="ll-board">
           <div class="ll-board-group-label">Stage Areas</div>
           <div class="ll-channels-row" id="llAreaChannels"></div>
           <div class="ll-board-group-label">Cyclorama</div>
           <div class="ll-channels-row" id="llCycChannels"></div>
-        </div>
-        <div class="ll-stage-panel">
-          <div class="ll-canvas-wrap" id="llCanvasWrap">
-            <canvas id="llCanvas"></canvas>
-            <div class="sd-hint">Drag to orbit · scroll to zoom</div>
-          </div>
-          <div class="card" style="margin-top:12px;">
-            <h3 style="margin-top:0;">Cues</h3>
-            <div class="form-grid">
-              <input type="text" id="llCueName" placeholder="Cue name (e.g. Cue 1 - Opening)">
-              <button class="btn small" id="llSaveCueBtn">Save Current Look as Cue</button>
-            </div>
-            <button class="btn ghost small" id="llBlackoutBtn">Blackout (all to 0%)</button>
-            <div id="llCueList" style="margin-top:10px;"></div>
-          </div>
         </div>
       </div>
     </div>
@@ -1216,24 +1231,33 @@ function toast(msg){
   clearTimeout(t._timer); t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
 }
 function showSignedOutShell(){
-  document.getElementById('mainTabs').style.display = 'none';
+  document.getElementById('tabsWrap').style.display = 'none';
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('signedOutShell').style.display = 'block';
   document.getElementById('pendingApprovalShell').style.display = 'none';
 }
 function showAppShell(){
-  document.getElementById('mainTabs').style.display = 'flex';
+  document.getElementById('tabsWrap').style.display = 'flex';
   document.getElementById('mainContent').style.display = 'block';
   document.getElementById('signedOutShell').style.display = 'none';
   document.getElementById('pendingApprovalShell').style.display = 'none';
+  updateTabsScrollButtons();
 }
 function showPendingApprovalShell(){
-  document.getElementById('mainTabs').style.display = 'none';
+  document.getElementById('tabsWrap').style.display = 'none';
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('signedOutShell').style.display = 'none';
   document.getElementById('pendingApprovalShell').style.display = 'block';
   const emailEl = document.getElementById('pendingApprovalEmail');
   if(emailEl) emailEl.textContent = activeEmail() || '';
+}
+function updateTabsScrollButtons(){
+  const nav = document.getElementById('mainTabs');
+  const leftBtn = document.getElementById('tabsScrollLeft');
+  const rightBtn = document.getElementById('tabsScrollRight');
+  if(!nav || !leftBtn || !rightBtn) return;
+  leftBtn.disabled = nav.scrollLeft <= 2;
+  rightBtn.disabled = nav.scrollLeft >= nav.scrollWidth - nav.clientWidth - 2;
 }
 // True once someone is allowed to actually see the app: Director, matched to the roster by
 // email, or — bootstrap case — nobody has claimed Director yet, so the very first sign-in
@@ -2887,6 +2911,8 @@ function renderReportFormSub(content, dep, depState){
         <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; display:block; margin:10px 0 6px;">Flag non-contributors</label>
         <div class="checkbox-row" id="repNonContribChecks">${deptCrew.map(c=>`<label><input type="checkbox" value="${c.id}"> ${c.name}</label>`).join('')}</div>
       </div>
+      <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">Daily / Weekly Goal</label>
+      <textarea id="repGoal" class="notes-field" placeholder="What's the team aiming to accomplish today or this week?"></textarea>
       <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">Completed tasks</label>
       <textarea id="repCompleted" class="notes-field">${depState.tasks.filter(t=>t.status==='done').map(t=>'• '+t.title).join('\\n')}</textarea>
       <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">In progress</label>
@@ -2914,6 +2940,7 @@ function renderReportFormSub(content, dep, depState){
     const report = {
       id:cryptoId(), date: document.getElementById('repDate').value, shift: document.getElementById('repShift').value, classPeriod,
       teamMemberIds: teamIds, nonContributorIds: nonContribIds,
+      goal: document.getElementById('repGoal').value.trim(),
       completedTasks: document.getElementById('repCompleted').value.trim(),
       inProgressTasks: document.getElementById('repInProgress').value.trim(),
       notes: document.getElementById('repNotes').value.trim(), challenges: document.getElementById('repChallenges').value.trim(),
@@ -3727,6 +3754,15 @@ function buildRampGeometry(THREE, w, d, h){
   geo.computeVertexNormals();
   return geo;
 }
+// Darkens/lightens a hex color by a flat amount per channel — used to make a door panel or
+// window frame read as visually distinct from its surrounding flat, without needing a
+// second color input per piece.
+function shadeColor(hex, amount){
+  const num = parseInt(String(hex).replace('#',''),16);
+  let r=(num>>16)+amount, g=((num>>8)&0xff)+amount, b=(num&0xff)+amount;
+  r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
 function buildPieceMesh(THREE, type, w, d, h, color){
   const mat = new THREE.MeshStandardMaterial({ color, roughness:0.85, metalness:0.05 });
   const group = new THREE.Group();
@@ -3758,6 +3794,56 @@ function buildPieceMesh(THREE, type, w, d, h, color){
     [[w/2-w*0.06,d/2-d*0.06],[-(w/2-w*0.06),d/2-d*0.06],[w/2-w*0.06,-(d/2-d*0.06)],[-(w/2-w*0.06),-(d/2-d*0.06)]].forEach(([lx,lz])=>{
       const leg = new THREE.Mesh(legGeo, mat); leg.position.set(lx, h*0.225, lz); group.add(leg);
     });
+  } else if(type==='uil_door' || type==='door'){
+    const jambW = Math.min(0.25, w*0.1), headerH = Math.min(0.3, h*0.06);
+    const leftJamb = new THREE.Mesh(new THREE.BoxGeometry(jambW,h,d), mat);
+    leftJamb.position.set(-w/2+jambW/2, h/2, 0); group.add(leftJamb);
+    const rightJamb = new THREE.Mesh(new THREE.BoxGeometry(jambW,h,d), mat);
+    rightJamb.position.set(w/2-jambW/2, h/2, 0); group.add(rightJamb);
+    const header = new THREE.Mesh(new THREE.BoxGeometry(w,headerH,d), mat);
+    header.position.set(0, h-headerH/2, 0); group.add(header);
+    const doorMat = new THREE.MeshStandardMaterial({ color: shadeColor(color,-30), roughness:0.7 });
+    const panelW = w - jambW*2 - 0.1, panelH = h - headerH - 0.1;
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(panelW, panelH, Math.max(d*0.5, 0.08)), doorMat);
+    panel.position.set(0, panelH/2+0.05, 0); group.add(panel);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(Math.min(0.09,w*0.03),8,8), new THREE.MeshStandardMaterial({ color:0xC9A227, roughness:0.3, metalness:0.6 }));
+    knob.position.set(panelW*0.32, panelH*0.35, d*0.35); group.add(knob);
+  } else if(type==='uil_french_door'){
+    const jambW = Math.min(0.2, w*0.06), headerH = Math.min(0.3, h*0.06), mullionW = jambW*0.85;
+    const leftJamb = new THREE.Mesh(new THREE.BoxGeometry(jambW,h,d), mat);
+    leftJamb.position.set(-w/2+jambW/2, h/2, 0); group.add(leftJamb);
+    const rightJamb = new THREE.Mesh(new THREE.BoxGeometry(jambW,h,d), mat);
+    rightJamb.position.set(w/2-jambW/2, h/2, 0); group.add(rightJamb);
+    const header = new THREE.Mesh(new THREE.BoxGeometry(w,headerH,d), mat);
+    header.position.set(0, h-headerH/2, 0); group.add(header);
+    const doorH = h - headerH;
+    const midMullion = new THREE.Mesh(new THREE.BoxGeometry(mullionW, doorH, d), mat);
+    midMullion.position.set(0, doorH/2, 0); group.add(midMullion);
+    const glassMat = new THREE.MeshStandardMaterial({ color:0xbfe3f0, transparent:true, opacity:0.4, roughness:0.15 });
+    const paneW = (w - jambW*2 - mullionW)/2 - 0.08;
+    [-1,1].forEach(side=>{
+      const pane = new THREE.Mesh(new THREE.BoxGeometry(Math.max(paneW,0.1), doorH-0.2, Math.max(d*0.35,0.06)), glassMat);
+      pane.position.set(side*(paneW/2+mullionW/2+0.04), doorH/2, 0); group.add(pane);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(Math.min(0.07,w*0.02),8,8), new THREE.MeshStandardMaterial({ color:0xC9A227, roughness:0.3, metalness:0.6 }));
+      knob.position.set(side*(mullionW/2+0.06), doorH*0.35, d*0.3); group.add(knob);
+    });
+  } else if(type==='uil_window'){
+    const frameW = Math.min(0.2, w*0.07);
+    const openTop = h*0.75, openBottom = h*0.45;
+    const openH = openTop - openBottom;
+    const top = new THREE.Mesh(new THREE.BoxGeometry(w, frameW, d), mat); top.position.set(0, openTop, 0); group.add(top);
+    const bottom = new THREE.Mesh(new THREE.BoxGeometry(w, frameW, d), mat); bottom.position.set(0, openBottom, 0); group.add(bottom);
+    const left = new THREE.Mesh(new THREE.BoxGeometry(frameW, openH, d), mat); left.position.set(-w/2+frameW/2, (openTop+openBottom)/2, 0); group.add(left);
+    const right = new THREE.Mesh(new THREE.BoxGeometry(frameW, openH, d), mat); right.position.set(w/2-frameW/2, (openTop+openBottom)/2, 0); group.add(right);
+    const wallBelow = new THREE.Mesh(new THREE.BoxGeometry(w, openBottom, d), mat); wallBelow.position.set(0, openBottom/2, 0); group.add(wallBelow);
+    const wallAbove = new THREE.Mesh(new THREE.BoxGeometry(w, h-openTop, d), mat); wallAbove.position.set(0, (h+openTop)/2, 0); group.add(wallAbove);
+    const glassMat = new THREE.MeshStandardMaterial({ color:0xbfe3f0, transparent:true, opacity:0.45, roughness:0.1 });
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(Math.max(w-frameW*2,0.1), Math.max(openH-frameW,0.1), Math.max(d*0.3,0.05)), glassMat);
+    glass.position.set(0, (openTop+openBottom)/2, 0); group.add(glass);
+    const muntinV = new THREE.Mesh(new THREE.BoxGeometry(0.06, Math.max(openH-frameW,0.1), Math.max(d*0.35,0.06)), mat);
+    muntinV.position.set(0, (openTop+openBottom)/2, 0); group.add(muntinV);
+    const muntinH = new THREE.Mesh(new THREE.BoxGeometry(Math.max(w-frameW*2,0.1), 0.06, Math.max(d*0.35,0.06)), mat);
+    muntinH.position.set(0, (openTop+openBottom)/2, 0); group.add(muntinH);
   } else {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     mesh.position.set(0, h/2, 0); group.add(mesh);
@@ -3994,9 +4080,24 @@ const LL_INTENSITY_SCALE = 40; // best-effort brightness scale — tell me if it
 function canUseLightingLab(){ return isDirector() || !!currentUser(); }
 
 let llScene=null, llCamera=null, llRenderer=null, llControls=null, llResizeObs=null, llAnimFrame=null;
-let llLights=[], llActors=[], llCycMesh=null;
+let llLights=[], llActors=[], llCycMesh=null, llFloorMesh=null;
 let llCrossfade = null;
+let llPieceMeshes = {}, llDraggingPieceId = null, llRaycaster = null;
 
+function buildLLActorMesh(THREE, color){
+  const mat = new THREE.MeshStandardMaterial({ color: color||0xcfc6b8, roughness:0.9 });
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.65,3.2,10), mat);
+  body.position.y = 1.9; body.castShadow = true; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5,12,10), mat);
+  head.position.y = 3.9; head.castShadow = true; g.add(head);
+  return g;
+}
+function buildLLCubeMesh(THREE, color){
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), new THREE.MeshStandardMaterial({ color: color||0x8a7c66, roughness:0.85 }));
+  mesh.position.y = 1; mesh.castShadow = true;
+  return mesh;
+}
 async function initLightingLabSceneIfNeeded(){
   await ensureThreeLoaded();
   if(llScene) return;
@@ -4011,6 +4112,7 @@ async function initLightingLabSceneIfNeeded(){
   llRenderer = new THREE.WebGLRenderer({ canvas, antialias:true });
   llRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   llRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
+  llRenderer.shadowMap.enabled = true; // real shadows, toggled per-light below based on intensity
 
   llControls = new OrbitControlsClass(llCamera, llRenderer.domElement);
   llControls.target.set(0,3,-2);
@@ -4022,21 +4124,17 @@ async function initLightingLabSceneIfNeeded(){
 
   // Floor
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(34,24), new THREE.MeshStandardMaterial({ color:0x2a2c33, roughness:1 }));
-  floor.rotation.x = -Math.PI/2; floor.position.z = -1; llScene.add(floor);
+  floor.rotation.x = -Math.PI/2; floor.position.z = -1; floor.receiveShadow = true; llScene.add(floor);
+  llFloorMesh = floor;
   const grid = new THREE.GridHelper(34, 34, 0x555555, 0x333333); grid.position.y=0.01; grid.position.z=-1; llScene.add(grid);
 
   // Cyclorama backdrop
   llCycMesh = new THREE.Mesh(new THREE.PlaneGeometry(30,14), new THREE.MeshStandardMaterial({ color:0x111111, roughness:1 }));
-  llCycMesh.position.set(0, 7, -14); llScene.add(llCycMesh);
+  llCycMesh.position.set(0, 7, -14); llCycMesh.receiveShadow = true; llScene.add(llCycMesh);
 
-  // Simple actor placeholders, one per stage area
-  const actorMat = new THREE.MeshStandardMaterial({ color:0xcfc6b8, roughness:0.9 });
+  // Simple actor placeholders, one per stage area (fixed — not the movable practice pieces)
   LL_AREA_DEFS.forEach(def=>{
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.65,3.2,10), actorMat.clone());
-    body.position.y = 1.9; g.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.5,12,10), actorMat.clone());
-    head.position.y = 3.9; g.add(head);
+    const g = buildLLActorMesh(THREE);
     g.position.set(def.x, 0, def.z);
     llScene.add(g);
     llActors.push(g);
@@ -4045,10 +4143,16 @@ async function initLightingLabSceneIfNeeded(){
   // One light per channel (areas get SpotLights aimed down at their area; cyc channels get
   // SpotLights aimed at the backdrop). decay:0 so brightness doesn't require guessing large
   // physically-based candela numbers — a straightforward 0-100% maps predictably to dark-to-bright.
+  // Shadows are toggled on per-light only while that light is actually above 0%, and use a
+  // modest shadow-map size, so a school laptop isn't rendering 18 shadow maps at once for
+  // lights nobody's even brought up.
   llLights = LL_CHANNELS.map(def=>{
     const light = new THREE.SpotLight(0xffffff, 0, 40, def.isCyc ? Math.PI/5 : Math.PI/7, 0.5, 0);
     if(def.isCyc){ light.position.set(def.x, 3, -9); } else { light.position.set(def.x, 14, def.z+1); }
     light.castShadow = false;
+    light.shadow.mapSize.set(512,512);
+    light.shadow.camera.near = 1; light.shadow.camera.far = 30;
+    light.shadow.bias = -0.0015;
     llScene.add(light);
     const target = new THREE.Object3D();
     target.position.set(def.x, def.isCyc?7:0, def.isCyc?-14:def.z);
@@ -4064,6 +4168,55 @@ async function initLightingLabSceneIfNeeded(){
     llRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
   });
   llResizeObs.observe(wrap);
+
+  // Movable practice pieces (actors/cubes) — drag on the floor plane to reposition, same
+  // pattern as the Set Design tool. Dragging a piece temporarily disables camera orbit so
+  // the two gestures don't fight each other.
+  llRaycaster = new THREE.Raycaster();
+  const dragPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+  const dragOffset = new THREE.Vector3();
+  let dragId = null;
+  function ndc(e){
+    const rect = canvas.getBoundingClientRect();
+    return new THREE.Vector2(((e.clientX-rect.left)/rect.width)*2-1, -((e.clientY-rect.top)/rect.height)*2+1);
+  }
+  function pieceIdAt(e){
+    llRaycaster.setFromCamera(ndc(e), llCamera);
+    const hits = llRaycaster.intersectObjects(Object.values(llPieceMeshes), true);
+    if(!hits.length) return null;
+    let obj = hits[0].object;
+    while(obj && !obj.userData.llPieceId) obj = obj.parent;
+    return obj ? obj.userData.llPieceId : null;
+  }
+  canvas.addEventListener('pointerdown', (e)=>{
+    if(!canUseLightingLab()) return;
+    const id = pieceIdAt(e);
+    if(!id) return;
+    dragId = id; llDraggingPieceId = id;
+    llControls.enabled = false;
+    llRaycaster.setFromCamera(ndc(e), llCamera);
+    const hitPoint = new THREE.Vector3();
+    llRaycaster.ray.intersectPlane(dragPlane, hitPoint);
+    const mesh = llPieceMeshes[id];
+    dragOffset.copy(mesh.position).sub(hitPoint);
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e)=>{
+    if(!dragId) return;
+    llRaycaster.setFromCamera(ndc(e), llCamera);
+    const hitPoint = new THREE.Vector3();
+    if(llRaycaster.ray.intersectPlane(dragPlane, hitPoint)){
+      const mesh = llPieceMeshes[dragId];
+      mesh.position.x = hitPoint.x + dragOffset.x;
+      mesh.position.z = hitPoint.z + dragOffset.z;
+      const piece = ui.llPieces.find(p=>p.id===dragId);
+      if(piece){ piece.x = mesh.position.x; piece.z = mesh.position.z; }
+    }
+  });
+  canvas.addEventListener('pointerup', ()=>{
+    dragId = null; llDraggingPieceId = null;
+    llControls.enabled = true;
+  });
 }
 function llAnimateFrame(){
   llAnimFrame = requestAnimationFrame(llAnimateFrame);
@@ -4074,6 +4227,7 @@ function llAnimateFrame(){
       const from = llCrossfade.fromIntensity[i], to = llCrossfade.toIntensity[i];
       ui.llState[i].intensity = Math.round(from + (to-from)*t);
       llLights[i].intensity = (ui.llState[i].intensity/100) * LL_INTENSITY_SCALE;
+      llLights[i].castShadow = ui.llState[i].intensity > 0;
     });
     llRefreshChannelUI();
     if(t>=1) llCrossfade = null;
@@ -4090,6 +4244,7 @@ function llApplyChannel(i){
   if(llLights[i]){
     llLights[i].intensity = (st.intensity/100) * LL_INTENSITY_SCALE;
     llLights[i].color.set(st.color);
+    llLights[i].castShadow = st.intensity > 0; // only lights that are actually on pay for a shadow map
   }
 }
 function llRefreshChannelUI(){
@@ -4155,17 +4310,43 @@ async function llSaveCue(){
   renderLightingCueList();
   toast('Cue saved');
 }
+function exportLightingCuesCsv(){
+  const cues = state.lightingCues || [];
+  if(!cues.length){ toast('No cues to export yet'); return; }
+  const rows = [];
+  cues.forEach(c=>{
+    LL_CHANNELS.forEach((def,i)=>{
+      const ch = c.channels[i];
+      if(!ch || ch.intensity<=0) return; // only channels actually contributing to the look
+      rows.push([c.name, def.label, Math.round(ch.intensity), ch.color, c.authorName, fmtDateTime(c.createdAt), c.updatedAt?fmtDateTime(c.updatedAt):'']);
+    });
+  });
+  if(!rows.length){ toast('Every saved cue is blackout — nothing to export'); return; }
+  downloadCsvRows(['Cue Name','Channel','Intensity (%)','Color','Created By','Created At','Last Updated'], rows, `lighting-cues-${todayISO()}.csv`);
+}
+function llCueChannelSummary(cue){
+  const active = LL_CHANNELS.map((def,i)=>({ def, ch: cue.channels[i] })).filter(x=>x.ch && x.ch.intensity>0);
+  if(!active.length) return `<div style="font-size:11px; color:var(--paper-dim); margin-top:4px;">All channels at 0% (blackout)</div>`;
+  return `<div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;">${active.map(x=>
+    `<span class="mono" style="font-size:10.5px; background:rgba(0,0,0,0.25); border:1px solid var(--line); border-radius:10px; padding:2px 8px; display:inline-flex; align-items:center; gap:5px;">
+      <span style="width:8px;height:8px;border-radius:2px;background:${x.ch.color}; display:inline-block;"></span>${escapeHtml(x.def.label)}: ${Math.round(x.ch.intensity)}%
+    </span>`
+  ).join('')}</div>`;
+}
 function renderLightingCueList(){
   const list = document.getElementById('llCueList');
   const cues = state.lightingCues || [];
   if(!cues.length){ list.innerHTML = `<div class="empty-state">No cues saved yet.</div>`; return; }
   const editable = canUseLightingLab();
   list.innerHTML = [...cues].reverse().map(c=>`
-    <div class="ll-cue-item">
-      <span><b>${escapeHtml(c.name)}</b><br><span class="mono" style="font-size:10.5px;color:var(--paper-dim);">${escapeHtml(c.authorName)} · ${fmtDateTime(c.createdAt)}${c.updatedAt?' · edited '+fmtDateTime(c.updatedAt):''}</span></span>
-      <span style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
-        ${editable?`<button class="btn ghost small" data-go="${c.id}">Go</button><button class="btn ghost small" data-snap="${c.id}">Snap</button><button class="btn ghost small" data-update="${c.id}">Update</button><button class="btn ghost small" data-rename="${c.id}">Rename</button><button class="btn danger small" data-delcue="${c.id}">✕</button>`:''}
-      </span>
+    <div class="ll-cue-item" style="flex-direction:column; align-items:stretch;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <span><b>${escapeHtml(c.name)}</b><br><span class="mono" style="font-size:10.5px;color:var(--paper-dim);">${escapeHtml(c.authorName)} · ${fmtDateTime(c.createdAt)}${c.updatedAt?' · edited '+fmtDateTime(c.updatedAt):''}</span></span>
+        <span style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; flex-shrink:0;">
+          ${editable?`<button class="btn ghost small" data-go="${c.id}">Go</button><button class="btn ghost small" data-snap="${c.id}">Snap</button><button class="btn ghost small" data-update="${c.id}">Update</button><button class="btn ghost small" data-rename="${c.id}">Rename</button><button class="btn danger small" data-delcue="${c.id}">✕</button>`:''}
+        </span>
+      </div>
+      ${llCueChannelSummary(c)}
     </div>
   `).join('');
   list.querySelectorAll('[data-go]').forEach(btn=>btn.addEventListener('click', ()=>{
@@ -4206,16 +4387,47 @@ function renderLightingCueList(){
     toast('Cue deleted');
   }));
 }
+function syncLightingPieces(){
+  if(!llScene) return;
+  const THREE = THREE_MOD;
+  const ids = new Set((ui.llPieces||[]).map(p=>p.id));
+  Object.keys(llPieceMeshes).forEach(id=>{
+    if(!ids.has(id)){ llScene.remove(llPieceMeshes[id]); delete llPieceMeshes[id]; }
+  });
+  (ui.llPieces||[]).forEach(p=>{
+    let mesh = llPieceMeshes[p.id];
+    if(!mesh){
+      mesh = p.type==='cube' ? buildLLCubeMesh(THREE, p.color) : buildLLActorMesh(THREE, p.color);
+      mesh.userData.llPieceId = p.id;
+      mesh.traverse(o=>{ o.userData.llPieceId = p.id; });
+      llScene.add(mesh);
+      llPieceMeshes[p.id] = mesh;
+    }
+    mesh.position.x = p.x; mesh.position.z = p.z;
+  });
+}
+function addLightingPiece(type){
+  if(!canUseLightingLab()){ toast('Sign in to add practice pieces'); return; }
+  if(!ui.llPieces) ui.llPieces = [];
+  ui.llPieces.push({ id:cryptoId(), type, x:(Math.random()-0.5)*10, z:(Math.random()-0.5)*6 });
+  syncLightingPieces();
+}
+function clearLightingPieces(){
+  ui.llPieces = [];
+  syncLightingPieces();
+}
 async function renderLightingLabView(){
   const canView = canUseLightingLab();
   document.getElementById('lightingLabLockedMsg').style.display = canView ? 'none' : 'block';
   document.getElementById('lightingLabWrap').style.display = canView ? 'block' : 'none';
   if(!canView){ pauseLightingLabScene(); return; }
   if(!ui.llState) ui.llState = LL_CHANNELS.map(()=>({ intensity:0, color:'#ffffff' }));
+  if(!ui.llPieces) ui.llPieces = [];
   await initLightingLabSceneIfNeeded();
   if(!llAnimFrame) llAnimFrame = requestAnimationFrame(llAnimateFrame);
   renderLightingChannels();
   LL_CHANNELS.forEach((def,i)=>llApplyChannel(i));
+  syncLightingPieces();
   renderLightingCueList();
 }
 
@@ -4225,8 +4437,9 @@ function renderReportDetail(r, dep, depState, container){
   container.innerHTML = `
     <div class="summary-line" style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--line); font-size:13px;"><span>Team present</span><span class="mono">${teamNames.join(', ')||'—'}</span></div>
     ${(nonContribNames.length && isDirector())?`<div class="summary-line" style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--line); font-size:13px; color:var(--red);"><span>Flagged non-contributors</span><span class="mono">${nonContribNames.join(', ')}</span></div>`:''}
-    ${r.completedTasks?`<p style="font-size:13px; margin-top:10px;"><b>Completed:</b><br>${r.completedTasks.replace(/\\n/g,'<br>')}</p>`:''}
-    ${r.inProgressTasks?`<p style="font-size:13px;"><b>In progress:</b><br>${r.inProgressTasks.replace(/\\n/g,'<br>')}</p>`:''}
+    ${r.goal?`<p style="font-size:13px; margin-top:10px;"><b>Goal:</b> ${escapeHtml(r.goal)}</p>`:''}
+    ${r.completedTasks?`<p style="font-size:13px; margin-top:10px;"><b>Completed:</b><br>${escapeHtml(r.completedTasks).replace(/\\n/g,'<br>')}</p>`:''}
+    ${r.inProgressTasks?`<p style="font-size:13px;"><b>In progress:</b><br>${escapeHtml(r.inProgressTasks).replace(/\\n/g,'<br>')}</p>`:''}
     ${r.notes?`<p style="font-size:13px;"><b>Notes:</b> ${escapeHtml(r.notes)}</p>`:''}
     ${r.challenges?`<p style="font-size:13px;"><b>Challenges:</b> ${escapeHtml(r.challenges)}</p>`:''}
     ${r.teacherFeedback?`<div class="card" style="margin-top:10px;"><h3>Teacher Feedback</h3><p style="font-size:13px;">${escapeHtml(r.teacherFeedback)}</p></div>`:''}
@@ -4625,6 +4838,13 @@ async function init(){
     });
   }
 
+  document.getElementById('tabsScrollLeft').addEventListener('click', ()=>{ document.getElementById('mainTabs').scrollBy({left:-180, behavior:'smooth'}); });
+  document.getElementById('tabsScrollRight').addEventListener('click', ()=>{ document.getElementById('mainTabs').scrollBy({left:180, behavior:'smooth'}); });
+  document.getElementById('mainTabs').addEventListener('scroll', updateTabsScrollButtons);
+  document.getElementById('mainTabs').addEventListener('wheel', (e)=>{
+    if(Math.abs(e.deltaY) > Math.abs(e.deltaX)){ e.preventDefault(); document.getElementById('mainTabs').scrollLeft += e.deltaY; }
+  }, {passive:false});
+  window.addEventListener('resize', updateTabsScrollButtons);
   document.getElementById('googleSignInBtn').addEventListener('click', signInWithGoogle);
   document.getElementById('toggleEmailPwBtn').addEventListener('click', ()=>{
     const wrap = document.getElementById('emailPwWrap');
@@ -4845,6 +5065,15 @@ async function init(){
     LL_CHANNELS.forEach((def,i)=>{ ui.llState[i].intensity = 0; llApplyChannel(i); });
     llRefreshChannelUI();
     toast('Blackout');
+  });
+  document.getElementById('llAddActorBtn').addEventListener('click', ()=>addLightingPiece('actor'));
+  document.getElementById('llExportCuesBtn').addEventListener('click', exportLightingCuesCsv);
+  document.getElementById('llAddCubeBtn').addEventListener('click', ()=>addLightingPiece('cube'));
+  document.getElementById('llClearPiecesBtn').addEventListener('click', ()=>{
+    if(!canUseLightingLab()) return;
+    if((ui.llPieces||[]).length && !confirm('Remove all actors and rehearsal cubes from the stage?')) return;
+    clearLightingPieces();
+    toast('Cleared');
   });
   document.getElementById('exportAllGradesBtn').addEventListener('click', ()=>{
     if(!isDirector()){ toast('Only the Director can export grades'); return; }
