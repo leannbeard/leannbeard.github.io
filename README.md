@@ -335,6 +335,13 @@
   .ll-canvas-wrap canvas{ display:block; width:100%; height:100%; touch-action:none; }
   .ll-cue-item{ display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px dashed var(--line); font-size:12.5px; }
   .ll-cue-item:last-child{ border-bottom:none; }
+
+  .mk-canvas-wrap{ position:relative; width:100%; max-width:420px; margin:0 auto; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background-size:100% 100%; background-repeat:no-repeat; background-color:#fff; }
+  .mk-canvas-wrap canvas{ display:block; width:100%; height:100%; touch-action:none; }
+  .mk-gallery-item{ padding:8px 0; border-bottom:1px dashed var(--line); font-size:12px; }
+  .mk-gallery-item:last-child{ border-bottom:none; }
+  .mk-gallery-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .mk-gallery-actions{ display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; }
   .wb-image-add-row input{ flex:1; min-width:200px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:8px 10px; border-radius:3px; font-size:12.5px; }
   #wbDrawCanvas{ position:absolute; top:0; left:0; width:1400px; height:900px; z-index:40; pointer-events:none; }
 
@@ -420,6 +427,7 @@
     <button data-view="costumes">Costumes</button>
     <button data-view="stagedesign">3D Set Design</button>
     <button data-view="lightinglab">Lighting Lab</button>
+    <button data-view="makeuplab">Makeup Lab</button>
     <button data-view="notifications">Notifications<span class="badge" id="notifBadge" style="display:none;">0</span></button>
     <button data-view="setup">Roster / Setup</button>
   </nav>
@@ -749,6 +757,10 @@
           <button class="btn danger small" id="sdClearBtn">Clear All Pieces</button>
         </div>
       </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+        <button class="btn ghost small" id="sdPrintSnapshotBtn">🖨 Print 3D View</button>
+        <button class="btn ghost small" id="sdPrintGroundPlanBtn">📐 Print Ground Plan</button>
+      </div>
       <div class="sd-layout">
         <div class="sd-canvas-wrap" id="sdCanvasWrap">
           <canvas id="sdCanvas"></canvas>
@@ -799,6 +811,12 @@
             <div class="sd-hint">Drag background to orbit · drag an actor/cube to move it · scroll to zoom</div>
           </div>
         </div>
+        <div class="ll-board">
+          <div class="ll-board-group-label">Stage Areas</div>
+          <div class="ll-channels-row" id="llAreaChannels"></div>
+          <div class="ll-board-group-label">Cyclorama</div>
+          <div class="ll-channels-row" id="llCycChannels"></div>
+        </div>
         <div class="card">
           <h3 style="margin-top:0;">Cues</h3>
           <div class="form-grid">
@@ -807,13 +825,62 @@
           </div>
           <button class="btn ghost small" id="llBlackoutBtn">Blackout (all to 0%)</button>
           <button class="btn ghost small" id="llExportCuesBtn">Export All Cues (CSV)</button>
+          <button class="btn ghost small" id="llPrintLookBtn">🖨 Print This Look</button>
           <div id="llCueList" style="margin-top:10px;"></div>
         </div>
-        <div class="ll-board">
-          <div class="ll-board-group-label">Stage Areas</div>
-          <div class="ll-channels-row" id="llAreaChannels"></div>
-          <div class="ll-board-group-label">Cyclorama</div>
-          <div class="ll-channels-row" id="llCycChannels"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-makeuplab">
+    <div id="makeupLabLockedMsg" class="empty-state" style="display:none;">
+      <div class="lamp">🔒</div>Sign in to use the Makeup Design Lab.
+    </div>
+    <div id="makeupLabWrap" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-top:-6px;">
+        <p style="font-size:12px;color:var(--paper-dim); margin:0;">Practice makeup design on a generic face or body outline — bruises, wounds, aging, fantasy looks, anything. Save named looks to a shared gallery the whole team can see and learn from.</p>
+        <button class="btn danger small" id="mkReportBtn" style="white-space:nowrap;">🚩 Report inappropriate content</button>
+      </div>
+      <div id="mkRestrictWrap" style="display:none; margin-top:8px;">
+        <label class="lockmsg" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="mkRestrictToggle">
+          Restrict drawing to Hair &amp; Makeup, Costumes, Stage Management, and Director only (everyone can still view the gallery)
+        </label>
+      </div>
+      <div class="wb-toolbar" id="mkTemplateTabs" style="margin-top:10px;">
+        <button class="wb-tool-btn active" data-template="face_front">🙂 Face — Front</button>
+        <button class="wb-tool-btn" data-template="face_profile">👤 Face — Profile</button>
+        <button class="wb-tool-btn" data-template="body_front">🧍 Full Body</button>
+      </div>
+      <div class="wb-toolbar" id="mkToolWrap" style="display:none;">
+        <button class="wb-tool-btn active" data-tool="pen">✏️ Pen</button>
+        <button class="wb-tool-btn" data-tool="eraser">🧹 Eraser</button>
+        <span class="wb-sep"></span>
+        <span class="wb-color-row" id="mkColorRow"></span>
+        <span class="wb-width-row" id="mkWidthRow"></span>
+        <span class="wb-sep"></span>
+        <label style="font-size:11px;color:var(--paper-dim); display:flex; align-items:center; gap:6px;">Opacity <input type="range" id="mkOpacitySlider" min="10" max="100" value="100"></label>
+      </div>
+      <div class="sd-layout">
+        <div style="flex:1; min-width:300px;">
+          <div class="mk-canvas-wrap" id="mkCanvasWrap">
+            <canvas id="mkCanvas"></canvas>
+          </div>
+          <div style="display:flex; justify-content:center; gap:8px; margin-top:10px; flex-wrap:wrap;">
+            <button class="btn ghost small" id="mkClearCanvasBtn">Clear Canvas</button>
+            <button class="btn ghost small" id="mkPrintBtn">🖨 Print This Look</button>
+          </div>
+        </div>
+        <div class="sd-side-panel">
+          <div class="card">
+            <h3 style="margin-top:0;">Save Look</h3>
+            <input type="text" id="mkLookName" class="full-width" style="margin-bottom:8px;" placeholder="Look name (e.g. Zombie Bite Wound)">
+            <button class="btn small" id="mkSaveLookBtn" style="width:100%;">Save Current Look</button>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">Saved Looks</h3>
+            <div id="mkGallery"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1069,6 +1136,8 @@ function defaultProductionState(name, seeded){
     pendingApprovals:[],
     lightingCues:[],
     sandboxOwners:[],
+    makeupLooks:[],
+    makeupRestricted:false,
     departments: freshDepartments(seeded)
   };
 }
@@ -3868,7 +3937,7 @@ async function initStageDesignSceneIfNeeded(){
   sdScene.background = new THREE.Color(0x0c0d10);
   sdCamera = new THREE.PerspectiveCamera(50, Math.max(wrap.clientWidth,1)/Math.max(wrap.clientHeight,1), 0.1, 500);
   sdCamera.position.set(0, 26, 34);
-  sdRenderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+  sdRenderer = new THREE.WebGLRenderer({ canvas, antialias:true, preserveDrawingBuffer:true });
   sdRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   sdRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
 
@@ -4027,6 +4096,64 @@ async function deleteSelectedPiece(){
   syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
   await saveStageDesignData();
 }
+function sdPieceManifestRows(){
+  return stageDesignCache.pieces.map(p=>`<tr><td>${escapeHtml(p.label||PIECE_TYPES[p.type]?.label||p.type)}</td><td>${p.width.toFixed(2)}' × ${p.depth.toFixed(2)}' × ${p.height.toFixed(2)}'</td><td>${Math.round(p.x*10)/10}, ${Math.round(p.z*10)/10}</td><td>${p.rotationY||0}°</td></tr>`).join('');
+}
+function printStageDesignSnapshot(){
+  if(!sdRenderer || !stageDesignCache.pieces.length){ toast('Add some pieces to the set first'); return; }
+  sdRenderer.render(sdScene, sdCamera); // ensure the buffer reflects the current camera angle
+  const dataUrl = sdRenderer.domElement.toDataURL('image/png');
+  const boardLabel = sdBoardMode==='sandbox' ? 'Practice Sandbox' : 'Production Set';
+  const body = `
+    <h1>${escapeHtml(state.productionName)}</h1>
+    <div class="meta">3D Set Design — ${boardLabel} — Printed ${new Date().toLocaleDateString()} (camera view at time of printing, not to scale)</div>
+    <img src="${dataUrl}" style="width:100%; border:1px solid #999; margin-bottom:16px;">
+    <h2>Pieces on Stage</h2>
+    <table><thead><tr><th>Piece</th><th>Dimensions (W×D×H)</th><th>Position (X,Z ft from center)</th><th>Rotation</th></tr></thead>
+    <tbody>${sdPieceManifestRows() || '<tr><td colspan="4">No pieces placed.</td></tr>'}</tbody></table>
+  `;
+  openPrintWindow(`${state.productionName} — 3D Set View`, body);
+}
+function printStageDesignGroundPlan(){
+  if(!stageDesignCache.pieces.length){ toast('Add some pieces to the set first'); return; }
+  const stageW = 50, stageD = 34; // matches the floor built in initStageDesignSceneIfNeeded
+  const scale = 12; // px per foot on screen; printing at 100%/no-scaling keeps this proportionally accurate
+  const svgW = stageW*scale, svgH = stageD*scale;
+  const cx = svgW/2, cy = svgH/2;
+  const toPx = (x,z)=>[cx + x*scale, cy + z*scale];
+  const pieceShapes = stageDesignCache.pieces.map(p=>{
+    const [px,pz] = toPx(p.x, p.z);
+    const w = p.width*scale, d = p.depth*scale;
+    const label = escapeHtml(p.label||PIECE_TYPES[p.type]?.label||p.type);
+    return `
+      <g transform="translate(${px},${pz}) rotate(${p.rotationY||0})">
+        <rect x="${-w/2}" y="${-d/2}" width="${w}" height="${d}" fill="${p.color}" fill-opacity="0.55" stroke="#111" stroke-width="1.5"/>
+        <text x="0" y="4" font-size="10" text-anchor="middle" fill="#111" font-family="Arial">${label}</text>
+      </g>`;
+  }).join('');
+  const svg = `
+    <svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="background:#fff; border:2px solid #111;">
+      <line x1="${cx}" y1="0" x2="${cx}" y2="${svgH}" stroke="#999" stroke-width="1" stroke-dasharray="4,4"/>
+      <text x="${cx+4}" y="14" font-size="10" fill="#999" font-family="Arial">Center Line</text>
+      <text x="8" y="${svgH-8}" font-size="10" fill="#333" font-family="Arial">Downstage / Audience →</text>
+      ${pieceShapes}
+      <g transform="translate(16,16)">
+        <line x1="0" y1="0" x2="${scale*5}" y2="0" stroke="#111" stroke-width="2"/>
+        <text x="0" y="-4" font-size="10" fill="#111" font-family="Arial">Scale: 5 ft (print at 100% / "Actual Size" for accuracy)</text>
+      </g>
+    </svg>`;
+  const boardLabel = sdBoardMode==='sandbox' ? 'Practice Sandbox' : 'Production Set';
+  const body = `
+    <h1>${escapeHtml(state.productionName)}</h1>
+    <div class="meta">Ground Plan — ${boardLabel} — Printed ${new Date().toLocaleDateString()} — Stage shown: ${stageW}' × ${stageD}'</div>
+    ${svg}
+    <h2 style="margin-top:16px;">Pieces on Stage</h2>
+    <table><thead><tr><th>Piece</th><th>Dimensions (W×D×H)</th><th>Position (X,Z ft from center)</th><th>Rotation</th></tr></thead>
+    <tbody>${sdPieceManifestRows()}</tbody></table>
+    <p style="font-size:10.5px; color:#777; margin-top:10px;">Auto-generated top-down plan from the 3D layout — position/rotation are exact, but treat this as a working plan, not a substitute for a hand-checked technical drawing before building.</p>
+  `;
+  openPrintWindow(`${state.productionName} — Ground Plan`, body);
+}
 async function renderStageDesignView(){
   const canView = canViewStageDesign();
   document.getElementById('stageDesignLockedMsg').style.display = canView ? 'none' : 'block';
@@ -4036,14 +4163,15 @@ async function renderStageDesignView(){
 
   const sandboxTabBtn = document.querySelector('#sdBoardTabs [data-board="sandbox"]');
   const u = currentUser();
-  sandboxTabBtn.style.display = u ? 'inline-block' : 'none';
+  sandboxTabBtn.style.display = (u || isDirectorOrStageMgmt()) ? 'inline-block' : 'none';
   document.getElementById('sdSandboxBrowseWrap').style.display = (sdBoardMode==='sandbox' && isDirectorOrStageMgmt()) ? 'block' : 'none';
   if(sdBoardMode==='sandbox' && isDirectorOrStageMgmt()){
     const sel = document.getElementById('sdSandboxBrowseSelect');
     const owners = state.sandboxOwners || [];
     const myId = u ? u.id : null;
-    const options = [{crewId: myId||'me', name:'My own sandbox'}, ...owners.filter(o=>o.crewId!==myId)];
-    sel.innerHTML = options.map(o=>`<option value="${o.crewId}" ${o.crewId===sdBoardOwnerId?'selected':''}>${escapeHtml(o.name)}</option>`).join('');
+    const options = u ? [{crewId: myId, name:'My own sandbox'}, ...owners.filter(o=>o.crewId!==myId)] : owners;
+    sel.innerHTML = options.length ? options.map(o=>`<option value="${o.crewId}" ${o.crewId===sdBoardOwnerId?'selected':''}>${escapeHtml(o.name)}</option>`).join('')
+      : `<option value="">No student sandboxes yet</option>`;
   }
 
   await initStageDesignSceneIfNeeded();
@@ -4109,7 +4237,7 @@ async function initLightingLabSceneIfNeeded(){
   llScene.background = new THREE.Color(0x050608);
   llCamera = new THREE.PerspectiveCamera(50, Math.max(wrap.clientWidth,1)/Math.max(wrap.clientHeight,1), 0.1, 500);
   llCamera.position.set(0, 16, 24);
-  llRenderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+  llRenderer = new THREE.WebGLRenderer({ canvas, antialias:true, preserveDrawingBuffer:true });
   llRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   llRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
   llRenderer.shadowMap.enabled = true; // real shadows, toggled per-light below based on intensity
@@ -4132,13 +4260,8 @@ async function initLightingLabSceneIfNeeded(){
   llCycMesh = new THREE.Mesh(new THREE.PlaneGeometry(30,14), new THREE.MeshStandardMaterial({ color:0x111111, roughness:1 }));
   llCycMesh.position.set(0, 7, -14); llCycMesh.receiveShadow = true; llScene.add(llCycMesh);
 
-  // Simple actor placeholders, one per stage area (fixed — not the movable practice pieces)
-  LL_AREA_DEFS.forEach(def=>{
-    const g = buildLLActorMesh(THREE);
-    g.position.set(def.x, 0, def.z);
-    llScene.add(g);
-    llActors.push(g);
-  });
+  // Stage starts blank — students use "+ Add Actor" / "+ Add Rehearsal Cube" to place
+  // movable practice pieces themselves, rather than fixed figures cluttering every area.
 
   // One light per channel (areas get SpotLights aimed down at their area; cyc channels get
   // SpotLights aimed at the backdrop). decay:0 so brightness doesn't require guessing large
@@ -4324,6 +4447,26 @@ function exportLightingCuesCsv(){
   if(!rows.length){ toast('Every saved cue is blackout — nothing to export'); return; }
   downloadCsvRows(['Cue Name','Channel','Intensity (%)','Color','Created By','Created At','Last Updated'], rows, `lighting-cues-${todayISO()}.csv`);
 }
+function printLightingLook(){
+  if(!llRenderer || !ui.llState){ toast('Nothing to print yet'); return; }
+  const active = LL_CHANNELS.filter((def,i)=>ui.llState[i] && ui.llState[i].intensity>0);
+  if(!active.length){ toast('Board is at blackout — nothing to print'); return; }
+  llRenderer.render(llScene, llCamera); // ensure the buffer reflects the current camera angle
+  const dataUrl = llRenderer.domElement.toDataURL('image/png');
+  const rows = LL_CHANNELS.map((def,i)=>{
+    const st = ui.llState[i];
+    if(!st || st.intensity<=0) return '';
+    return `<tr><td>${escapeHtml(def.label)}</td><td>${Math.round(st.intensity)}%</td><td><span style="display:inline-block;width:14px;height:14px;border:1px solid #999;background:${st.color};vertical-align:middle; margin-right:6px;"></span>${st.color}</td></tr>`;
+  }).join('');
+  const body = `
+    <h1>${escapeHtml(state.productionName)}</h1>
+    <div class="meta">Lighting Lab — Current Look — Printed ${new Date().toLocaleDateString()}</div>
+    <img src="${dataUrl}" style="width:100%; border:1px solid #999; margin-bottom:16px;">
+    <h2>Active Channels</h2>
+    <table><thead><tr><th>Channel</th><th>Intensity</th><th>Color</th></tr></thead><tbody>${rows}</tbody></table>
+  `;
+  openPrintWindow(`${state.productionName} — Lighting Look`, body);
+}
 function llCueChannelSummary(cue){
   const active = LL_CHANNELS.map((def,i)=>({ def, ch: cue.channels[i] })).filter(x=>x.ch && x.ch.intensity>0);
   if(!active.length) return `<div style="font-size:11px; color:var(--paper-dim); margin-top:4px;">All channels at 0% (blackout)</div>`;
@@ -4429,6 +4572,256 @@ async function renderLightingLabView(){
   LL_CHANNELS.forEach((def,i)=>llApplyChannel(i));
   syncLightingPieces();
   renderLightingCueList();
+}
+
+// ---------------- MAKEUP DESIGN LAB (2D canvas over generic templates) ----------------
+// Templates are generic/anonymous by design — never real student photos — same reasoning
+// as keeping Set Design sandboxes separate from real production data, just applied to a
+// safety concern instead of a collision concern.
+const MK_TEMPLATE_DIMS = { face_front:[300,380], face_profile:[300,380], body_front:[300,600] };
+const MK_TEMPLATES = {
+  face_front: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 380">
+    <ellipse cx="150" cy="150" rx="95" ry="120" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <ellipse cx="58" cy="155" rx="14" ry="22" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <ellipse cx="242" cy="155" rx="14" ry="22" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <ellipse cx="112" cy="130" rx="18" ry="10" fill="none" stroke="#333" stroke-width="2"/>
+    <ellipse cx="188" cy="130" rx="18" ry="10" fill="none" stroke="#333" stroke-width="2"/>
+    <circle cx="112" cy="130" r="4" fill="#333"/>
+    <circle cx="188" cy="130" r="4" fill="#333"/>
+    <path d="M 95 105 Q 112 95 129 105" fill="none" stroke="#333" stroke-width="2"/>
+    <path d="M 171 105 Q 188 95 205 105" fill="none" stroke="#333" stroke-width="2"/>
+    <path d="M 150 135 L 143 178 Q 150 185 157 178" fill="none" stroke="#333" stroke-width="2"/>
+    <path d="M 118 208 Q 150 224 182 208" fill="none" stroke="#333" stroke-width="2"/>
+    <rect x="120" y="255" width="60" height="50" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <path d="M 90 300 L 55 345 L 245 345 L 210 300 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+  </svg>`,
+  face_profile: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 380">
+    <path d="M 100 60 Q 180 50 200 110 Q 215 130 205 150 Q 225 155 215 175 Q 235 185 210 200 Q 220 215 195 220 Q 190 240 165 245 L 150 270 Q 145 285 120 290 L 100 330 L 230 330 L 230 380 L 60 380 L 60 150 Q 60 90 100 60 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <ellipse cx="130" cy="140" rx="10" ry="7" fill="none" stroke="#333" stroke-width="2"/>
+    <circle cx="130" cy="140" r="2.5" fill="#333"/>
+    <path d="M 110 120 Q 125 113 140 120" fill="none" stroke="#333" stroke-width="2"/>
+    <path d="M 75 175 Q 65 195 75 210" fill="none" stroke="#333" stroke-width="1.5"/>
+  </svg>`,
+  body_front: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 600">
+    <ellipse cx="150" cy="55" rx="40" ry="48" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <rect x="130" y="95" width="40" height="30" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <path d="M 90 125 Q 150 105 210 125 L 225 230 L 75 230 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <path d="M 90 130 L 40 260 L 55 270 L 100 160 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <path d="M 210 130 L 260 260 L 245 270 L 200 160 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <path d="M 100 230 L 90 420 L 130 420 L 140 300 L 150 300 L 160 420 L 200 420 L 190 230 Z" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <rect x="85" y="420" width="45" height="140" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+    <rect x="170" y="420" width="45" height="140" fill="#f0d9c0" stroke="#333" stroke-width="2"/>
+  </svg>`,
+};
+function mkTemplateDataUri(key){ return 'data:image/svg+xml;utf8,' + encodeURIComponent(MK_TEMPLATES[key]); }
+const MK_COLORS = ['#f0d9c0','#d9a679','#8a5a3c','#c0392b','#7a1f1f','#8e44ad','#5b8a3c','#c99a3c','#1a1a1a','#ffffff','#4a90d9'];
+const MK_WIDTHS = [1,3,6];
+
+function canUseMakeupLab(){ return isDirector() || !!currentUser(); }
+function canDrawMakeupLab(){
+  if(!state.makeupRestricted) return canUseMakeupLab();
+  return isDirectorOrStageMgmt() || canViewDept('hair_makeup') || canViewDept('costumes');
+}
+
+let mkCtx = null, mkCanvasInitialized = false;
+let mkDrawing = false, mkCurrentStroke = null;
+
+function mkRedrawCanvas(){
+  const canvas = document.getElementById('mkCanvas');
+  if(!canvas || !mkCtx) return;
+  mkCtx.clearRect(0,0,canvas.width,canvas.height);
+  (ui.mkStrokes||[]).forEach(s=>{
+    if(!s.points || s.points.length<2) return;
+    mkCtx.globalAlpha = s.opacity!=null ? s.opacity : 1;
+    mkCtx.beginPath();
+    mkCtx.strokeStyle = s.color; mkCtx.lineWidth = s.width; mkCtx.lineCap='round'; mkCtx.lineJoin='round';
+    mkCtx.moveTo(s.points[0].x, s.points[0].y);
+    for(let i=1;i<s.points.length;i++) mkCtx.lineTo(s.points[i].x, s.points[i].y);
+    mkCtx.stroke();
+  });
+  mkCtx.globalAlpha = 1;
+}
+function mkSetTemplate(key){
+  ui.mkTemplate = key;
+  const [w,h] = MK_TEMPLATE_DIMS[key];
+  const wrap = document.getElementById('mkCanvasWrap');
+  wrap.style.aspectRatio = `${w} / ${h}`;
+  wrap.style.backgroundImage = `url("${mkTemplateDataUri(key)}")`;
+  const canvas = document.getElementById('mkCanvas');
+  canvas.width = w; canvas.height = h;
+  mkCtx = canvas.getContext('2d');
+  mkRedrawCanvas();
+}
+function mkEraseAtPoint(p){
+  const threshold = 10;
+  const before = (ui.mkStrokes||[]).length;
+  ui.mkStrokes = (ui.mkStrokes||[]).filter(s=> !s.points.some(pt => Math.hypot(pt.x-p.x, pt.y-p.y) < threshold));
+  if(ui.mkStrokes.length !== before) mkRedrawCanvas();
+}
+function initMakeupCanvasIfNeeded(){
+  if(mkCanvasInitialized) return;
+  mkCanvasInitialized = true;
+  const canvas = document.getElementById('mkCanvas');
+  mkCtx = canvas.getContext('2d');
+
+  function canvasPoint(e){
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width/rect.width, scaleY = canvas.height/rect.height;
+    return { x:(e.clientX-rect.left)*scaleX, y:(e.clientY-rect.top)*scaleY };
+  }
+  canvas.addEventListener('pointerdown', (e)=>{
+    if(!canDrawMakeupLab()) return;
+    mkDrawing = true;
+    const p = canvasPoint(e);
+    if(ui.mkTool==='eraser'){ mkEraseAtPoint(p); }
+    else {
+      mkCurrentStroke = [p];
+      mkCtx.beginPath(); mkCtx.strokeStyle=ui.mkColor; mkCtx.lineWidth=ui.mkWidth; mkCtx.lineCap='round'; mkCtx.lineJoin='round';
+      mkCtx.globalAlpha = ui.mkOpacity;
+      mkCtx.moveTo(p.x,p.y);
+    }
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e)=>{
+    if(!mkDrawing) return;
+    const p = canvasPoint(e);
+    if(ui.mkTool==='eraser'){ mkEraseAtPoint(p); }
+    else if(mkCurrentStroke){ mkCurrentStroke.push(p); mkCtx.lineTo(p.x,p.y); mkCtx.stroke(); }
+  });
+  canvas.addEventListener('pointerup', ()=>{
+    mkDrawing = false;
+    mkCtx.globalAlpha = 1;
+    if(mkCurrentStroke && mkCurrentStroke.length>1){
+      if(!ui.mkStrokes) ui.mkStrokes = [];
+      ui.mkStrokes.push({ id:cryptoId(), points:mkCurrentStroke, color:ui.mkColor, width:ui.mkWidth, opacity:ui.mkOpacity });
+    }
+    mkCurrentStroke = null;
+  });
+}
+function renderMakeupToolbar(){
+  const colorRow = document.getElementById('mkColorRow');
+  colorRow.innerHTML = MK_COLORS.map((c,i)=>`<div class="sticky-color-swatch ${c===ui.mkColor?'active':''}" style="background:${c}" data-color="${c}"></div>`).join('');
+  colorRow.querySelectorAll('.sticky-color-swatch').forEach(sw=>sw.addEventListener('click', ()=>{
+    ui.mkColor = sw.dataset.color;
+    colorRow.querySelectorAll('.sticky-color-swatch').forEach(s=>s.classList.remove('active'));
+    sw.classList.add('active');
+  }));
+  const widthRow = document.getElementById('mkWidthRow');
+  const widthLabels = {1:'Thin',3:'Med',6:'Thick'};
+  widthRow.innerHTML = MK_WIDTHS.map(w=>`<button class="btn ghost small wb-width-btn ${w===ui.mkWidth?'active':''}" data-width="${w}">${widthLabels[w]}</button>`).join('');
+  widthRow.querySelectorAll('.wb-width-btn').forEach(btn=>btn.addEventListener('click', ()=>{
+    ui.mkWidth = parseInt(btn.dataset.width);
+    widthRow.querySelectorAll('.wb-width-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }));
+  document.getElementById('mkOpacitySlider').value = Math.round(ui.mkOpacity*100);
+}
+function mkGalleryCard(look){
+  const d = MK_TEMPLATE_DIMS[look.template];
+  const icon = look.template==='body_front' ? '🧍' : look.template==='face_profile' ? '👤' : '🙂';
+  const u = currentUser();
+  const canManage = isDirectorOrStageMgmt() || (u && u.id===look.authorId);
+  return `
+    <div class="mk-gallery-item">
+      <div class="mk-gallery-top">
+        <span>${icon} <b>${escapeHtml(look.name)}</b><br><span class="mono" style="font-size:10px;color:var(--paper-dim);">${escapeHtml(look.authorName)} · ${fmtDateTime(look.createdAt)}</span></span>
+      </div>
+      <div class="mk-gallery-actions">
+        <button class="btn ghost small" data-loadlook="${look.id}">Load</button>
+        ${canManage?`<button class="btn ghost small" data-renamelook="${look.id}">Rename</button><button class="btn danger small" data-dellook="${look.id}">✕</button>`:''}
+      </div>
+    </div>
+  `;
+}
+function renderMakeupGallery(){
+  const list = document.getElementById('mkGallery');
+  const looks = state.makeupLooks || [];
+  if(!looks.length){ list.innerHTML = `<div class="empty-state">No looks saved yet.</div>`; return; }
+  list.innerHTML = [...looks].reverse().map(mkGalleryCard).join('');
+  list.querySelectorAll('[data-loadlook]').forEach(btn=>btn.addEventListener('click', ()=>{
+    const look = looks.find(l=>l.id===btn.dataset.loadlook); if(!look) return;
+    if((ui.mkStrokes||[]).length && !confirm('Load this look? Your current unsaved canvas will be replaced.')) return;
+    ui.mkStrokes = JSON.parse(JSON.stringify(look.strokes));
+    document.querySelectorAll('#mkTemplateTabs button').forEach(b=>b.classList.toggle('active', b.dataset.template===look.template));
+    mkSetTemplate(look.template);
+    toast(`Loaded "${look.name}"`);
+  }));
+  list.querySelectorAll('[data-renamelook]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    const look = looks.find(l=>l.id===btn.dataset.renamelook); if(!look) return;
+    const newName = prompt('Rename look:', look.name);
+    if(newName===null) return;
+    const trimmed = newName.trim();
+    if(!trimmed){ toast('Name cannot be empty'); return; }
+    look.name = trimmed;
+    await saveState(); renderMakeupGallery();
+    toast('Look renamed');
+  }));
+  list.querySelectorAll('[data-dellook]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if(!confirm('Delete this look?')) return;
+    state.makeupLooks = state.makeupLooks.filter(l=>l.id!==btn.dataset.dellook);
+    await saveState(); renderMakeupGallery();
+    toast('Look deleted');
+  }));
+}
+async function mkSaveLook(){
+  if(!canDrawMakeupLab()){ toast('Sign in to save a look'); return; }
+  const name = document.getElementById('mkLookName').value.trim();
+  if(!name){ toast('Name this look first'); return; }
+  if(!(ui.mkStrokes||[]).length){ toast('Draw something first'); return; }
+  const author = currentUser()?.name || authUser?.displayName || 'Someone';
+  state.makeupLooks.push({
+    id:cryptoId(), name, template: ui.mkTemplate, strokes: JSON.parse(JSON.stringify(ui.mkStrokes)),
+    authorName:author, authorId: currentUser()?.id||null, createdAt:new Date().toISOString()
+  });
+  await saveState();
+  document.getElementById('mkLookName').value = '';
+  renderMakeupGallery();
+  toast('Look saved');
+}
+function mkLoadImage(src){
+  return new Promise((resolve,reject)=>{ const img = new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src; });
+}
+async function printMakeupLook(){
+  if(!(ui.mkStrokes||[]).length){ toast('Nothing drawn yet'); return; }
+  const [w,h] = MK_TEMPLATE_DIMS[ui.mkTemplate];
+  const temp = document.createElement('canvas'); temp.width=w; temp.height=h;
+  const tctx = temp.getContext('2d');
+  tctx.fillStyle = '#fff'; tctx.fillRect(0,0,w,h);
+  try{ const img = await mkLoadImage(mkTemplateDataUri(ui.mkTemplate)); tctx.drawImage(img,0,0,w,h); }catch(e){ console.warn('Template image failed to load for print', e); }
+  (ui.mkStrokes||[]).forEach(s=>{
+    if(!s.points || s.points.length<2) return;
+    tctx.globalAlpha = s.opacity!=null ? s.opacity : 1;
+    tctx.beginPath(); tctx.strokeStyle=s.color; tctx.lineWidth=s.width; tctx.lineCap='round'; tctx.lineJoin='round';
+    tctx.moveTo(s.points[0].x, s.points[0].y);
+    for(let i=1;i<s.points.length;i++) tctx.lineTo(s.points[i].x, s.points[i].y);
+    tctx.stroke();
+  });
+  tctx.globalAlpha = 1;
+  const dataUrl = temp.toDataURL('image/png');
+  const body = `<h1>${escapeHtml(state.productionName)}</h1><div class="meta">Makeup Design — Printed ${new Date().toLocaleDateString()}</div><img src="${dataUrl}" style="max-width:100%; border:1px solid #999;">`;
+  openPrintWindow(`${state.productionName} — Makeup Design`, body);
+}
+async function renderMakeupLabView(){
+  const canView = canUseMakeupLab();
+  document.getElementById('makeupLabLockedMsg').style.display = canView ? 'none' : 'block';
+  document.getElementById('makeupLabWrap').style.display = canView ? 'block' : 'none';
+  if(!canView) return;
+  if(!ui.mkTemplate) ui.mkTemplate = 'face_front';
+  if(!ui.mkStrokes) ui.mkStrokes = [];
+  if(!ui.mkTool) ui.mkTool = 'pen';
+  if(!ui.mkColor) ui.mkColor = MK_COLORS[0];
+  if(!ui.mkWidth) ui.mkWidth = MK_WIDTHS[1];
+  if(ui.mkOpacity===undefined) ui.mkOpacity = 1;
+
+  document.getElementById('mkRestrictWrap').style.display = isDirectorOrStageMgmt() ? 'block' : 'none';
+  document.getElementById('mkRestrictToggle').checked = !!state.makeupRestricted;
+  const canDraw = canDrawMakeupLab();
+  document.getElementById('mkToolWrap').style.display = canDraw ? 'flex' : 'none';
+
+  initMakeupCanvasIfNeeded();
+  mkSetTemplate(ui.mkTemplate);
+  renderMakeupToolbar();
+  renderMakeupGallery();
 }
 
 function renderReportDetail(r, dep, depState, container){
@@ -4759,6 +5152,7 @@ function switchView(view){
   if(view==='costumes') renderCostumesView();
   if(view==='stagedesign') renderStageDesignView();
   if(view==='lightinglab') renderLightingLabView();
+  if(view==='makeuplab') renderMakeupLabView();
   if(view==='notifications') renderNotifications();
   if(view==='setup') renderSetup();
 }
@@ -4780,6 +5174,8 @@ async function loadEverythingAndRender(){
   if(!state.pendingApprovals) state.pendingApprovals = [];
   if(!state.lightingCues) state.lightingCues = [];
   if(!state.sandboxOwners) state.sandboxOwners = [];
+  if(!state.makeupLooks) state.makeupLooks = [];
+  if(state.makeupRestricted===undefined) state.makeupRestricted = false;
   if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
   if(globalState.emailjs.templateBehavior === undefined) globalState.emailjs.templateBehavior = '';
   if(globalState.emailjs.templateFailingGrade === undefined) globalState.emailjs.templateFailingGrade = '';
@@ -5039,16 +5435,21 @@ async function init(){
       await switchStageDesignBoard('production', null);
     } else {
       const u = currentUser();
-      if(!u){ toast('Sign in to get your own practice sandbox'); return; }
-      await switchStageDesignBoard('sandbox', u.id);
+      if(u){
+        await switchStageDesignBoard('sandbox', u.id);
+      } else if(isDirectorOrStageMgmt()){
+        const owners = state.sandboxOwners || [];
+        if(!owners.length){ toast('No student sandboxes exist yet — a student needs to open their Practice Sandbox first'); return; }
+        await switchStageDesignBoard('sandbox', owners[0].crewId);
+      } else {
+        toast('Sign in to get your own practice sandbox'); return;
+      }
     }
     renderStageDesignView();
   }));
   document.getElementById('sdSandboxBrowseSelect').addEventListener('change', async (e)=>{
-    if(!isDirectorOrStageMgmt()) return;
-    const u = currentUser();
-    const ownerId = (e.target.value==='me' && u) ? u.id : e.target.value;
-    await switchStageDesignBoard('sandbox', ownerId);
+    if(!isDirectorOrStageMgmt() || !e.target.value) return;
+    await switchStageDesignBoard('sandbox', e.target.value);
   });
   document.getElementById('sdPropLabel').addEventListener('change', e=>updateSelectedPieceProp('label', e.target.value));
   document.getElementById('sdPropColor').addEventListener('input', e=>updateSelectedPieceProp('color', e.target.value));
@@ -5058,6 +5459,8 @@ async function init(){
   document.getElementById('sdPropRotation').addEventListener('change', e=>updateSelectedPieceProp('rotationY', parseFloat(e.target.value)||0));
   document.getElementById('sdPropBaseY').addEventListener('change', e=>updateSelectedPieceProp('y', parseFloat(e.target.value)||0));
   document.getElementById('sdDeletePieceBtn').addEventListener('click', deleteSelectedPiece);
+  document.getElementById('sdPrintSnapshotBtn').addEventListener('click', printStageDesignSnapshot);
+  document.getElementById('sdPrintGroundPlanBtn').addEventListener('click', printStageDesignGroundPlan);
   document.getElementById('llSaveCueBtn').addEventListener('click', llSaveCue);
   document.getElementById('llBlackoutBtn').addEventListener('click', ()=>{
     if(!canUseLightingLab()) return;
@@ -5068,6 +5471,38 @@ async function init(){
   });
   document.getElementById('llAddActorBtn').addEventListener('click', ()=>addLightingPiece('actor'));
   document.getElementById('llExportCuesBtn').addEventListener('click', exportLightingCuesCsv);
+  document.getElementById('llPrintLookBtn').addEventListener('click', printLightingLook);
+  document.querySelectorAll('#mkTemplateTabs button').forEach(btn=>btn.addEventListener('click', ()=>{
+    if((ui.mkStrokes||[]).length && !confirm('Switch templates? Your current unsaved canvas will be cleared.')) return;
+    document.querySelectorAll('#mkTemplateTabs button').forEach(b=>b.classList.toggle('active', b===btn));
+    ui.mkStrokes = [];
+    mkSetTemplate(btn.dataset.template);
+  }));
+  document.querySelectorAll('#mkToolWrap [data-tool]').forEach(btn=>btn.addEventListener('click', ()=>{
+    ui.mkTool = btn.dataset.tool;
+    document.querySelectorAll('#mkToolWrap [data-tool]').forEach(b=>b.classList.toggle('active', b===btn));
+  }));
+  document.getElementById('mkOpacitySlider').addEventListener('input', (e)=>{ ui.mkOpacity = parseInt(e.target.value)/100; });
+  document.getElementById('mkReportBtn').addEventListener('click', ()=>{
+    const reporter = currentUser()?.name || authUser?.displayName || activeEmail() || 'Someone';
+    logChange(`🚩 ${reporter} reported something inappropriate in the Makeup Design Lab — please review it.`, {type:'directorOnly'});
+    toast('Reported — Director and Stage Management have been notified');
+  });
+  document.getElementById('mkRestrictToggle').addEventListener('change', async (e)=>{
+    if(!isDirectorOrStageMgmt()) return;
+    state.makeupRestricted = e.target.checked;
+    await saveState();
+    renderMakeupLabView();
+    toast(state.makeupRestricted ? 'Drawing locked to Hair & Makeup/Costumes/staff' : 'Drawing opened back up to the team');
+  });
+  document.getElementById('mkClearCanvasBtn').addEventListener('click', ()=>{
+    if(!canDrawMakeupLab()) return;
+    if((ui.mkStrokes||[]).length && !confirm('Clear the current canvas? Unsaved work will be lost.')) return;
+    ui.mkStrokes = [];
+    mkRedrawCanvas();
+  });
+  document.getElementById('mkPrintBtn').addEventListener('click', printMakeupLook);
+  document.getElementById('mkSaveLookBtn').addEventListener('click', mkSaveLook);
   document.getElementById('llAddCubeBtn').addEventListener('click', ()=>addLightingPiece('cube'));
   document.getElementById('llClearPiecesBtn').addEventListener('click', ()=>{
     if(!canUseLightingLab()) return;
@@ -5188,4 +5623,4 @@ init();
 })();
 </script>
 </body>
-</html> 
+</html>
