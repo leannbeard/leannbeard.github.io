@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -457,6 +458,13 @@
   <div class="lamp" style="font-size:30px; margin-bottom:10px;">⏳</div>
   <h2 style="margin-bottom:6px;">Waiting for approval</h2>
   <p style="font-size:15px; color:var(--paper-dim); line-height:1.6;">You're signed in as <b id="pendingApprovalEmail" style="color:var(--paper);"></b>, but you're not on the roster yet. Your Director needs to approve your account before you can get in — let them know you're waiting, then check back and refresh this page.</p>
+</div>
+
+<div id="showPickerShell" style="display:none; max-width:520px; margin:70px auto; text-align:center; padding:0 24px;">
+  <div class="lamp" style="font-size:30px; margin-bottom:10px;">🎭</div>
+  <h2 style="margin-bottom:6px;">Which show are you working on?</h2>
+  <p style="font-size:14px; color:var(--paper-dim); line-height:1.6; margin-bottom:18px;">You're on the roster for more than one production.</p>
+  <div id="showPickerList"></div>
 </div>
 
 <main id="mainContent" style="display:none;">
@@ -992,6 +1000,8 @@
           <select id="rosterClassPeriod"><option>Class A</option><option>Class B</option><option>Class C</option><option>Class D</option></select>
         </div>
         <div class="checkbox-row" id="rosterDeptChecks" style="margin-bottom:10px;"></div>
+        <label style="font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">Add to Production(s)</label>
+        <div class="checkbox-row" id="rosterProdChecks" style="margin-bottom:10px;"></div>
         <div class="form-grid">
           <input type="text" id="rosterCastRole" placeholder="Cast role / character (if applicable)">
         </div>
@@ -1055,6 +1065,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, doc, getDoc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDbK6aryhE8wBUJ54Hq3_shhSOsJzSP-bY",
@@ -1149,7 +1160,6 @@ function defaultProductionState(name, seeded){
     behaviorConfig: { pointsPerDay:20, daysPerWeek:5 },
     participationConfig: { pointsPerDay:20, daysPerWeek:5 },
     announcements:[],
-    pendingApprovals:[],
     lightingCues:[],
     sandboxOwners:[],
     blockingNotes:[],
@@ -1158,7 +1168,7 @@ function defaultProductionState(name, seeded){
 }
 // Production defaults are created via defaultProductionState(name, seeded) above.
 
-const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null, emailjs:{ publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' }, groupme:{ botId:'' } };
+const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null, emailjs:{ publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' }, groupme:{ botId:'' }, rosterIndex:{}, pendingApprovals:[] };
 
 let state = null;
 let globalState = null;
@@ -1280,10 +1290,12 @@ async function createProduction(name, copyFromId){
   const prodState = defaultProductionState(name, false);
   if(copyFromId){
     const src = await loadProductionState(copyFromId);
-    prodState.crew = (src.crew||[]).map(c=>({...c, departments:[]}));
+    prodState.crew = (src.crew||[]).map(c=>({...c, id:cryptoId(), departments:[]}));
   }
   await saveProductionStateFor(prodId, prodState);
   globalState.productions.push({ id:prodId, name, createdAt:new Date().toISOString() });
+  prodState.crew.forEach(c=>{ if(c.email) rosterIndexAdd(c.email, prodId, name, c.id); });
+  await saveGlobalState();
   return prodId;
 }
 async function switchToProduction(id){
@@ -1319,12 +1331,14 @@ function showSignedOutShell(){
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('signedOutShell').style.display = 'block';
   document.getElementById('pendingApprovalShell').style.display = 'none';
+  document.getElementById('showPickerShell').style.display = 'none';
 }
 function showAppShell(){
   document.getElementById('tabsWrap').style.display = 'flex';
   document.getElementById('mainContent').style.display = 'block';
   document.getElementById('signedOutShell').style.display = 'none';
   document.getElementById('pendingApprovalShell').style.display = 'none';
+  document.getElementById('showPickerShell').style.display = 'none';
   updateTabsScrollButtons();
 }
 function showPendingApprovalShell(){
@@ -1332,8 +1346,43 @@ function showPendingApprovalShell(){
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('signedOutShell').style.display = 'none';
   document.getElementById('pendingApprovalShell').style.display = 'block';
+  document.getElementById('showPickerShell').style.display = 'none';
   const emailEl = document.getElementById('pendingApprovalEmail');
   if(emailEl) emailEl.textContent = activeEmail() || '';
+}
+function showProductionPickerShell(matches){
+  document.getElementById('tabsWrap').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('signedOutShell').style.display = 'none';
+  document.getElementById('pendingApprovalShell').style.display = 'none';
+  document.getElementById('showPickerShell').style.display = 'block';
+  const list = document.getElementById('showPickerList');
+  list.innerHTML = matches.map(m=>`<button class="btn" style="display:block; width:100%; margin-bottom:10px;" data-prodid="${m.prodId}">${escapeHtml(m.prodName)}</button>`).join('');
+  list.querySelectorAll('[data-prodid]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    currentProductionId = btn.dataset.prodid;
+    await finishLoadingChosenProduction();
+  }));
+}
+async function finishLoadingChosenProduction(){
+  state = await loadProductionState(currentProductionId);
+  if(!state.costumeRecords) state.costumeRecords = [];
+  if(!state.behaviorIncidents) state.behaviorIncidents = [];
+  if(!state.behaviorConfig) state.behaviorConfig = { pointsPerDay:20, daysPerWeek:5 };
+  if(!state.participationConfig) state.participationConfig = { pointsPerDay:20, daysPerWeek:5 };
+  if(!state.announcements) state.announcements = [];
+  if(!state.lightingCues) state.lightingCues = [];
+  if(!state.sandboxOwners) state.sandboxOwners = [];
+  if(!state.blockingNotes) state.blockingNotes = [];
+  if(!isApprovedUser()){
+    await registerPendingApproval();
+    showPendingApprovalShell();
+    return;
+  }
+  showAppShell();
+  renderAll();
+  renderCostumeMeasureGrid(); renderCostumePieces();
+  initEmailJs();
+  renderHeader();
 }
 function updateTabsScrollButtons(){
   const nav = document.getElementById('mainTabs');
@@ -1352,17 +1401,16 @@ function isApprovedUser(){
 async function registerPendingApproval(){
   const email = activeEmail();
   if(!email) return;
-  if(!state.pendingApprovals) state.pendingApprovals = [];
-  if(state.pendingApprovals.some(p=>p.email.toLowerCase()===email.toLowerCase())) return;
-  state.pendingApprovals.push({ id:cryptoId(), email, displayName: (authUser&&authUser.displayName)||email, requestedAt:new Date().toISOString() });
-  logChange(`🔔 New account request awaiting approval: ${(authUser&&authUser.displayName)||email} (${email}).`, {type:'directorOnly'});
-  await saveState();
+  if(!globalState.pendingApprovals) globalState.pendingApprovals = [];
+  if(globalState.pendingApprovals.some(p=>p.email.toLowerCase()===email.toLowerCase())) return;
+  globalState.pendingApprovals.push({ id:cryptoId(), email, displayName: (authUser&&authUser.displayName)||email, requestedAt:new Date().toISOString() });
+  await saveGlobalState();
 }
 function renderPendingApprovals(){
   const card = document.getElementById('pendingApprovalsCard');
   card.style.display = isDirector() ? 'block' : 'none';
   if(!isDirector()) return;
-  const pending = state.pendingApprovals || [];
+  const pending = globalState.pendingApprovals || [];
   const badge = document.getElementById('pendingApprovalsBadge');
   badge.style.display = pending.length ? 'inline-block' : 'none';
   badge.textContent = pending.length;
@@ -1383,12 +1431,12 @@ function renderPendingApprovals(){
     document.getElementById('rosterName').value = p.displayName;
     document.getElementById('rosterEmail').value = p.email;
     document.getElementById('rosterName').scrollIntoView({behavior:'smooth', block:'center'});
-    toast('Fill in their team & class period below, then click "Add Cast / Crew Member" to finish approving');
+    toast('Pick which production(s) below, fill in their team & class period, then click "Add Cast / Crew Member"');
   }));
   list.querySelectorAll('[data-deny]').forEach(btn=>btn.addEventListener('click', async ()=>{
     if(!confirm('Deny this request? They\'ll stay blocked from the app.')) return;
-    state.pendingApprovals = state.pendingApprovals.filter(x=>x.id!==btn.dataset.deny);
-    await saveState(); renderPendingApprovals();
+    globalState.pendingApprovals = globalState.pendingApprovals.filter(x=>x.id!==btn.dataset.deny);
+    await saveGlobalState(); renderPendingApprovals();
     toast('Request denied');
   }));
 }
@@ -1405,6 +1453,48 @@ function currentUser(){
   if(!email) return null;
   const lower = email.toLowerCase();
   return state.crew.find(c=>(c.email||'').toLowerCase()===lower) || null;
+}
+// Cross-production lookup: which production(s) is this email actually on the roster for?
+// Needed because a student can be signed in while a DIFFERENT production than theirs
+// happens to be the Director's globally-active one — we never want to gate their access
+// on whatever show the Director last had open.
+function rosterIndexAdd(email, prodId, prodName, crewId){
+  if(!email) return;
+  const key = email.toLowerCase();
+  if(!globalState.rosterIndex) globalState.rosterIndex = {};
+  const list = globalState.rosterIndex[key] || [];
+  if(!list.some(m=>m.prodId===prodId)) list.push({ prodId, prodName, crewId });
+  globalState.rosterIndex[key] = list;
+}
+function rosterIndexRemove(email, prodId){
+  if(!email || !globalState.rosterIndex) return;
+  const key = email.toLowerCase();
+  const list = globalState.rosterIndex[key];
+  if(!list) return;
+  globalState.rosterIndex[key] = list.filter(m=>m.prodId!==prodId);
+  if(!globalState.rosterIndex[key].length) delete globalState.rosterIndex[key];
+}
+// One-time backfill for productions that already had crew before this index existed —
+// scans every production once and rebuilds the index from scratch. Safe to call repeatedly;
+// only actually does the (relatively expensive) scan when the index looks empty/missing.
+async function ensureRosterIndexBackfilled(){
+  if(globalState.rosterIndex && Object.keys(globalState.rosterIndex).length) return;
+  if(!globalState.productions || !globalState.productions.length) return;
+  const freshIndex = {};
+  for(const p of globalState.productions){
+    const data = await fsGet(PROD_COLLECTION, p.id);
+    if(data && Array.isArray(data.crew)){
+      data.crew.forEach(c=>{
+        if(!c.email) return;
+        const key = c.email.toLowerCase();
+        const list = freshIndex[key] || [];
+        list.push({ prodId:p.id, prodName:p.name, crewId:c.id });
+        freshIndex[key] = list;
+      });
+    }
+  }
+  globalState.rosterIndex = freshIndex;
+  await saveGlobalState();
 }
 function isDirector(){
   // Director access requires real, verified Google sign-in — never the manual fallback.
@@ -1757,6 +1847,12 @@ function renderProductionsView(){
     try{
       await deleteProductionCompletely(p.id);
       globalState.productions = globalState.productions.filter(x=>x.id!==p.id);
+      if(globalState.rosterIndex){
+        Object.keys(globalState.rosterIndex).forEach(email=>{
+          globalState.rosterIndex[email] = globalState.rosterIndex[email].filter(m=>m.prodId!==p.id);
+          if(!globalState.rosterIndex[email].length) delete globalState.rosterIndex[email];
+        });
+      }
       await saveGlobalState();
       renderProductionsView();
       toast(`"${p.name}" deleted`);
@@ -1873,7 +1969,7 @@ function renderDashboard(){
   const items = [];
   if(pendingConflicts) items.push(`<div class="list-item"><span>⚠ ${pendingConflicts} conflict(s) awaiting a decision</span><span class="d">Conflicts tab</span></div>`);
   if(reportsToGrade) items.push(`<div class="list-item"><span>📋 ${reportsToGrade} report(s) awaiting review/grade</span><span class="d">Departments tab</span></div>`);
-  if(isDirector() && (state.pendingApprovals||[]).length) items.push(`<div class="list-item" style="color:var(--amber);"><span>🔔 ${state.pendingApprovals.length} account(s) awaiting approval</span><span class="d">Setup tab</span></div>`);
+  if(isDirector() && (globalState.pendingApprovals||[]).length) items.push(`<div class="list-item" style="color:var(--amber);"><span>🔔 ${globalState.pendingApprovals.length} account(s) awaiting approval</span><span class="d">Setup tab</span></div>`);
   if(isDirectorOrStageMgmt()){
     attendanceAlerts().forEach(a=>{
       items.push(`<div class="list-item" style="color:var(--red);"><span>🚩 ${a.crew.name} has ${a.count} unexcused absence${a.count!==1?'s':''}</span><span class="d">${a.crew.classPeriod||''}</span></div>`);
@@ -5188,6 +5284,8 @@ function renderSetup(){
 
   const deptWrap = document.getElementById('rosterDeptChecks');
   deptWrap.innerHTML = DEPARTMENTS.map(d=>`<label><input type="checkbox" value="${d.key}"> ${d.label}</label>`).join('');
+  const prodWrap = document.getElementById('rosterProdChecks');
+  prodWrap.innerHTML = (globalState.productions||[]).map(p=>`<label><input type="checkbox" value="${p.id}" ${p.id===currentProductionId?'checked':''}> ${escapeHtml(p.name)}</label>`).join('');
   const list = document.getElementById('rosterList'); list.innerHTML = '';
   if(!state.crew.length){ list.innerHTML = `<div class="empty-state">No cast/crew added yet.</div>`; }
   state.crew.forEach(c=>{
@@ -5211,8 +5309,11 @@ function renderSetup(){
       row.querySelector('[data-editemail]').addEventListener('click', async ()=>{
         const val = prompt(`Sign-in email for ${c.name}:`, c.email||'');
         if(val===null) return;
+        const oldEmail = c.email;
         c.email = val.trim();
-        await saveState(); renderSetup();
+        if(oldEmail) rosterIndexRemove(oldEmail, currentProductionId);
+        if(c.email){ const prodMeta = globalState.productions.find(p=>p.id===currentProductionId); rosterIndexAdd(c.email, currentProductionId, prodMeta?prodMeta.name:'', c.id); }
+        await saveState(); await saveGlobalState(); renderSetup();
         toast('Email updated');
       });
       if(isCast){
@@ -5242,7 +5343,9 @@ function renderSetup(){
   });
   list.querySelectorAll('.task-del').forEach(btn=>btn.addEventListener('click', async ()=>{
     if(!isDirector()) return;
+    const removed = state.crew.find(c=>c.id===btn.dataset.id);
     state.crew = state.crew.filter(c=>c.id!==btn.dataset.id);
+    if(removed && removed.email){ rosterIndexRemove(removed.email, currentProductionId); await saveGlobalState(); }
     await saveState(); renderSetup(); renderHeader();
   }));
 }
@@ -5252,15 +5355,18 @@ async function bulkImportCrew(){
   const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
   if(!lines.length){ toast('Paste at least one name'); return; }
   let count = 0;
+  const prodMeta = globalState.productions.find(p=>p.id===currentProductionId);
   lines.forEach(line=>{
     const parts = line.split(',').map(p=>p.trim());
     const name = parts[0];
     if(!name) return;
     const email = parts[1] && parts[1].includes('@') ? parts[1] : '';
-    state.crew.push({ id:cryptoId(), name, role:'student', classPeriod:'Class A', departments:[], castRole:'', email, parentEmail:'', parentPhone:'' });
+    const newMember = { id:cryptoId(), name, role:'student', classPeriod:'Class A', departments:[], castRole:'', email, parentEmail:'', parentPhone:'' };
+    state.crew.push(newMember);
+    if(email) rosterIndexAdd(email, currentProductionId, prodMeta?prodMeta.name:'', newMember.id);
     count++;
   });
-  await saveState();
+  await saveState(); await saveGlobalState();
   document.getElementById('bulkImportText').value = '';
   renderSetup(); renderHeader();
   toast(`${count} student(s) imported — assign teams with "Edit Teams"`);
@@ -5276,15 +5382,31 @@ async function addCrew(){
   const email = document.getElementById('rosterEmail').value.trim();
   const parentEmail = document.getElementById('rosterParentEmail').value.trim();
   const parentPhone = document.getElementById('rosterParentPhone').value.trim();
-  state.crew.push({ id:cryptoId(), name, role, classPeriod, departments, castRole, email, parentEmail, parentPhone });
-  if(email && state.pendingApprovals && state.pendingApprovals.length){
-    state.pendingApprovals = state.pendingApprovals.filter(p=>p.email.toLowerCase()!==email.toLowerCase());
+  let prodIds = Array.from(document.querySelectorAll('#rosterProdChecks input:checked')).map(i=>i.value);
+  if(!prodIds.length) prodIds = [currentProductionId]; // safety net — always add to at least the current show
+
+  for(const prodId of prodIds){
+    const newMember = { id:cryptoId(), name, role, classPeriod, departments, castRole, email, parentEmail, parentPhone };
+    if(prodId === currentProductionId){
+      state.crew.push(newMember);
+      await saveState();
+    } else {
+      const otherState = await loadProductionState(prodId);
+      if(!otherState.crew) otherState.crew = [];
+      otherState.crew.push(newMember);
+      await fsSet(PROD_COLLECTION, prodId, otherState);
+    }
+    const prodMeta = globalState.productions.find(p=>p.id===prodId);
+    if(email) rosterIndexAdd(email, prodId, prodMeta?prodMeta.name:'', newMember.id);
   }
-  await saveState();
+  if(email && globalState.pendingApprovals && globalState.pendingApprovals.length){
+    globalState.pendingApprovals = globalState.pendingApprovals.filter(p=>p.email.toLowerCase()!==email.toLowerCase());
+  }
+  await saveGlobalState();
   document.getElementById('rosterName').value=''; document.getElementById('rosterCastRole').value=''; document.getElementById('rosterEmail').value=''; document.getElementById('rosterParentEmail').value=''; document.getElementById('rosterParentPhone').value='';
   document.querySelectorAll('#rosterDeptChecks input').forEach(i=>i.checked=false);
   renderSetup(); renderHeader();
-  toast('Crew member added');
+  toast(prodIds.length>1 ? `Crew member added to ${prodIds.length} productions` : 'Crew member added');
 }
 
 // ---------------- NAV ----------------
@@ -5316,22 +5438,45 @@ function renderAll(){
 
 async function loadEverythingAndRender(){
   globalState = await loadOrMigrateGlobalState();
+  if(!globalState.rosterIndex) globalState.rosterIndex = {};
+  if(!globalState.pendingApprovals) globalState.pendingApprovals = [];
   if(!globalState.activeProductionId && globalState.productions.length){ globalState.activeProductionId = globalState.productions[0].id; }
-  currentProductionId = globalState.activeProductionId;
+  if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
+  if(globalState.emailjs.templateBehavior === undefined) globalState.emailjs.templateBehavior = '';
+  if(globalState.emailjs.templateFailingGrade === undefined) globalState.emailjs.templateFailingGrade = '';
+  if(!globalState.groupme) globalState.groupme = { botId:'' };
+  await ensureRosterIndexBackfilled();
+
+  // Directors manage whichever production they've switched to (Productions tab).
+  // Everyone else lands in whichever show(s) their own email is actually rostered on —
+  // never just whatever the Director happens to have open at the moment.
+  const email = activeEmail();
+  const isDirectorEmail = !!(email && globalState.directorEmails.includes(email));
+  if(isDirectorEmail){
+    currentProductionId = globalState.activeProductionId;
+  } else if(email){
+    const matches = globalState.rosterIndex[email.toLowerCase()] || [];
+    if(matches.length === 1){
+      currentProductionId = matches[0].prodId;
+    } else if(matches.length > 1){
+      showProductionPickerShell(matches);
+      return;
+    } else {
+      currentProductionId = globalState.activeProductionId; // not on any roster — pending-approval path below handles this
+    }
+  } else {
+    currentProductionId = globalState.activeProductionId;
+  }
+
   state = await loadProductionState(currentProductionId);
   if(!state.costumeRecords) state.costumeRecords = [];
   if(!state.behaviorIncidents) state.behaviorIncidents = [];
   if(!state.behaviorConfig) state.behaviorConfig = { pointsPerDay:20, daysPerWeek:5 };
   if(!state.participationConfig) state.participationConfig = { pointsPerDay:20, daysPerWeek:5 };
   if(!state.announcements) state.announcements = [];
-  if(!state.pendingApprovals) state.pendingApprovals = [];
   if(!state.lightingCues) state.lightingCues = [];
   if(!state.sandboxOwners) state.sandboxOwners = [];
   if(!state.blockingNotes) state.blockingNotes = [];
-  if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
-  if(globalState.emailjs.templateBehavior === undefined) globalState.emailjs.templateBehavior = '';
-  if(globalState.emailjs.templateFailingGrade === undefined) globalState.emailjs.templateFailingGrade = '';
-  if(!globalState.groupme) globalState.groupme = { botId:'' };
 
   if(!isApprovedUser()){
     await registerPendingApproval();
