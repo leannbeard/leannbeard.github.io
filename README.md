@@ -423,6 +423,7 @@
           <div id="authUserName" style="font-size:13px; font-weight:600;"></div>
           <div id="authUserRole" class="mono" style="font-size:11px; color:var(--paper-dim);"></div>
         </div>
+        <button class="btn ghost small" id="switchShowBtn" style="display:none;">Switch Show</button>
         <button class="btn ghost small" id="signOutBtn">Sign out</button>
       </div>
     </div>
@@ -1065,7 +1066,6 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, doc, getDoc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDbK6aryhE8wBUJ54Hq3_shhSOsJzSP-bY",
@@ -1300,6 +1300,9 @@ async function createProduction(name, copyFromId){
 }
 async function switchToProduction(id){
   stopWorkspaceListener();
+  pauseStageDesignScene();
+  pauseLightingLabScene();
+  pauseBlockingScene();
   const prod = await loadProductionState(id);
   currentProductionId = id;
   state = prod;
@@ -1364,6 +1367,10 @@ function showProductionPickerShell(matches){
   }));
 }
 async function finishLoadingChosenProduction(){
+  stopWorkspaceListener();
+  pauseStageDesignScene();
+  pauseLightingLabScene();
+  pauseBlockingScene();
   state = await loadProductionState(currentProductionId);
   if(!state.costumeRecords) state.costumeRecords = [];
   if(!state.behaviorIncidents) state.behaviorIncidents = [];
@@ -1711,7 +1718,7 @@ async function checkAndSendGroupMeReminders(){
   let anySent = false;
   for(const ev of state.calendar){
     if(ev.reminderSent || ev.date !== tomorrowISO) continue;
-    await sendGroupMe(`📢 Reminder: "${ev.title}" is tomorrow${ev.startTime?' at '+ev.startTime:''}${ev.location?' — '+ev.location:''}${groupMeCallInfo(ev)}.`);
+    await sendGroupMe(`📢 Reminder: "${escapeHtml(ev.title)}" is tomorrow${ev.startTime?' at '+ev.startTime:''}${ev.location?' — '+ev.location:''}${groupMeCallInfo(ev)}.`);
     ev.reminderSent = true;
     anySent = true;
   }
@@ -1782,10 +1789,13 @@ function renderHeader(){
     if(state){
       const u = currentUser();
       if(isDirector()) roleLabel = 'Director (verified)';
-      else if(u) roleLabel = `${u.name} · ${deptInfo((u.departments||[])[0]||'').label || 'No team yet'}`;
+      else if(u) roleLabel = `${escapeHtml(u.name)} · ${deptInfo((u.departments||[])[0]||'').label || 'No team yet'}`;
       else roleLabel = 'Not on the roster yet';
     }
     document.getElementById('authUserRole').textContent = roleLabel;
+    const switchBtn = document.getElementById('switchShowBtn');
+    const myMatches = (globalState && globalState.rosterIndex) ? (globalState.rosterIndex[email.toLowerCase()]||[]) : [];
+    switchBtn.style.display = (!isDirector() && myMatches.length > 1) ? 'inline-block' : 'none';
   }
   if(!state) return; // production data hasn't loaded yet (e.g. still signing in) — nothing more to show
   document.getElementById('prodName').value = state.productionName;
@@ -1972,7 +1982,7 @@ function renderDashboard(){
   if(isDirector() && (globalState.pendingApprovals||[]).length) items.push(`<div class="list-item" style="color:var(--amber);"><span>🔔 ${globalState.pendingApprovals.length} account(s) awaiting approval</span><span class="d">Setup tab</span></div>`);
   if(isDirectorOrStageMgmt()){
     attendanceAlerts().forEach(a=>{
-      items.push(`<div class="list-item" style="color:var(--red);"><span>🚩 ${a.crew.name} has ${a.count} unexcused absence${a.count!==1?'s':''}</span><span class="d">${a.crew.classPeriod||''}</span></div>`);
+      items.push(`<div class="list-item" style="color:var(--red);"><span>🚩 ${escapeHtml(a.crew.name)} has ${a.count} unexcused absence${a.count!==1?'s':''}</span><span class="d">${a.crew.classPeriod||''}</span></div>`);
     });
   }
   attn.innerHTML = items.length ? items.join('') : `<div class="empty-state">Nothing needs attention right now.</div>`;
@@ -1987,7 +1997,7 @@ function renderCalendarForm(){
   const specific = document.getElementById('calSpecific');
   specific.onchange = ()=>{ document.getElementById('calStudentPickWrap').style.display = specific.checked ? 'block' : 'none'; };
   const studentWrap = document.getElementById('calStudentChecks');
-  studentWrap.innerHTML = state.crew.filter(c=>c.role==='student').map(c=>`<label><input type="checkbox" value="${c.id}"> ${c.name}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No students on roster yet.</span>';
+  studentWrap.innerHTML = state.crew.filter(c=>c.role==='student').map(c=>`<label><input type="checkbox" value="${c.id}"> ${escapeHtml(c.name)}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No students on roster yet.</span>';
 }
 function visibleToCurrentUser(ev){
   if(isDirector() || !ev.isSpecificCall) return true;
@@ -2073,7 +2083,7 @@ function renderCalMonth(){
 }
 
 function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
-function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // ---------------- PRINTING ----------------
 // Opens a clean, white-background, ink-friendly version in a new tab rather than trying to
@@ -2166,7 +2176,7 @@ function buildEventCardEl(ev){
       </div>
       <div class="edit-student-wrap" style="display:${ev.isSpecificCall?'block':'none'}; margin-bottom:10px;">
         <div class="checkbox-row edit-student-checks">
-          ${state.crew.filter(c=>c.role==='student').map(c=>`<label><input type="checkbox" value="${c.id}" ${(ev.calledStudentIds||[]).includes(c.id)?'checked':''}> ${c.name}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No students on roster yet.</span>'}
+          ${state.crew.filter(c=>c.role==='student').map(c=>`<label><input type="checkbox" value="${c.id}" ${(ev.calledStudentIds||[]).includes(c.id)?'checked':''}> ${escapeHtml(c.name)}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No students on roster yet.</span>'}
         </div>
       </div>
       <textarea class="edit-notes full-width" style="min-height:50px;" placeholder="Notes">${ev.notes||''}</textarea>
@@ -2196,10 +2206,10 @@ function buildEventCardEl(ev){
       ev.calledStudentIds = Array.from(card.querySelectorAll('.edit-student-checks input:checked')).map(i=>i.value);
       const moved = before.date!==ev.date || before.startTime!==ev.startTime;
       if(moved) ev.reminderSent = false;
-      logChange(`Edited: "${before.title}"${moved ? ` — moved from ${fmtDate(before.date)} ${before.startTime||''} to ${fmtDate(ev.date)} ${ev.startTime||''}` : ` (${fmtDate(ev.date)})`}.`, eventScope(ev));
+      logChange(`Edited: "${escapeHtml(before.title)}"${moved ? ` — moved from ${fmtDate(before.date)} ${before.startTime||''} to ${fmtDate(ev.date)} ${ev.startTime||''}` : ` (${fmtDate(ev.date)})`}.`, eventScope(ev));
       ui.editingEventId = null;
       await saveState(); renderCalMonth(); renderCalendar(); renderNotifications(); renderDashboard();
-      if(moved) sendGroupMe(`🔄 "${ev.title}" has been rescheduled to ${fmtDate(ev.date)}${ev.startTime?' at '+ev.startTime:''}${ev.location?' — '+ev.location:''}${groupMeCallInfo(ev)}.`);
+      if(moved) sendGroupMe(`🔄 "${escapeHtml(ev.title)}" has been rescheduled to ${fmtDate(ev.date)}${ev.startTime?' at '+ev.startTime:''}${ev.location?' — '+ev.location:''}${groupMeCallInfo(ev)}.`);
       toast('Call updated — crew notified');
     });
     return card;
@@ -2213,7 +2223,7 @@ function buildEventCardEl(ev){
     ${ev.isSpecificCall ? `<div class="chip-row">
       <span class="chip outline">Specific call</span>
       ${(ev.calledDepartments||[]).map(k=>`<span class="chip" style="background:${deptInfo(k).color}">${deptInfo(k).label}</span>`).join('')}
-      ${(ev.calledStudentIds||[]).map(id=>{ const c=state.crew.find(x=>x.id===id); return c?`<span class="chip outline">${c.name}</span>`:''; }).join('')}
+      ${(ev.calledStudentIds||[]).map(id=>{ const c=state.crew.find(x=>x.id===id); return c?`<span class="chip outline">${escapeHtml(c.name)}</span>`:''; }).join('')}
     </div>` : ''}
     ${ev.notes?`<div class="cal-notes">${escapeHtml(ev.notes)}</div>`:''}
     ${conflictsBlockForEvent(ev)}
@@ -2225,11 +2235,11 @@ function buildEventCardEl(ev){
       ui.editingEventId = ev.id; renderCalMonth(); renderCalendar();
     });
     card.querySelector('.del-btn').addEventListener('click', async ()=>{
-      if(!confirm(`Cancel "${ev.title}" on ${fmtDate(ev.date)}?`)) return;
+      if(!confirm(`Cancel "${escapeHtml(ev.title)}" on ${fmtDate(ev.date)}?`)) return;
       state.calendar = state.calendar.filter(e=>e.id!==ev.id);
-      logChange(`Cancelled: "${ev.title}" originally set for ${fmtDate(ev.date)}.`, eventScope(ev));
+      logChange(`Cancelled: "${escapeHtml(ev.title)}" originally set for ${fmtDate(ev.date)}.`, eventScope(ev));
       await saveState(); renderCalMonth(); renderCalendar(); renderNotifications(); renderDashboard();
-      sendGroupMe(`❌ "${ev.title}" originally set for ${fmtDate(ev.date)} has been cancelled${groupMeCallInfo(ev)}.`);
+      sendGroupMe(`❌ "${escapeHtml(ev.title)}" originally set for ${fmtDate(ev.date)} has been cancelled${groupMeCallInfo(ev)}.`);
       toast('Call cancelled — crew notified');
     });
   }
@@ -2334,15 +2344,15 @@ function renderConflictForm(){
   const whoSel = document.getElementById('conflictWho');
   if(director){
     whoSel.disabled = false;
-    whoSel.innerHTML = state.crew.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    whoSel.innerHTML = state.crew.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     if(cu) whoSel.value = cu.id;
   } else {
     whoSel.disabled = true;
-    whoSel.innerHTML = `<option value="${cu.id}">${cu.name} (you)</option>`;
+    whoSel.innerHTML = `<option value="${cu.id}">${escapeHtml(cu.name)} (you)</option>`;
   }
 
   const sel = document.getElementById('conflictEvent');
-  sel.innerHTML = future.map(e=>`<option value="${e.id}">${e.title} — ${fmtDate(e.date)}</option>`).join('');
+  sel.innerHTML = future.map(e=>`<option value="${e.id}">${escapeHtml(e.title)} — ${fmtDate(e.date)}</option>`).join('');
 }
 function renderConflicts(){
   renderConflictForm();
@@ -2404,7 +2414,7 @@ function renderAttendanceMarkView(){
     const card = document.createElement('div'); card.className = 'card';
     card.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-        <div><h3 style="margin:0;">${ev.title}</h3><div class="cal-meta">${fmtDate(ev.date)}${ev.startTime?' · '+ev.startTime:''}</div></div>
+        <div><h3 style="margin:0;">${escapeHtml(ev.title)}</h3><div class="cal-meta">${fmtDate(ev.date)}${ev.startTime?' · '+ev.startTime:''}</div></div>
         <span class="mono" style="font-size:12px; color:var(--paper-dim);">✓${counts.present} · ✕${counts.absent} · ⊘${counts.excused}${counts.unmarked?' · '+counts.unmarked+' unmarked':''}</span>
       </div>
       <div id="att-rows-${ev.id}" style="margin-top:12px;"></div>
@@ -2416,7 +2426,7 @@ function renderAttendanceMarkView(){
       const status = attendanceStatus(ev, c.id);
       const row = document.createElement('div'); row.className = 'list-item';
       row.innerHTML = `
-        <span>${c.name}</span>
+        <span>${escapeHtml(c.name)}</span>
         <span style="display:flex; gap:5px;">
           <button class="btn small" style="border:1px solid var(--sage); background:${status==='present'?'var(--sage)':'transparent'}; color:${status==='present'?'var(--ink)':'var(--paper)'};" data-att="present" data-event="${ev.id}" data-crew="${c.id}">Present</button>
           <button class="btn small" style="border:1px solid var(--red); background:${status==='absent'?'var(--red)':'transparent'}; color:${status==='absent'?'#fff':'var(--paper)'};" data-att="absent" data-event="${ev.id}" data-crew="${c.id}">Absent</button>
@@ -2466,7 +2476,7 @@ function renderAttendanceGrid(){
     <table class="att-table">
       <thead><tr>
         <th class="att-name-th">Cast / Crew</th>
-        ${events.map(ev=>`<th title="${ev.title}">${new Date(ev.date+'T00:00').toLocaleDateString(undefined,{month:'numeric',day:'numeric'})}</th>`).join('')}
+        ${events.map(ev=>`<th title="${escapeHtml(ev.title)}">${new Date(ev.date+'T00:00').toLocaleDateString(undefined,{month:'numeric',day:'numeric'})}</th>`).join('')}
         <th class="att-total-th">Absences</th>
       </tr></thead>
       <tbody>
@@ -2479,7 +2489,7 @@ function renderAttendanceGrid(){
             const [label, cls] = cellMark[status];
             return `<td class="${cls}">${label}</td>`;
           }).join('');
-          return `<tr><td class="att-name-cell">${c.name}<br><span style="font-size:10px;color:var(--paper-dim);">${(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team'} · ${c.classPeriod||''}</span></td>${cells}<td class="att-total-cell" style="color:${absentCount(c.id)>=(globalState.attendanceAlertThreshold||3)?'var(--red)':'var(--paper)'}">${absentCount(c.id)}</td></tr>`;
+          return `<tr><td class="att-name-cell">${escapeHtml(c.name)}<br><span style="font-size:10px;color:var(--paper-dim);">${(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team'} · ${c.classPeriod||''}</span></td>${cells}<td class="att-total-cell" style="color:${absentCount(c.id)>=(globalState.attendanceAlertThreshold||3)?'var(--red)':'var(--paper)'}">${absentCount(c.id)}</td></tr>`;
         }).join('')}
       </tbody>
     </table>
@@ -2625,7 +2635,7 @@ function renderBehaviorLog(){
 
   const studentSel = document.getElementById('behStudent');
   const students = state.crew.filter(c=>c.role==='student').sort((a,b)=>a.name.localeCompare(b.name));
-  studentSel.innerHTML = students.map(c=>`<option value="${c.id}">${c.name}${(c.departments||[]).includes('cast') && c.castRole ? ' as '+c.castRole : ''} — ${(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team'}</option>`).join('') || '<option value="">No students on roster</option>';
+  studentSel.innerHTML = students.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}${(c.departments||[]).includes('cast') && c.castRole ? ' as '+c.castRole : ''} — ${(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team'}</option>`).join('') || '<option value="">No students on roster</option>';
 
   document.getElementById('behRecentCard').style.display = isDirector() ? 'block' : 'none';
   if(!isDirector()) return; // Stage Management can log infractions but cannot view existing ones
@@ -2663,7 +2673,7 @@ async function logInfraction(){
     loggedBy, loggedByEmail: activeEmail()||'', timestamp:new Date().toISOString()
   };
   state.behaviorIncidents.push(incident);
-  logChange(`Behavior infraction logged for ${student.name} (${fmtDate(date)}).`, {type:'crew', crewId});
+  logChange(`Behavior infraction logged for ${escapeHtml(student.name)} (${fmtDate(date)}).`, {type:'crew', crewId});
   await saveState(); renderBehaviorLog(); renderNotifications();
   sendBehaviorInfractionEmail(student, incident);
   document.getElementById('behReason').value = ''; document.getElementById('behNotes').value = '';
@@ -2687,7 +2697,7 @@ function renderBehaviorSummary(){
     const pct = r.maxScore ? r.score / r.maxScore : 1;
     const cls = pct>=0.9 ? 'behavior-score-good' : pct>=0.6 ? 'behavior-score-mid' : 'behavior-score-bad';
     const isCast = (c.departments||[]).includes('cast');
-    return { name: c.name + (isCast && c.castRole ? ` (${c.castRole})` : ''), classPeriod:c.classPeriod||'', departments:(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team', score:r.score, maxScore:r.maxScore, incidentCount:r.incidentCount, cls };
+    return { name: c.name + (isCast && c.castRole ? ` (${escapeHtml(c.castRole)})` : ''), classPeriod:c.classPeriod||'', departments:(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team', score:r.score, maxScore:r.maxScore, incidentCount:r.incidentCount, cls };
   });
 
   wrap.innerHTML = `
@@ -2698,7 +2708,7 @@ function renderBehaviorSummary(){
       </tr></thead>
       <tbody>
         ${rows.map(r=>`<tr>
-          <td class="att-name-cell">${r.name}</td>
+          <td class="att-name-cell">${escapeHtml(r.name)}</td>
           <td>${r.classPeriod}</td>
           <td>${r.departments}</td>
           <td>${r.incidentCount}</td>
@@ -2845,7 +2855,7 @@ function renderTasksSub(content, dep, depState){
         <input type="number" name="hours" placeholder="Hrs" value="1" min="0.5" step="0.5" style="width:70px;">
         <select name="assignedToCrewId">
           <option value="">— Unassigned —</option>
-          ${deptCrewOptions.map(c=>`<option value="${c.id}">${c.name}${c.email?'':' (no email on file)'}</option>`).join('')}
+          ${deptCrewOptions.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}${c.email?'':' (no email on file)'}</option>`).join('')}
         </select>
       </div>
       <textarea name="description" placeholder="Instructions / notes for whoever picks this up (optional)" style="width:100%; min-height:54px; background:var(--ink); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:8px 10px; font-size:13px; font-family:'Inter',sans-serif; resize:vertical;"></textarea>
@@ -2911,7 +2921,7 @@ function renderTaskCard(t, dep, depState){
   const assignee = document.createElement('select');
   assignee.className = 'assignee';
   const deptCrewOptions = state.crew.filter(c=>(c.departments||[]).includes(dep.key));
-  assignee.innerHTML = `<option value="">— Unassigned —</option>` + deptCrewOptions.map(c=>`<option value="${c.id}" ${c.id===t.assignedToCrewId?'selected':''}>${c.name}</option>`).join('');
+  assignee.innerHTML = `<option value="">— Unassigned —</option>` + deptCrewOptions.map(c=>`<option value="${c.id}" ${c.id===t.assignedToCrewId?'selected':''}>${escapeHtml(c.name)}</option>`).join('');
   assignee.addEventListener('change', async ()=>{
     const person = state.crew.find(c=>c.id===assignee.value);
     t.assignedToCrewId = assignee.value || null;
@@ -3013,7 +3023,7 @@ function renderTemplatesSub(content, dep, depState){
   if(!depState.templates.length){ list.innerHTML = `<div class="empty-state">No templates saved for ${dep.label} yet.</div>`; }
   else depState.templates.forEach(tpl=>{
     const card = document.createElement('div'); card.className = 'card'; card.style.marginBottom='10px';
-    card.innerHTML = `<h3 style="margin-bottom:6px;">${tpl.name}</h3><p style="font-size:12.5px;color:var(--paper-dim);margin:0 0 10px;">${tpl.items.length} task(s)</p>
+    card.innerHTML = `<h3 style="margin-bottom:6px;">${escapeHtml(tpl.name)}</h3><p style="font-size:12.5px;color:var(--paper-dim);margin:0 0 10px;">${tpl.items.length} task(s)</p>
       <button class="btn small" data-act="apply" data-id="${tpl.id}">Apply — creates ${tpl.items.length} tasks</button>
       ${canManage?`<button class="btn danger small" data-act="del" data-id="${tpl.id}" style="margin-left:8px;">Delete</button>`:''}`;
     list.appendChild(card);
@@ -3037,7 +3047,7 @@ function renderTemplatesSub(content, dep, depState){
       items.forEach((it,idx)=>{
         const row = document.createElement('div'); row.className='add-form-row'; row.style.marginTop='8px';
         row.innerHTML = `
-          <input type="text" value="${it.title}" placeholder="Item title" data-f="title" data-i="${idx}" style="flex:2; min-width:160px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:3px;">
+          <input type="text" value="${escapeHtml(it.title)}" placeholder="Item title" data-f="title" data-i="${idx}" style="flex:2; min-width:160px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:3px;">
           <select data-f="workType" data-i="${idx}" style="background:var(--ink); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:3px;">${WORK_TYPES.map(w=>`<option ${w===it.workType?'selected':''}>${w}</option>`).join('')}</select>
           <select data-f="priority" data-i="${idx}" style="background:var(--ink); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:3px;">${PRIORITIES.map(p=>`<option value="${p}" ${p===it.priority?'selected':''}>${p}</option>`).join('')}</select>
           <input type="number" value="${it.hours}" min="0.5" step="0.5" data-f="hours" data-i="${idx}" style="width:60px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:3px;">
@@ -3088,9 +3098,9 @@ function renderReportFormSub(content, dep, depState){
       </div>
       <div style="margin:12px 0;">
         <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; display:block; margin-bottom:6px;">Team present today (${effectiveClass})</label>
-        <div class="checkbox-row" id="repTeamChecks">${deptCrew.map(c=>`<label><input type="checkbox" value="${c.id}" checked> ${c.name}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No crew assigned to this department/class period yet — add them in Setup.</span>'}</div>
+        <div class="checkbox-row" id="repTeamChecks">${deptCrew.map(c=>`<label><input type="checkbox" value="${c.id}" checked> ${escapeHtml(c.name)}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No crew assigned to this department/class period yet — add them in Setup.</span>'}</div>
         <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; display:block; margin:10px 0 6px;">Flag non-contributors</label>
-        <div class="checkbox-row" id="repNonContribChecks">${deptCrew.map(c=>`<label><input type="checkbox" value="${c.id}"> ${c.name}</label>`).join('')}</div>
+        <div class="checkbox-row" id="repNonContribChecks">${deptCrew.map(c=>`<label><input type="checkbox" value="${c.id}"> ${escapeHtml(c.name)}</label>`).join('')}</div>
       </div>
       <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">Daily / Weekly Goal</label>
       <textarea id="repGoal" class="notes-field" placeholder="What's the team aiming to accomplish today or this week?"></textarea>
@@ -3214,7 +3224,7 @@ function renderParticipationSub(content, dep, depState){
               const r = participationScoreForStudent(c.id, dep.key, ui.participationWeekCursor);
               const pct = r.maxScore ? r.score/r.maxScore : 1;
               const cls = pct>=0.9?'behavior-score-good':pct>=0.6?'behavior-score-mid':'behavior-score-bad';
-              return `<tr><td class="att-name-cell">${c.name}</td><td>${r.reportsCount}</td><td>${r.dockedDates.length}</td><td class="${cls}" style="font-weight:700;">${r.score}/${r.maxScore}</td></tr>`;
+              return `<tr><td class="att-name-cell">${escapeHtml(c.name)}</td><td>${r.reportsCount}</td><td>${r.dockedDates.length}</td><td class="${cls}" style="font-weight:700;">${r.score}/${r.maxScore}</td></tr>`;
             }).join('')}
           </tbody>
         </table>
@@ -3699,7 +3709,7 @@ function renderWhiteboard(dep, depState){
     el.style.left = sn.x+'px'; el.style.top = sn.y+'px'; el.style.background = sn.color;
     el.innerHTML = `
       <div class="sn-handle" title="Drag to move">⠿⠿ drag</div>
-      <textarea placeholder="Write something..." ${canEditText?'':'readonly'}>${sn.text}</textarea>
+      <textarea placeholder="Write something..." ${canEditText?'':'readonly'}>${escapeHtml(sn.text)}</textarea>
       <div class="sn-meta">${sn.authorName}</div>
       ${canEditText?`<button class="sn-del">✕</button>`:''}
     `;
@@ -4609,21 +4619,21 @@ function renderLightingCueList(){
     LL_CHANNELS.forEach((def,i)=>{ ui.llState[i].color = c.channels[i].color; llLights[i].color.set(c.channels[i].color); });
     llRefreshChannelUI();
     llCrossfade = { fromIntensity: ui.llState.map(s=>s.intensity), toIntensity: c.channels.map(s=>s.intensity), startTime:performance.now(), duration:2200 };
-    toast(`Going to "${c.name}"…`);
+    toast(`Going to "${escapeHtml(c.name)}"…`);
   }));
   list.querySelectorAll('[data-snap]').forEach(btn=>btn.addEventListener('click', ()=>{
     const c = cues.find(x=>x.id===btn.dataset.snap); if(!c) return;
     LL_CHANNELS.forEach((def,i)=>{ ui.llState[i] = JSON.parse(JSON.stringify(c.channels[i])); llApplyChannel(i); });
     llRefreshChannelUI();
-    toast(`Snapped to "${c.name}"`);
+    toast(`Snapped to "${escapeHtml(c.name)}"`);
   }));
   list.querySelectorAll('[data-update]').forEach(btn=>btn.addEventListener('click', async ()=>{
     const c = cues.find(x=>x.id===btn.dataset.update); if(!c) return;
-    if(!confirm(`Overwrite "${c.name}" with the board's current look? This replaces its saved levels and colors.`)) return;
+    if(!confirm(`Overwrite "${escapeHtml(c.name)}" with the board's current look? This replaces its saved levels and colors.`)) return;
     c.channels = JSON.parse(JSON.stringify(ui.llState));
     c.updatedAt = new Date().toISOString();
     await saveState(); renderLightingCueList();
-    toast(`"${c.name}" updated to the current look`);
+    toast(`"${escapeHtml(c.name)}" updated to the current look`);
   }));
   list.querySelectorAll('[data-rename]').forEach(btn=>btn.addEventListener('click', async ()=>{
     const c = cues.find(x=>x.id===btn.dataset.rename); if(!c) return;
@@ -4696,7 +4706,7 @@ function bkNextNumber(){
 function bkCastRosterPrompt(currentLabel){
   const castMembers = (state.crew||[]).filter(c=>(c.departments||[]).includes('cast'));
   if(!castMembers.length) return prompt('Actor / character name:', currentLabel||'');
-  const listText = castMembers.map((c,i)=>`${i+1}) ${c.name}${c.castRole?' as '+c.castRole:''}`).join('\n');
+  const listText = castMembers.map((c,i)=>`${i+1}) ${escapeHtml(c.name)}${c.castRole?' as '+c.castRole:''}`).join('\n');
   const val = prompt(`Type a name, or type a number to pick from your Cast roster:\n${listText}`, currentLabel||'');
   if(val===null) return null;
   const trimmed = val.trim();
@@ -5135,7 +5145,7 @@ function renderReportDetail(r, dep, depState, container){
     const who = prompt(`Adjust grade for which team member?\\n${names.join(', ')}`); if(!who) return;
     const crewMember = state.crew.find(c=>c.name.toLowerCase()===who.trim().toLowerCase());
     if(!crewMember){ toast("Name not found on this report's team"); return; }
-    const g = prompt(`Adjusted grade for ${crewMember.name}:`, r.grade); if(g===null) return;
+    const g = prompt(`Adjusted grade for ${escapeHtml(crewMember.name)}:`, r.grade); if(g===null) return;
     const note = prompt('Note (optional):','') || '';
     r.individualAdjustments.push({ crewId: crewMember.id, crewName: crewMember.name, adjustedGrade: parseFloat(g)||0, teacherNote: note });
     await saveState(); renderDepartments();
@@ -5177,7 +5187,7 @@ function renderCostumesView(){
     const card = document.createElement('div'); card.className = 'costume-card';
     card.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div><b>${rec.name}</b>${rec.email?` <span class="mono" style="font-size:11px;color:var(--paper-dim);">${rec.email}</span>`:''}</div>
+        <div><b>${escapeHtml(rec.name)}</b>${rec.email?` <span class="mono" style="font-size:11px;color:var(--paper-dim);">${rec.email}</span>`:''}</div>
         ${isDirector() ? `<button class="task-del" data-id="${rec.id}">✕</button>` : ''}
       </div>
       <div class="costume-grid">${MEASURE_FIELDS.map(m=>rec[m.key]?`<div><label>${m.label}</label>${rec[m.key]}</div>`:'').join('')}</div>
@@ -5293,7 +5303,7 @@ function renderSetup(){
     const row = document.createElement('div'); row.className = 'roster-row';
     const isCast = (c.departments||[]).includes('cast');
     row.innerHTML = `<span class="dot" style="background:${c.role==='teacher'?'var(--gold)':'var(--amber)'}"></span>
-      <span class="rname">${c.name}${c.role==='teacher'?' <span class="mono" style="font-size:10px;color:var(--gold)">TEACHER</span>':''}${isCast && c.castRole?` <span class="mono" style="font-size:10.5px;color:var(--cast,#8C3B3B);">as ${c.castRole}</span>`:''}<br><span class="mono" style="font-size:10px;color:var(--paper-dim);">${c.email||'no sign-in email set'}</span></span>
+      <span class="rname">${escapeHtml(c.name)}${c.role==='teacher'?' <span class="mono" style="font-size:10px;color:var(--gold)">TEACHER</span>':''}${isCast && c.castRole?` <span class="mono" style="font-size:10.5px;color:var(--cast,#8C3B3B);">as ${escapeHtml(c.castRole)}</span>`:''}<br><span class="mono" style="font-size:10px;color:var(--paper-dim);">${c.email||'no sign-in email set'}</span></span>
       <span class="rmeta">${(c.departments||[]).map(k=>deptInfo(k).label).join(', ')||'No team yet'}</span>
       ${isDirector() ? `<select class="mono" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:4px 7px; font-size:11.5px;" data-classperiod="${c.id}">
         ${['Class A','Class B','Class C','Class D'].map(cp=>`<option ${cp===c.classPeriod?'selected':''}>${cp}</option>`).join('')}
@@ -5304,10 +5314,10 @@ function renderSetup(){
       row.querySelector('[data-classperiod]').addEventListener('change', async (e)=>{
         c.classPeriod = e.target.value;
         await saveState(); renderSetup();
-        toast(`${c.name} moved to ${c.classPeriod}`);
+        toast(`${escapeHtml(c.name)} moved to ${c.classPeriod}`);
       });
       row.querySelector('[data-editemail]').addEventListener('click', async ()=>{
-        const val = prompt(`Sign-in email for ${c.name}:`, c.email||'');
+        const val = prompt(`Sign-in email for ${escapeHtml(c.name)}:`, c.email||'');
         if(val===null) return;
         const oldEmail = c.email;
         c.email = val.trim();
@@ -5318,7 +5328,7 @@ function renderSetup(){
       });
       if(isCast){
         row.querySelector('[data-editrole]').addEventListener('click', async ()=>{
-          const val = prompt(`Cast role / character for ${c.name}:`, c.castRole||'');
+          const val = prompt(`Cast role / character for ${escapeHtml(c.name)}:`, c.castRole||'');
           if(val===null) return;
           c.castRole = val.trim();
           await saveState(); renderSetup();
@@ -5561,6 +5571,12 @@ async function init(){
     sendPasswordReset(email);
   });
   document.getElementById('signOutBtn').addEventListener('click', signOutUser);
+  document.getElementById('switchShowBtn').addEventListener('click', ()=>{
+    const email = activeEmail();
+    if(!email) return;
+    const matches = (globalState.rosterIndex[email.toLowerCase()]||[]).filter(m=>m.prodId!==currentProductionId);
+    showProductionPickerShell(matches.length ? matches : (globalState.rosterIndex[email.toLowerCase()]||[]));
+  });
   document.getElementById('claimDirectorBtn').addEventListener('click', async ()=>{
     if(!authUser) return;
     globalState.directorEmails = [authUser.email];
@@ -5630,7 +5646,7 @@ async function init(){
     const weekOutISO = weekOut.toISOString().slice(0,10);
     const upcoming = [...state.calendar].filter(e=>e.date>=today && e.date<=weekOutISO).sort((a,b)=>a.date.localeCompare(b.date));
     if(!upcoming.length){ toast('No calls in the next 7 days'); return; }
-    const lines = upcoming.map(e=>`• ${fmtDate(e.date)}${e.startTime?' '+e.startTime:''} — ${e.title}${e.location?' @ '+e.location:''}${groupMeCallInfo(e)}`);
+    const lines = upcoming.map(e=>`• ${fmtDate(e.date)}${e.startTime?' '+e.startTime:''} — ${escapeHtml(e.title)}${e.location?' @ '+e.location:''}${groupMeCallInfo(e)}`);
     await sendGroupMe(`🗓️ Upcoming Rehearsal Schedule:\n${lines.join('\n')}`);
     toast('Schedule sent to GroupMe');
   });
