@@ -1,4 +1,3 @@
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -742,11 +741,13 @@
       <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">A simple 3D layout tool for blocking the set — not photorealistic models. Drag on the empty background to orbit the camera, scroll to zoom. Grid lines are 1-foot squares — check your own contest venue's actual playing space, since that varies by site.</p>
       <div class="subtabs" id="sdBoardTabs">
         <button data-board="production" class="active">Production Set</button>
-        <button data-board="sandbox">My Practice Sandbox</button>
+        <button data-board="sandbox">Practice Sandboxes</button>
       </div>
-      <div id="sdSandboxBrowseWrap" style="display:none; margin-bottom:10px;">
-        <select id="sdSandboxBrowseSelect" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:3px; font-size:12.5px;"></select>
-        <span style="font-size:11px; color:var(--paper-dim); margin-left:8px;">Director/Stage Mgmt view — browse any student's sandbox</span>
+      <div id="sdSandboxBrowseWrap" style="display:none; margin-bottom:10px; align-items:center; gap:8px; flex-wrap:wrap;">
+        <select id="sdSandboxBrowseSelect" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:7px 9px; border-radius:3px; font-size:12.5px; max-width:280px;"></select>
+        <button class="btn small" id="sdNewSandboxBtn">+ New Sandbox</button>
+        <button class="btn danger small" id="sdDeleteSandboxBtn" style="display:none;">Delete This Sandbox</button>
+        <span style="font-size:11px; color:var(--paper-dim);">Each sandbox is its own separate board — make one per group so groups don't overwrite each other. Anyone who picks the same sandbox works on it together, live.</span>
       </div>
       <div id="sdToolbarWrap" style="display:none;">
         <p style="font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; margin:10px 0 4px;">Standard UIL One-Act Play Set (32-piece)</p>
@@ -1064,7 +1065,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
@@ -1082,7 +1083,7 @@
   const auth = getAuth(app);
   const googleProvider = new GoogleAuthProvider();
 
-  window.__fb = { db, doc, getDoc, setDoc, onSnapshot, deleteDoc, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail };
+  window.__fb = { db, doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, onSnapshot, deleteDoc, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail };
   window.__firebaseReady = true;
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
@@ -1161,7 +1162,7 @@ function defaultProductionState(name, seeded){
     participationConfig: { pointsPerDay:20, daysPerWeek:5 },
     announcements:[],
     lightingCues:[],
-    sandboxOwners:[],
+    sandboxList:[],
     blockingNotes:[],
     departments: freshDepartments(seeded)
   };
@@ -1378,7 +1379,7 @@ async function finishLoadingChosenProduction(){
   if(!state.participationConfig) state.participationConfig = { pointsPerDay:20, daysPerWeek:5 };
   if(!state.announcements) state.announcements = [];
   if(!state.lightingCues) state.lightingCues = [];
-  if(!state.sandboxOwners) state.sandboxOwners = [];
+  if(!state.sandboxList) state.sandboxList = [];
   if(!state.blockingNotes) state.blockingNotes = [];
   if(!isApprovedUser()){
     await registerPendingApproval();
@@ -1410,8 +1411,18 @@ async function registerPendingApproval(){
   if(!email) return;
   if(!globalState.pendingApprovals) globalState.pendingApprovals = [];
   if(globalState.pendingApprovals.some(p=>p.email.toLowerCase()===email.toLowerCase())) return;
-  globalState.pendingApprovals.push({ id:cryptoId(), email, displayName: (authUser&&authUser.displayName)||email, requestedAt:new Date().toISOString() });
-  await saveGlobalState();
+  const entry = { id:cryptoId(), email, displayName: (authUser&&authUser.displayName)||email, requestedAt:new Date().toISOString() };
+  globalState.pendingApprovals.push(entry);
+  // Atomic server-side append — critical here specifically, since many students can hit this
+  // within seconds of each other during a class period. A normal saveGlobalState() would
+  // overwrite the whole config document, and whoever saves last would silently wipe out
+  // everyone else's pending request that raced with them.
+  try{
+    if(window.__fb){
+      const ref = window.__fb.doc(window.__fb.db, GLOBAL_DOC[0], GLOBAL_DOC[1]);
+      await window.__fb.updateDoc(ref, { pendingApprovals: window.__fb.arrayUnion(entry) });
+    }
+  }catch(e){ console.warn('Pending approval append failed', e); }
 }
 function renderPendingApprovals(){
   const card = document.getElementById('pendingApprovalsCard');
@@ -1442,8 +1453,15 @@ function renderPendingApprovals(){
   }));
   list.querySelectorAll('[data-deny]').forEach(btn=>btn.addEventListener('click', async ()=>{
     if(!confirm('Deny this request? They\'ll stay blocked from the app.')) return;
+    const removed = pending.find(x=>x.id===btn.dataset.deny);
     globalState.pendingApprovals = globalState.pendingApprovals.filter(x=>x.id!==btn.dataset.deny);
-    await saveGlobalState(); renderPendingApprovals();
+    try{
+      if(window.__fb && removed){
+        const ref = window.__fb.doc(window.__fb.db, GLOBAL_DOC[0], GLOBAL_DOC[1]);
+        await window.__fb.updateDoc(ref, { pendingApprovals: window.__fb.arrayRemove(removed) });
+      }
+    }catch(e){ console.warn('Deny failed to sync', e); }
+    renderPendingApprovals();
     toast('Request denied');
   }));
 }
@@ -1874,12 +1892,18 @@ function renderProductionsView(){
 }
 async function deleteProductionCompletely(prodId){
   if(!window.__fb) throw new Error('Firebase not ready');
+  const data = await fsGet(PROD_COLLECTION, prodId).catch(()=>null);
   await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'productions', prodId));
   await Promise.all(DEPARTMENTS.map(d=>
     window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'workspaces', prodId+'_'+d.key)).catch(()=>{})
   ));
   await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'stagedesigns', prodId)).catch(()=>{});
   await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'blocking_boards', prodId)).catch(()=>{});
+  if(data && Array.isArray(data.sandboxList)){
+    await Promise.all(data.sandboxList.map(sbx=>
+      window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'stagedesign_sandboxes', prodId+'_sbx_'+sbx.id)).catch(()=>{})
+    ));
+  }
 }
 
 function renderAnnouncements(){
@@ -3851,24 +3875,25 @@ const PIECE_TYPES = {
 function canViewStageDesign(){ return isDirector() || !!currentUser(); }
 function canEditStageDesign(){ return isDirectorOrStageMgmt() || canViewDept('set_design'); }
 
-// A student's practice sandbox is a completely separate board from the real production set —
-// same 3D engine and piece palette, but its own Firestore doc, so students can freely practice
-// without colliding with each other or with the real show's plan. sdBoardMode picks which one
-// is currently loaded into the scene; switching boards swaps the data source, not the renderer.
+// Practice sandboxes are separate boards from the real production set — same 3D engine and
+// piece palette, but their own Firestore doc, so groups can practice without colliding with
+// the real show's plan OR with each other. Sandboxes are freely creatable and named (e.g. one
+// per group), NOT tied to a single login identity — anyone who selects the same sandbox is
+// collaborating on it live, same as the real Production Set. sdBoardMode picks which board is
+// currently loaded into the (already-running) scene; switching swaps the data source only.
 let sdBoardMode = 'production'; // 'production' | 'sandbox'
-let sdBoardOwnerId = null;      // crewId whose sandbox is loaded, when sdBoardMode==='sandbox'
+let sdSandboxId = null;         // which sandbox doc is loaded, when sdBoardMode==='sandbox'
 function stageDesignCollectionName(){ return sdBoardMode==='sandbox' ? 'stagedesign_sandboxes' : 'stagedesigns'; }
 function canEditActiveBoard(){
   if(sdBoardMode==='production') return canEditStageDesign();
-  const u = currentUser();
-  return isDirectorOrStageMgmt() || (u && u.id===sdBoardOwnerId);
+  return isDirectorOrStageMgmt() || !!currentUser(); // any signed-in team member can edit a sandbox — that's the whole point, group collaboration
 }
 
 let stageDesignUnsubscribe = null;
 let stageDesignCache = { pieces:[] };
 let stageDesignDraggingId = null;
 let stageDesignPendingRerender = false;
-function stageDesignDocId(){ return sdBoardMode==='sandbox' ? currentProductionId+'_'+sdBoardOwnerId : currentProductionId; }
+function stageDesignDocId(){ return sdBoardMode==='sandbox' ? currentProductionId+'_sbx_'+sdSandboxId : currentProductionId; }
 function normalizeStageDesignCache(){ if(!stageDesignCache.pieces) stageDesignCache.pieces = []; }
 function stopStageDesignListener(){ if(stageDesignUnsubscribe){ stageDesignUnsubscribe(); stageDesignUnsubscribe = null; } }
 async function startStageDesignListener(){
@@ -3888,22 +3913,38 @@ async function saveStageDesignData(){
     if(window.__fb && currentProductionId){
       const ref = window.__fb.doc(window.__fb.db, stageDesignCollectionName(), stageDesignDocId());
       await window.__fb.setDoc(ref, JSON.parse(JSON.stringify(stageDesignCache)));
-      if(sdBoardMode==='sandbox'){
-        const u = currentUser();
-        if(u && !(state.sandboxOwners||[]).some(o=>o.crewId===u.id)){
-          if(!state.sandboxOwners) state.sandboxOwners = [];
-          state.sandboxOwners.push({ crewId:u.id, name:u.name, updatedAt:new Date().toISOString() });
-          await saveState();
-        }
-      }
     }
   }catch(e){ console.warn('Stage design save failed', e); }
 }
+// Creates a brand new, empty, freely-named sandbox (e.g. "Group 1") and switches into it.
+// Uses an atomic array append so two groups creating sandboxes at the same moment can't
+// clobber each other's entry in the shared sandbox list.
+async function createNewSandbox(){
+  if(!currentUser() && !isDirectorOrStageMgmt()){ toast('Sign in to create a sandbox'); return; }
+  const name = prompt('Name this sandbox (e.g. "Group 1", "2nd Period Team A"):', '');
+  if(name===null) return;
+  const trimmed = name.trim();
+  if(!trimmed){ toast('Give it a name'); return; }
+  const entry = { id:cryptoId(), name:trimmed, createdBy: currentUser()?.name || authUser?.displayName || 'Someone', createdAt:new Date().toISOString() };
+  if(!state.sandboxList) state.sandboxList = [];
+  state.sandboxList.push(entry);
+  try{
+    if(window.__fb){
+      const ref = window.__fb.doc(window.__fb.db, PROD_COLLECTION, currentProductionId);
+      await window.__fb.updateDoc(ref, { sandboxList: window.__fb.arrayUnion(entry) });
+    } else {
+      await saveState();
+    }
+  }catch(e){ console.warn('Sandbox creation failed to sync, falling back to full save', e); await saveState(); }
+  await switchStageDesignBoard('sandbox', entry.id);
+  renderStageDesignView();
+  toast(`Created "${trimmed}" — share this name with your group`);
+}
 // Switches which board is loaded into the (already-running) 3D scene — stops the old live
 // listener, clears the currently-rendered pieces, and starts a fresh listener on the new one.
-async function switchStageDesignBoard(mode, ownerId){
+async function switchStageDesignBoard(mode, sandboxId){
   stopStageDesignListener();
-  sdBoardMode = mode; sdBoardOwnerId = ownerId || null;
+  sdBoardMode = mode; sdSandboxId = sandboxId || null;
   sdSelectedId = null;
   stageDesignCache = { pieces:[] };
   if(sdScene) syncStageDesignScene();
@@ -4276,6 +4317,26 @@ function printStageDesignGroundPlan(){
   `;
   openPrintWindow(`${state.productionName} — Ground Plan`, body);
 }
+async function deleteSandbox(sandboxId){
+  if(!isDirectorOrStageMgmt()) return;
+  const sbx = (state.sandboxList||[]).find(s=>s.id===sandboxId);
+  if(!sbx) return;
+  if(!confirm(`Delete the sandbox "${sbx.name}"? This removes everything in it — no undo.`)) return;
+  state.sandboxList = (state.sandboxList||[]).filter(s=>s.id!==sandboxId);
+  try{
+    if(window.__fb){
+      const ref = window.__fb.doc(window.__fb.db, PROD_COLLECTION, currentProductionId);
+      await window.__fb.updateDoc(ref, { sandboxList: window.__fb.arrayRemove(sbx) });
+      await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db, 'stagedesign_sandboxes', currentProductionId+'_sbx_'+sandboxId)).catch(()=>{});
+    } else {
+      await saveState();
+    }
+  }catch(e){ console.warn('Sandbox delete failed to sync', e); await saveState(); }
+  await switchStageDesignBoard('production', null);
+  document.querySelectorAll('#sdBoardTabs button').forEach(b=>b.classList.toggle('active', b.dataset.board==='production'));
+  renderStageDesignView();
+  toast(`"${sbx.name}" deleted`);
+}
 async function renderStageDesignView(){
   const canView = canViewStageDesign();
   document.getElementById('stageDesignLockedMsg').style.display = canView ? 'none' : 'block';
@@ -4286,14 +4347,13 @@ async function renderStageDesignView(){
   const sandboxTabBtn = document.querySelector('#sdBoardTabs [data-board="sandbox"]');
   const u = currentUser();
   sandboxTabBtn.style.display = (u || isDirectorOrStageMgmt()) ? 'inline-block' : 'none';
-  document.getElementById('sdSandboxBrowseWrap').style.display = (sdBoardMode==='sandbox' && isDirectorOrStageMgmt()) ? 'block' : 'none';
-  if(sdBoardMode==='sandbox' && isDirectorOrStageMgmt()){
+  document.getElementById('sdSandboxBrowseWrap').style.display = (sdBoardMode==='sandbox') ? 'flex' : 'none';
+  document.getElementById('sdDeleteSandboxBtn').style.display = (sdBoardMode==='sandbox' && sdSandboxId && isDirectorOrStageMgmt()) ? 'inline-block' : 'none';
+  if(sdBoardMode==='sandbox'){
     const sel = document.getElementById('sdSandboxBrowseSelect');
-    const owners = state.sandboxOwners || [];
-    const myId = u ? u.id : null;
-    const options = u ? [{crewId: myId, name:'My own sandbox'}, ...owners.filter(o=>o.crewId!==myId)] : owners;
-    sel.innerHTML = options.length ? options.map(o=>`<option value="${o.crewId}" ${o.crewId===sdBoardOwnerId?'selected':''}>${escapeHtml(o.name)}</option>`).join('')
-      : `<option value="">No student sandboxes yet</option>`;
+    const list = state.sandboxList || [];
+    sel.innerHTML = list.length ? list.map(sbx=>`<option value="${sbx.id}" ${sbx.id===sdSandboxId?'selected':''}>${escapeHtml(sbx.name)}</option>`).join('')
+      : `<option value="">No sandboxes yet — create one</option>`;
   }
 
   await initStageDesignSceneIfNeeded();
@@ -5409,8 +5469,22 @@ async function addCrew(){
     const prodMeta = globalState.productions.find(p=>p.id===prodId);
     if(email) rosterIndexAdd(email, prodId, prodMeta?prodMeta.name:'', newMember.id);
   }
+  let removedPending = null;
   if(email && globalState.pendingApprovals && globalState.pendingApprovals.length){
-    globalState.pendingApprovals = globalState.pendingApprovals.filter(p=>p.email.toLowerCase()!==email.toLowerCase());
+    removedPending = globalState.pendingApprovals.find(p=>p.email.toLowerCase()===email.toLowerCase()) || null;
+  }
+  if(removedPending){
+    try{
+      if(window.__fb){
+        const ref = window.__fb.doc(window.__fb.db, GLOBAL_DOC[0], GLOBAL_DOC[1]);
+        await window.__fb.updateDoc(ref, { pendingApprovals: window.__fb.arrayRemove(removedPending) });
+        // Refresh from the server right before the full save below, so that save's copy
+        // of pendingApprovals is as fresh as possible — the full save still overwrites the
+        // whole document, so this keeps the staleness window as small as it can be.
+        const fresh = await fsGet(GLOBAL_DOC[0], GLOBAL_DOC[1]);
+        if(fresh && fresh.pendingApprovals) globalState.pendingApprovals = fresh.pendingApprovals;
+      }
+    }catch(e){ console.warn('Pending approval cleanup failed to sync', e); }
   }
   await saveGlobalState();
   document.getElementById('rosterName').value=''; document.getElementById('rosterCastRole').value=''; document.getElementById('rosterEmail').value=''; document.getElementById('rosterParentEmail').value=''; document.getElementById('rosterParentPhone').value='';
@@ -5485,7 +5559,7 @@ async function loadEverythingAndRender(){
   if(!state.participationConfig) state.participationConfig = { pointsPerDay:20, daysPerWeek:5 };
   if(!state.announcements) state.announcements = [];
   if(!state.lightingCues) state.lightingCues = [];
-  if(!state.sandboxOwners) state.sandboxOwners = [];
+  if(!state.sandboxList) state.sandboxList = [];
   if(!state.blockingNotes) state.blockingNotes = [];
 
   if(!isApprovedUser()){
@@ -5747,23 +5821,19 @@ async function init(){
     if(btn.dataset.board==='production'){
       await switchStageDesignBoard('production', null);
     } else {
-      const u = currentUser();
-      if(u){
-        await switchStageDesignBoard('sandbox', u.id);
-      } else if(isDirectorOrStageMgmt()){
-        const owners = state.sandboxOwners || [];
-        if(!owners.length){ toast('No student sandboxes exist yet — a student needs to open their Practice Sandbox first'); return; }
-        await switchStageDesignBoard('sandbox', owners[0].crewId);
-      } else {
-        toast('Sign in to get your own practice sandbox'); return;
-      }
+      if(!currentUser() && !isDirectorOrStageMgmt()){ toast('Sign in to use a practice sandbox'); return; }
+      const list = state.sandboxList || [];
+      if(!list.length){ toast('No sandboxes exist yet — click "+ New Sandbox" to start one for your group'); await switchStageDesignBoard('sandbox', null); }
+      else await switchStageDesignBoard('sandbox', list[0].id);
     }
     renderStageDesignView();
   }));
   document.getElementById('sdSandboxBrowseSelect').addEventListener('change', async (e)=>{
-    if(!isDirectorOrStageMgmt() || !e.target.value) return;
+    if(!e.target.value) return;
     await switchStageDesignBoard('sandbox', e.target.value);
   });
+  document.getElementById('sdNewSandboxBtn').addEventListener('click', createNewSandbox);
+  document.getElementById('sdDeleteSandboxBtn').addEventListener('click', ()=>{ if(sdSandboxId) deleteSandbox(sdSandboxId); });
   document.getElementById('sdPropLabel').addEventListener('change', e=>updateSelectedPieceProp('label', e.target.value));
   document.getElementById('sdPropColor').addEventListener('input', e=>updateSelectedPieceProp('color', e.target.value));
   document.getElementById('sdPropWidth').addEventListener('change', e=>updateSelectedPieceProp('width', parseFloat(e.target.value)||1));
