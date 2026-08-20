@@ -609,7 +609,12 @@
       </div>
 
       <div id="attendanceMarkView">
-        <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px; margin-bottom:16px;">Mark each expected student Present, Absent, or Excused for every rehearsal call. Students with an already-approved conflict for a call show as Excused by default until changed.</p>
+        <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px; margin-bottom:16px;">Mark each expected student Present, Absent, or Excused for a rehearsal call. Students with an already-approved conflict for a call show as Excused by default until changed.</p>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+          <button class="btn ghost small" id="attPrevCallBtn">‹ Prev</button>
+          <select id="attendanceDateSelect" style="flex:1; min-width:220px; background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); padding:8px 10px; border-radius:3px; font-size:13px;"></select>
+          <button class="btn ghost small" id="attNextCallBtn">Next ›</button>
+        </div>
         <div id="attendanceList"></div>
       </div>
 
@@ -1467,7 +1472,7 @@ function renderPendingApprovals(){
   }));
 }
 
-let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', expandedTasks:new Set(), behaviorSub:'log', behaviorWeekCursor:null, myBehaviorWeekCursor:null, editingEventId:null, editingAnnouncementId:null, participationWeekCursor:null, allPartWeekCursor:null, bkTool:'select', bkPenColor:'#1a1a1a', bkPenWidth:3 };
+let ui = { activeDept:'set_design', activeSub:'tasks', calSub:'month', calMonthCursor:new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSelectedDate: todayISO(), reportClassPeriod:null, attendanceSub:'mark', attendanceSelectedEventId:null, expandedTasks:new Set(), behaviorSub:'log', behaviorWeekCursor:null, myBehaviorWeekCursor:null, editingEventId:null, editingAnnouncementId:null, participationWeekCursor:null, allPartWeekCursor:null, bkTool:'select', bkPenColor:'#1a1a1a', bkPenWidth:3 };
 let authUser = null; // { email, displayName } once signed in via Google or Email/Password, else null
 
 // Reading any data now requires real Firebase Auth (Firestore rules enforce this), so
@@ -2428,42 +2433,57 @@ function renderAttendanceView(){
   switchAttendanceSub(ui.attendanceSub || 'mark');
 }
 function renderAttendanceMarkView(){
+  const select = document.getElementById('attendanceDateSelect');
   const list = document.getElementById('attendanceList');
+  const sorted = [...state.calendar].sort((a,b)=>a.date.localeCompare(b.date)); // chronological, oldest first
+  if(!sorted.length){
+    select.innerHTML = '';
+    list.innerHTML = `<div class="empty-state"><div class="lamp">🗓️</div>No rehearsal calls on the calendar yet.</div>`;
+    return;
+  }
+  // Default selection: today's call if one exists, else the closest upcoming call, else the
+  // most recent past call — whichever is most likely to be what you actually opened this for.
+  if(!ui.attendanceSelectedEventId || !sorted.some(e=>e.id===ui.attendanceSelectedEventId)){
+    const today = todayISO();
+    ui.attendanceSelectedEventId = (sorted.find(e=>e.date===today) || sorted.find(e=>e.date>today) || sorted[sorted.length-1]).id;
+  }
+  select.innerHTML = sorted.map(ev=>`<option value="${ev.id}" ${ev.id===ui.attendanceSelectedEventId?'selected':''}>${fmtDate(ev.date)} — ${escapeHtml(ev.title)}</option>`).join('');
+  const idx = sorted.findIndex(e=>e.id===ui.attendanceSelectedEventId);
+  document.getElementById('attPrevCallBtn').disabled = idx<=0;
+  document.getElementById('attNextCallBtn').disabled = idx>=sorted.length-1;
+
+  const ev = sorted[idx];
   list.innerHTML = '';
-  const sorted = [...state.calendar].sort((a,b)=>b.date.localeCompare(a.date));
-  if(!sorted.length){ list.innerHTML = `<div class="empty-state"><div class="lamp">🗓️</div>No rehearsal calls on the calendar yet.</div>`; return; }
-  sorted.forEach(ev=>{
-    const attendees = expectedAttendees(ev).sort((a,b)=>a.name.localeCompare(b.name));
-    const counts = {present:0, absent:0, excused:0, unmarked:0};
-    attendees.forEach(c=>{ counts[attendanceStatus(ev,c.id) || 'unmarked']++; });
-    const card = document.createElement('div'); card.className = 'card';
-    card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-        <div><h3 style="margin:0;">${escapeHtml(ev.title)}</h3><div class="cal-meta">${fmtDate(ev.date)}${ev.startTime?' · '+ev.startTime:''}</div></div>
-        <span class="mono" style="font-size:12px; color:var(--paper-dim);">✓${counts.present} · ✕${counts.absent} · ⊘${counts.excused}${counts.unmarked?' · '+counts.unmarked+' unmarked':''}</span>
-      </div>
-      <div id="att-rows-${ev.id}" style="margin-top:12px;"></div>
+  const attendees = expectedAttendees(ev).sort((a,b)=>a.name.localeCompare(b.name));
+  const counts = {present:0, absent:0, excused:0, unmarked:0};
+  attendees.forEach(c=>{ counts[attendanceStatus(ev,c.id) || 'unmarked']++; });
+  const card = document.createElement('div'); card.className = 'card';
+  card.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <div><h3 style="margin:0;">${escapeHtml(ev.title)}</h3><div class="cal-meta">${fmtDate(ev.date)}${ev.startTime?' · '+ev.startTime:''}</div></div>
+      <span class="mono" style="font-size:12px; color:var(--paper-dim);">✓${counts.present} · ✕${counts.absent} · ⊘${counts.excused}${counts.unmarked?' · '+counts.unmarked+' unmarked':''}</span>
+    </div>
+    <div id="att-rows-${ev.id}" style="margin-top:12px;"></div>
+  `;
+  list.appendChild(card);
+  const rowsWrap = card.querySelector(`#att-rows-${ev.id}`);
+  if(!attendees.length){ rowsWrap.innerHTML = `<div class="empty-state">No students expected for this call — assign departments/students to it in Calendar, or add crew in Setup.</div>`; }
+  else attendees.forEach(c=>{
+    const status = attendanceStatus(ev, c.id);
+    const row = document.createElement('div'); row.className = 'list-item';
+    row.innerHTML = `
+      <span>${escapeHtml(c.name)}</span>
+      <span style="display:flex; gap:5px;">
+        <button class="btn small" style="border:1px solid var(--sage); background:${status==='present'?'var(--sage)':'transparent'}; color:${status==='present'?'var(--ink)':'var(--paper)'};" data-att="present" data-event="${ev.id}" data-crew="${c.id}">Present</button>
+        <button class="btn small" style="border:1px solid var(--red); background:${status==='absent'?'var(--red)':'transparent'}; color:${status==='absent'?'#fff':'var(--paper)'};" data-att="absent" data-event="${ev.id}" data-crew="${c.id}">Absent</button>
+        <button class="btn small" style="border:1px solid var(--amber); background:${status==='excused'?'var(--amber)':'transparent'}; color:${status==='excused'?'var(--ink)':'var(--paper)'};" data-att="excused" data-event="${ev.id}" data-crew="${c.id}">Excused</button>
+      </span>
     `;
-    list.appendChild(card);
-    const rowsWrap = card.querySelector(`#att-rows-${ev.id}`);
-    if(!attendees.length){ rowsWrap.innerHTML = `<div class="empty-state">No students expected for this call — assign departments/students to it in Calendar, or add crew in Setup.</div>`; return; }
-    attendees.forEach(c=>{
-      const status = attendanceStatus(ev, c.id);
-      const row = document.createElement('div'); row.className = 'list-item';
-      row.innerHTML = `
-        <span>${escapeHtml(c.name)}</span>
-        <span style="display:flex; gap:5px;">
-          <button class="btn small" style="border:1px solid var(--sage); background:${status==='present'?'var(--sage)':'transparent'}; color:${status==='present'?'var(--ink)':'var(--paper)'};" data-att="present" data-event="${ev.id}" data-crew="${c.id}">Present</button>
-          <button class="btn small" style="border:1px solid var(--red); background:${status==='absent'?'var(--red)':'transparent'}; color:${status==='absent'?'#fff':'var(--paper)'};" data-att="absent" data-event="${ev.id}" data-crew="${c.id}">Absent</button>
-          <button class="btn small" style="border:1px solid var(--amber); background:${status==='excused'?'var(--amber)':'transparent'}; color:${status==='excused'?'var(--ink)':'var(--paper)'};" data-att="excused" data-event="${ev.id}" data-crew="${c.id}">Excused</button>
-        </span>
-      `;
-      rowsWrap.appendChild(row);
-    });
+    rowsWrap.appendChild(row);
   });
   list.querySelectorAll('[data-att]').forEach(btn=>btn.addEventListener('click', async ()=>{
-    const ev = state.calendar.find(e=>e.id===btn.dataset.event); if(!ev) return;
-    await setAttendance(ev, btn.dataset.crew, btn.dataset.att);
+    const evt = state.calendar.find(e=>e.id===btn.dataset.event); if(!evt) return;
+    await setAttendance(evt, btn.dataset.crew, btn.dataset.att);
     renderAttendanceMarkView(); renderDashboard(); renderNotifications();
     if(ui.calSub==='month') renderCalMonth(); else renderCalendar();
   }));
@@ -5727,6 +5747,20 @@ async function init(){
   document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click', ()=>switchView(b.dataset.view)));
   document.querySelectorAll('#deptSubtabs button').forEach(b=>b.addEventListener('click', ()=>{ ui.activeSub = b.dataset.sub; renderDepartments(); }));
   document.querySelectorAll('#attendanceSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchAttendanceSub(b.dataset.attSub)));
+  document.getElementById('attendanceDateSelect').addEventListener('change', (e)=>{
+    ui.attendanceSelectedEventId = e.target.value;
+    renderAttendanceMarkView();
+  });
+  document.getElementById('attPrevCallBtn').addEventListener('click', ()=>{
+    const sorted = [...state.calendar].sort((a,b)=>a.date.localeCompare(b.date));
+    const idx = sorted.findIndex(e=>e.id===ui.attendanceSelectedEventId);
+    if(idx>0){ ui.attendanceSelectedEventId = sorted[idx-1].id; renderAttendanceMarkView(); }
+  });
+  document.getElementById('attNextCallBtn').addEventListener('click', ()=>{
+    const sorted = [...state.calendar].sort((a,b)=>a.date.localeCompare(b.date));
+    const idx = sorted.findIndex(e=>e.id===ui.attendanceSelectedEventId);
+    if(idx>=0 && idx<sorted.length-1){ ui.attendanceSelectedEventId = sorted[idx+1].id; renderAttendanceMarkView(); }
+  });
   document.querySelectorAll('#behaviorSubtabs button').forEach(b=>b.addEventListener('click', ()=>switchBehaviorSub(b.dataset.behSub)));
 
   document.getElementById('calAddBtn').addEventListener('click', addCalendarEvent);
