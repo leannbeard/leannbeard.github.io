@@ -778,6 +778,7 @@
           <button class="wb-tool-btn" data-piece="bench">▬ Bench</button>
           <button class="wb-tool-btn" data-piece="door">▮ Doorway</button>
           <span class="wb-sep"></span>
+          <button class="btn ghost small" id="sdUndoBtn" disabled>↶ Undo</button>
           <button class="btn danger small" id="sdClearBtn">Clear All Pieces</button>
         </div>
       </div>
@@ -3925,9 +3926,12 @@ async function createNewSandbox(){
   if(name===null) return;
   const trimmed = name.trim();
   if(!trimmed){ toast('Give it a name'); return; }
-  const entry = { id:cryptoId(), name:trimmed, createdBy: currentUser()?.name || authUser?.displayName || 'Someone', createdAt:new Date().toISOString() };
+  const pin = prompt('Optional: set a PIN so other groups can\'t get into this one (leave blank for no PIN):', '');
+  const trimmedPin = pin ? pin.trim() : '';
+  const entry = { id:cryptoId(), name:trimmed, pin: trimmedPin||null, createdBy: currentUser()?.name || authUser?.displayName || 'Someone', createdAt:new Date().toISOString() };
   if(!state.sandboxList) state.sandboxList = [];
   state.sandboxList.push(entry);
+  sdUnlockedSandboxes.add(entry.id); // the creator doesn't need to re-enter their own PIN
   try{
     if(window.__fb){
       const ref = window.__fb.doc(window.__fb.db, PROD_COLLECTION, currentProductionId);
@@ -3938,7 +3942,22 @@ async function createNewSandbox(){
   }catch(e){ console.warn('Sandbox creation failed to sync, falling back to full save', e); await saveState(); }
   await switchStageDesignBoard('sandbox', entry.id);
   renderStageDesignView();
-  toast(`Created "${trimmed}" — share this name with your group`);
+  toast(trimmedPin ? `Created "${trimmed}" — share the name AND PIN with your group` : `Created "${trimmed}" — share this name with your group`);
+}
+// Returns true if the person may proceed into this sandbox — staff always can (they need to
+// review any group's work), the sandbox's own creator never has to re-enter their PIN, and
+// once anyone enters a PIN correctly it's remembered for the rest of this browser session so
+// they're not re-prompted every time they switch back to it.
+function sdCheckSandboxAccess(sandboxId){
+  const sbx = (state.sandboxList||[]).find(s=>s.id===sandboxId);
+  if(!sbx || !sbx.pin) return true;
+  if(isDirectorOrStageMgmt()) return true;
+  if(sdUnlockedSandboxes.has(sandboxId)) return true;
+  const entered = prompt(`"${sbx.name}" is protected with a PIN. Enter it to continue:`);
+  if(entered===null) return false;
+  if(entered.trim() === sbx.pin){ sdUnlockedSandboxes.add(sandboxId); return true; }
+  toast('Wrong PIN');
+  return false;
 }
 // Switches which board is loaded into the (already-running) 3D scene — stops the old live
 // listener, clears the currently-rendered pieces, and starts a fresh listener on the new one.
@@ -3946,6 +3965,9 @@ async function switchStageDesignBoard(mode, sandboxId){
   stopStageDesignListener();
   sdBoardMode = mode; sdSandboxId = sandboxId || null;
   sdSelectedId = null;
+  sdUndoStack = [];
+  const undoBtn = document.getElementById('sdUndoBtn');
+  if(undoBtn) undoBtn.disabled = true;
   stageDesignCache = { pieces:[] };
   if(sdScene) syncStageDesignScene();
   document.getElementById('sdToolbarWrap').style.display = canEditActiveBoard() ? 'block' : 'none';
@@ -3956,6 +3978,12 @@ async function switchStageDesignBoard(mode, sandboxId){
 let THREE_MOD=null, OrbitControlsClass=null;
 let sdScene=null, sdCamera=null, sdRenderer=null, sdControls=null, sdRaycaster=null;
 let sdPieceMeshes={}, sdAnimFrame=null, sdResizeObs=null, sdSelectedId=null;
+// Undo is a local, in-memory, per-board safety net for destructive actions (Clear All,
+// Delete Piece) — not a synced/persisted history. It resets whenever you switch boards, since
+// undoing "into" a different board's history wouldn't make sense.
+let sdUndoStack = [];
+const SD_UNDO_MAX = 15;
+let sdUnlockedSandboxes = new Set(); // sandbox IDs whose PIN has already been verified this session
 
 async function ensureThreeLoaded(){
   if(THREE_MOD) return;
@@ -4252,8 +4280,26 @@ async function updateSelectedPieceProp(field, value){
   syncStageDesignScene(); renderSdPieceList();
   await saveStageDesignData();
 }
+function sdPushUndo(){
+  sdUndoStack.push(JSON.parse(JSON.stringify(stageDesignCache.pieces)));
+  if(sdUndoStack.length > SD_UNDO_MAX) sdUndoStack.shift();
+  const btn = document.getElementById('sdUndoBtn');
+  if(btn) btn.disabled = false;
+}
+async function sdUndo(){
+  if(!sdUndoStack.length){ toast('Nothing to undo'); return; }
+  if(!canEditActiveBoard()){ toast('Only editors of this board can undo'); return; }
+  stageDesignCache.pieces = sdUndoStack.pop();
+  sdSelectedId = null;
+  syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
+  await saveStageDesignData();
+  const btn = document.getElementById('sdUndoBtn');
+  if(btn) btn.disabled = !sdUndoStack.length;
+  toast('Undone');
+}
 async function deleteSelectedPiece(){
   if(!sdSelectedId) return;
+  sdPushUndo();
   stageDesignCache.pieces = stageDesignCache.pieces.filter(p=>p.id!==sdSelectedId);
   sdSelectedId = null;
   syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
@@ -5808,29 +5854,36 @@ async function init(){
     toast('Notifications cleared');
   });
   document.querySelectorAll('#sdToolbarWrap [data-piece]').forEach(btn=>btn.addEventListener('click', ()=>addStagePiece(btn.dataset.piece)));
+  document.getElementById('sdUndoBtn').addEventListener('click', sdUndo);
   document.getElementById('sdClearBtn').addEventListener('click', async ()=>{
     if(!canEditActiveBoard()){ toast('Only Set Design, Stage Management, or the Director can edit the set'); return; }
-    if(!confirm('Remove every piece from the 3D set design? This cannot be undone.')) return;
+    if(!stageDesignCache.pieces.length){ toast('Already empty'); return; }
+    if(!confirm(`Remove all ${stageDesignCache.pieces.length} piece(s) from this board? You'll be able to click Undo right after if this was a mistake, but that only lasts until you leave this board — don't count on it later.`)) return;
+    sdPushUndo();
     stageDesignCache.pieces = []; sdSelectedId = null;
     syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
     await saveStageDesignData();
-    toast('Set cleared');
+    toast('Set cleared — click Undo if that was a mistake');
   });
   document.querySelectorAll('#sdBoardTabs button').forEach(btn=>btn.addEventListener('click', async ()=>{
-    document.querySelectorAll('#sdBoardTabs button').forEach(b=>b.classList.toggle('active', b===btn));
     if(btn.dataset.board==='production'){
+      document.querySelectorAll('#sdBoardTabs button').forEach(b=>b.classList.toggle('active', b===btn));
       await switchStageDesignBoard('production', null);
     } else {
       if(!currentUser() && !isDirectorOrStageMgmt()){ toast('Sign in to use a practice sandbox'); return; }
       const list = state.sandboxList || [];
-      if(!list.length){ toast('No sandboxes exist yet — click "+ New Sandbox" to start one for your group'); await switchStageDesignBoard('sandbox', null); }
-      else await switchStageDesignBoard('sandbox', list[0].id);
+      if(!list.length){ toast('No sandboxes exist yet — click "+ New Sandbox" to start one for your group'); return; }
+      if(!sdCheckSandboxAccess(list[0].id)) return;
+      document.querySelectorAll('#sdBoardTabs button').forEach(b=>b.classList.toggle('active', b===btn));
+      await switchStageDesignBoard('sandbox', list[0].id);
     }
     renderStageDesignView();
   }));
   document.getElementById('sdSandboxBrowseSelect').addEventListener('change', async (e)=>{
     if(!e.target.value) return;
+    if(!sdCheckSandboxAccess(e.target.value)){ renderStageDesignView(); return; } // revert dropdown to the actually-loaded sandbox
     await switchStageDesignBoard('sandbox', e.target.value);
+    renderStageDesignView();
   });
   document.getElementById('sdNewSandboxBtn').addEventListener('click', createNewSandbox);
   document.getElementById('sdDeleteSandboxBtn').addEventListener('click', ()=>{ if(sdSandboxId) deleteSandbox(sdSandboxId); });
