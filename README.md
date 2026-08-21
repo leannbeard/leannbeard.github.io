@@ -2952,7 +2952,14 @@ function renderTaskCard(t, dep, depState){
   const statusBtn = document.createElement('button');
   statusBtn.className = 'status-btn ' + t.status;
   statusBtn.textContent = t.status.replace('_',' ');
-  statusBtn.addEventListener('click', async ()=>{ cycleStatus(t); await saveState(); renderDepartments(); renderDashboard(); });
+  statusBtn.addEventListener('click', async ()=>{
+    cycleStatus(t);
+    if(t.status==='done'){
+      const who = currentUser()?.name || authUser?.displayName || 'Someone';
+      logChange(`✅ "${escapeHtml(t.title)}" marked done in ${dep.label} by ${escapeHtml(who)}.`, {type:'directorOnly'});
+    }
+    await saveState(); renderDepartments(); renderDashboard();
+  });
   card.appendChild(statusBtn);
 
   const body = document.createElement('div'); body.className = 'task-body';
@@ -2983,9 +2990,12 @@ function renderTaskCard(t, dep, depState){
     await saveState();
   });
   metaRow.appendChild(assignee);
-  if(isDirectorOrStageMgmt()){
+  if(isDirector()){
     const del = document.createElement('button'); del.className='task-del'; del.textContent='✕';
-    del.addEventListener('click', async ()=>{ depState.tasks = depState.tasks.filter(x=>x.id!==t.id); await saveState(); renderDepartments(); renderDashboard(); });
+    del.addEventListener('click', async ()=>{
+      if(!isDirector()) return; // defensive re-check — only the Director can delete a task, even if this got triggered some other way
+      depState.tasks = depState.tasks.filter(x=>x.id!==t.id); await saveState(); renderDepartments(); renderDashboard();
+    });
     metaRow.appendChild(del);
   }
   body.appendChild(metaRow);
