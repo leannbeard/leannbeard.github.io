@@ -584,13 +584,14 @@
       <div id="conflictFormWrap">
         <div class="form-grid">
           <select id="conflictWho"></select>
-          <select id="conflictEvent"></select>
           <select id="conflictReason">
             <option value="">Select a reason</option>
             <option>Doctor Appointment</option><option>Family Emergency</option><option>School Conflict</option>
             <option>Religious Observance</option><option>Transportation Issue</option><option>Other</option>
           </select>
         </div>
+        <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">Which call(s)? Check all that apply — same reason applies to every one you check</label>
+        <div id="conflictEventChecks" class="checkbox-row" style="max-height:200px; overflow-y:auto; display:block; margin-bottom:10px;"></div>
         <textarea id="conflictNotes" class="full-width" style="min-height:50px;" placeholder="Additional notes (optional)"></textarea>
         <button class="btn" id="conflictAddBtn">Submit Conflict</button>
       </div>
@@ -2381,8 +2382,8 @@ function renderConflictForm(){
     whoSel.innerHTML = `<option value="${cu.id}">${escapeHtml(cu.name)} (you)</option>`;
   }
 
-  const sel = document.getElementById('conflictEvent');
-  sel.innerHTML = future.map(e=>`<option value="${e.id}">${escapeHtml(e.title)} — ${fmtDate(e.date)}</option>`).join('');
+  const eventChecks = document.getElementById('conflictEventChecks');
+  eventChecks.innerHTML = future.map(e=>`<label style="display:block; margin-bottom:6px; font-weight:normal;"><input type="checkbox" value="${e.id}"> ${escapeHtml(e.title)} — ${fmtDate(e.date)}</label>`).join('');
 }
 function renderConflicts(){
   renderConflictForm();
@@ -2830,17 +2831,24 @@ async function submitConflict(){
   const whoId = document.getElementById('conflictWho').value;
   const user = state.crew.find(c=>c.id===whoId);
   if(!user){ toast('Choose who this conflict is for'); return; }
-  const eventId = document.getElementById('conflictEvent').value;
-  const ev = state.calendar.find(e=>e.id===eventId);
-  if(!ev){ toast('Pick an upcoming call'); return; }
+  const eventIds = Array.from(document.querySelectorAll('#conflictEventChecks input:checked')).map(i=>i.value);
+  if(!eventIds.length){ toast('Check at least one call — you can check several if this conflict repeats'); return; }
   const reason = document.getElementById('conflictReason').value;
   if(!reason){ toast('Select a reason'); return; }
   const notes = document.getElementById('conflictNotes').value.trim();
-  state.conflicts.push({ id:cryptoId(), eventId:ev.id, eventTitle:ev.title, eventDate:ev.date, crewId:user.id, crewName:user.name,
-    department:(user.departments||[]).map(k=>deptInfo(k).label).join(', '), reason, notes, status:'pending', submittedAt:new Date().toISOString() });
+  let count = 0;
+  eventIds.forEach(eventId=>{
+    const ev = state.calendar.find(e=>e.id===eventId);
+    if(!ev) return;
+    state.conflicts.push({ id:cryptoId(), eventId:ev.id, eventTitle:ev.title, eventDate:ev.date, crewId:user.id, crewName:user.name,
+      department:(user.departments||[]).map(k=>deptInfo(k).label).join(', '), reason, notes, status:'pending', submittedAt:new Date().toISOString() });
+    count++;
+  });
   await saveState();
   document.getElementById('conflictNotes').value=''; document.getElementById('conflictReason').value='';
-  renderConflicts(); toast('Conflict submitted');
+  document.querySelectorAll('#conflictEventChecks input').forEach(i=>i.checked=false);
+  renderConflicts();
+  toast(count>1 ? `Submitted ${count} conflicts` : 'Conflict submitted');
 }
 
 // ---------------- DEPARTMENTS: pills + subtabs ----------------
