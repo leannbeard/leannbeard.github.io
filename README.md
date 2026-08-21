@@ -5442,7 +5442,7 @@ function renderSetup(){
       ${isDirector() ? `<select class="mono" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:4px 7px; font-size:11.5px;" data-classperiod="${c.id}">
         ${['Class A','Class B','Class C','Class D'].map(cp=>`<option ${cp===c.classPeriod?'selected':''}>${cp}</option>`).join('')}
       </select>` : `<span class="rmeta">${c.classPeriod||''}</span>`}
-      ${isDirector() ? `${isCast?`<button class="btn ghost small" data-editrole="${c.id}">Edit Role</button>`:''}<button class="btn ghost small" data-editemail="${c.id}">Edit Email</button><button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
+      ${isDirector() ? `${isCast?`<button class="btn ghost small" data-editrole="${c.id}">Edit Role</button>`:''}<button class="btn ghost small" data-editemail="${c.id}">Edit Email</button><button class="btn ghost small" data-editparent="${c.id}">Edit Parent Info</button><button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
     wrap.appendChild(row);
     if(isDirector()){
       row.querySelector('[data-classperiod]').addEventListener('change', async (e)=>{
@@ -5459,6 +5459,16 @@ function renderSetup(){
         if(c.email){ const prodMeta = globalState.productions.find(p=>p.id===currentProductionId); rosterIndexAdd(c.email, currentProductionId, prodMeta?prodMeta.name:'', c.id); }
         await saveState(); await saveGlobalState(); renderSetup();
         toast('Email updated');
+      });
+      row.querySelector('[data-editparent]').addEventListener('click', async ()=>{
+        const emailVal = prompt(`Parent/guardian email for ${escapeHtml(c.name)}:`, c.parentEmail||'');
+        if(emailVal===null) return;
+        const phoneVal = prompt(`Parent/guardian phone for ${escapeHtml(c.name)}:`, c.parentPhone||'');
+        if(phoneVal===null) return;
+        c.parentEmail = emailVal.trim();
+        c.parentPhone = phoneVal.trim();
+        await saveState(); renderSetup();
+        toast('Parent info updated');
       });
       if(isCast){
         row.querySelector('[data-editrole]').addEventListener('click', async ()=>{
@@ -6114,3 +6124,4 @@ init();
 </script>
 </body>
 </html>
+
