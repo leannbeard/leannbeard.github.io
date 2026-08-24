@@ -791,6 +791,7 @@
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
         <button class="btn ghost small" id="sdPrintSnapshotBtn">🖨 Print 3D View</button>
         <button class="btn ghost small" id="sdPrintGroundPlanBtn">📐 Print Ground Plan</button>
+        <button class="btn ghost small" id="sdToggleVersionsBtn">🕐 Version History</button>
       </div>
       <div class="sd-layout">
         <div class="sd-canvas-wrap" id="sdCanvasWrap">
@@ -819,6 +820,17 @@
             <button class="btn danger small" id="sdDeletePieceBtn" style="margin-top:12px; width:100%;">Delete Piece</button>
           </div>
         </div>
+      </div>
+      <div class="card" id="sdVersionPanel" style="display:none; margin-top:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <h3 style="margin:0;">Version History</h3>
+          <span style="display:flex; gap:8px;">
+            <button class="btn ghost small" id="sdClearOldVersionsBtn" style="display:none;">Clear Old Versions (keep 5 newest)</button>
+            <button class="btn small" id="sdSaveVersionBtn">Save Version Now</button>
+          </span>
+        </div>
+        <p style="font-size:11.5px; color:var(--paper-dim); margin-top:6px;">This board auto-saves a version every few minutes while people are working on it, on top of whatever you save on purpose — so a deleted or ruined design can always be brought back, not just within the same visit. Delete a version's ✕ if storage space matters — that only removes the saved snapshot, not any pieces currently on the board.</p>
+        <div id="sdVersionList" style="margin-top:8px;"></div>
       </div>
     </div>
   </section>
@@ -3933,7 +3945,9 @@ let stageDesignCache = { pieces:[] };
 let stageDesignDraggingId = null;
 let stageDesignPendingRerender = false;
 function stageDesignDocId(){ return sdBoardMode==='sandbox' ? currentProductionId+'_sbx_'+sdSandboxId : currentProductionId; }
-function normalizeStageDesignCache(){ if(!stageDesignCache.pieces) stageDesignCache.pieces = []; }
+const SD_VERSION_MAX = 30;
+const SD_AUTO_SNAPSHOT_INTERVAL_MS = 5*60*1000; // don't auto-snapshot more than once per 5 min per board
+function normalizeStageDesignCache(){ if(!stageDesignCache.pieces) stageDesignCache.pieces = []; if(!stageDesignCache.versionHistory) stageDesignCache.versionHistory = []; }
 function stopStageDesignListener(){ if(stageDesignUnsubscribe){ stageDesignUnsubscribe(); stageDesignUnsubscribe = null; } }
 async function startStageDesignListener(){
   stopStageDesignListener();
@@ -3947,13 +3961,95 @@ async function startStageDesignListener(){
     syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
   }, (err)=>console.warn('Stage design live listener failed (check Firestore rules include "'+stageDesignCollectionName()+'")', err));
 }
+// Pushes a snapshot into this board's persistent version history (separate from the
+// session-only Undo stack — this survives page reloads and different people signing in
+// later, specifically so a deleted design can be recovered days later, not just seconds later.
+function sdPushVersion(label, kind){
+  if(!stageDesignCache.versionHistory) stageDesignCache.versionHistory = [];
+  const who = currentUser()?.name || authUser?.displayName || 'Someone';
+  stageDesignCache.versionHistory.push({
+    id:cryptoId(), timestamp:new Date().toISOString(), savedBy:who, kind: kind||'manual',
+    label: label || '', pieceCount: stageDesignCache.pieces.length,
+    pieces: JSON.parse(JSON.stringify(stageDesignCache.pieces))
+  });
+  if(stageDesignCache.versionHistory.length > SD_VERSION_MAX){
+    stageDesignCache.versionHistory = stageDesignCache.versionHistory.slice(stageDesignCache.versionHistory.length - SD_VERSION_MAX);
+  }
+}
+function sdMaybeAutoSnapshot(){
+  const last = stageDesignCache._lastAutoSnapshotAt ? new Date(stageDesignCache._lastAutoSnapshotAt).getTime() : 0;
+  if(Date.now() - last < SD_AUTO_SNAPSHOT_INTERVAL_MS) return;
+  sdPushVersion('', 'auto');
+  stageDesignCache._lastAutoSnapshotAt = new Date().toISOString();
+}
 async function saveStageDesignData(){
   try{
     if(window.__fb && currentProductionId){
+      sdMaybeAutoSnapshot();
       const ref = window.__fb.doc(window.__fb.db, stageDesignCollectionName(), stageDesignDocId());
       await window.__fb.setDoc(ref, JSON.parse(JSON.stringify(stageDesignCache)));
     }
   }catch(e){ console.warn('Stage design save failed', e); }
+}
+async function sdSaveVersionNow(){
+  if(!canEditActiveBoard()){ toast('Only editors of this board can save a version'); return; }
+  const label = prompt('Label this version (optional) — e.g. "Before adding stairs", "Final for critique":', '');
+  if(label===null) return;
+  sdPushVersion(label.trim(), 'manual');
+  await saveStageDesignData();
+  toast('Version saved');
+  renderSdVersionHistory();
+}
+async function sdRestoreVersion(versionId){
+  const version = (stageDesignCache.versionHistory||[]).find(v=>v.id===versionId);
+  if(!version) return;
+  if(!canEditActiveBoard()){ toast('Only editors of this board can restore a version'); return; }
+  if(!confirm(`Restore the version from ${fmtDateTime(version.timestamp)}${version.label?' ("'+version.label+'")':''}? This replaces everything currently on the board (${stageDesignCache.pieces.length} piece(s)) with that version's ${version.pieceCount} piece(s). Your current board is pushed to Undo first, so you can get it back with one click if this wasn't what you wanted.`)) return;
+  sdPushUndo();
+  stageDesignCache.pieces = JSON.parse(JSON.stringify(version.pieces));
+  sdSelectedId = null;
+  syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
+  await saveStageDesignData();
+  toast('Version restored — click Undo if that was a mistake');
+}
+async function sdDeleteVersion(versionId){
+  if(!canEditActiveBoard()){ toast('Only editors of this board can delete a version'); return; }
+  const version = (stageDesignCache.versionHistory||[]).find(v=>v.id===versionId);
+  if(!version) return;
+  if(!confirm(`Delete the version from ${fmtDateTime(version.timestamp)}${version.label?' ("'+version.label+'")':''}? This can't be undone — the pieces in it aren't affected, only this saved snapshot.`)) return;
+  stageDesignCache.versionHistory = (stageDesignCache.versionHistory||[]).filter(v=>v.id!==versionId);
+  await saveStageDesignData();
+  renderSdVersionHistory();
+  toast('Version deleted');
+}
+async function sdClearOldVersions(){
+  if(!canEditActiveBoard()){ toast('Only editors of this board can delete versions'); return; }
+  const versions = stageDesignCache.versionHistory||[];
+  const keep = 5;
+  if(versions.length <= keep){ toast(`Only ${versions.length} version(s) saved — nothing old enough to clear`); return; }
+  const removing = versions.length - keep;
+  if(!confirm(`Delete the oldest ${removing} version(s), keeping the ${keep} most recent? This can't be undone.`)) return;
+  stageDesignCache.versionHistory = versions.slice(versions.length - keep);
+  await saveStageDesignData();
+  renderSdVersionHistory();
+  toast(`Deleted ${removing} old version(s)`);
+}
+function renderSdVersionHistory(){
+  const wrap = document.getElementById('sdVersionList');
+  if(!wrap) return;
+  const versions = [...(stageDesignCache.versionHistory||[])].reverse();
+  const clearBtn = document.getElementById('sdClearOldVersionsBtn');
+  if(clearBtn) clearBtn.style.display = (canEditActiveBoard() && versions.length > 5) ? 'inline-block' : 'none';
+  if(!versions.length){ wrap.innerHTML = `<div class="empty-state">No saved versions yet — they build up automatically as you work, or click "Save Version Now" to checkpoint one on purpose.</div>`; return; }
+  const editable = canEditActiveBoard();
+  wrap.innerHTML = versions.map(v=>`
+    <div class="list-item">
+      <span><b>${v.kind==='auto'?'Auto-save':'Saved version'}${v.label?': '+escapeHtml(v.label):''}</b><br><span class="mono" style="font-size:10.5px;color:var(--paper-dim);">${fmtDateTime(v.timestamp)} · ${escapeHtml(v.savedBy)} · ${v.pieceCount} piece(s)</span></span>
+      ${editable?`<span style="display:flex; gap:6px;"><button class="btn small" data-restorever="${v.id}">Restore</button><button class="btn danger small" data-delver="${v.id}">✕</button></span>`:''}
+    </div>
+  `).join('');
+  wrap.querySelectorAll('[data-restorever]').forEach(btn=>btn.addEventListener('click', ()=>sdRestoreVersion(btn.dataset.restorever)));
+  wrap.querySelectorAll('[data-delver]').forEach(btn=>btn.addEventListener('click', ()=>sdDeleteVersion(btn.dataset.delver)));
 }
 // Creates a brand new, empty, freely-named sandbox (e.g. "Group 1") and switches into it.
 // Uses an atomic array append so two groups creating sandboxes at the same moment can't
@@ -4290,6 +4386,7 @@ function selectPiece(id){
   syncStageDesignScene(); renderSdPieceList(); renderSdPropsPanel();
 }
 function renderSdPieceList(){
+  renderSdVersionHistory();
   const list = document.getElementById('sdPieceList'); if(!list) return;
   if(!stageDesignCache.pieces.length){ list.innerHTML = `<div class="empty-state" style="font-size:11.5px;">No pieces yet.</div>`; return; }
   list.innerHTML = stageDesignCache.pieces.map(p=>`
@@ -5959,6 +6056,14 @@ async function init(){
   document.getElementById('sdDeletePieceBtn').addEventListener('click', deleteSelectedPiece);
   document.getElementById('sdPrintSnapshotBtn').addEventListener('click', printStageDesignSnapshot);
   document.getElementById('sdPrintGroundPlanBtn').addEventListener('click', printStageDesignGroundPlan);
+  document.getElementById('sdToggleVersionsBtn').addEventListener('click', ()=>{
+    const panel = document.getElementById('sdVersionPanel');
+    const showing = panel.style.display !== 'none';
+    panel.style.display = showing ? 'none' : 'block';
+    if(!showing) renderSdVersionHistory();
+  });
+  document.getElementById('sdSaveVersionBtn').addEventListener('click', sdSaveVersionNow);
+  document.getElementById('sdClearOldVersionsBtn').addEventListener('click', sdClearOldVersions);
   document.getElementById('llSaveCueBtn').addEventListener('click', llSaveCue);
   document.getElementById('llBlackoutBtn').addEventListener('click', ()=>{
     if(!canUseLightingLab()) return;
