@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -653,14 +652,15 @@
         <button class="btn danger small" id="behClearOldBtn">Clear Records Older Than 30 Days</button>
       </div>
       <div class="subtabs" id="behaviorSubtabs">
-        <button data-beh-sub="log" class="active">Log Infraction</button>
+        <button data-beh-sub="log" class="active">Log a Note</button>
+        <button data-beh-sub="pending" id="behPendingTabBtn" style="display:none;">Pending Review <span id="behPendingBadge" style="display:none; background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:8px; vertical-align:middle;">0</span></button>
         <button data-beh-sub="summary" id="behSummaryTabBtn">Weekly Summary</button>
       </div>
 
       <div id="behaviorLogView">
         <div class="card">
-          <h2>Log an Etiquette / Behavior Infraction</h2>
-          <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Each school day is worth <span id="behPtsLabel">20</span> points toward the weekly behavior grade. Logging an infraction deducts points from that day; a student with no infractions all week gets full credit.</p>
+          <h2>Log a Production Note</h2>
+          <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Each school day is worth <span id="behPtsLabel">20</span> points toward the weekly behavior grade. A note from Stage Management waits for the Director to review it before it affects anyone's score — the student is never notified unless and until it's approved. A note the Director logs directly is approved right away.</p>
           <div class="form-grid">
             <select id="behStudent"></select>
             <input type="date" id="behDate">
@@ -677,12 +677,20 @@
             </select>
             <input type="number" id="behDeduction" placeholder="Points to deduct" min="1" max="100">
           </div>
-          <textarea id="behNotes" class="full-width" style="min-height:50px;" placeholder="Additional notes (optional)"></textarea>
-          <button class="btn" id="behLogBtn">Log Infraction</button>
+          <textarea id="behNotes" class="full-width" style="min-height:50px;" placeholder="What did you directly see or hear? Stick to facts, not labels or conclusions."></textarea>
+          <button class="btn" id="behLogBtn">Submit Production Note</button>
         </div>
         <div class="card" id="behRecentCard" style="display:none;">
-          <h2>Recent Infractions</h2>
+          <h2>Recent Production Notes (Approved)</h2>
           <div id="behaviorIncidentList"></div>
+        </div>
+      </div>
+
+      <div id="behaviorPendingView" style="display:none;">
+        <div class="card">
+          <h2 style="margin-top:0;">Pending Review</h2>
+          <p style="font-size:12px;color:var(--paper-dim);">These have no effect on anyone's score yet, and the student hasn't been told about them. Approve, edit and then approve, or reject — rejecting permanently deletes it.</p>
+          <div id="behaviorPendingList"></div>
         </div>
       </div>
 
@@ -976,7 +984,7 @@
         <button class="btn small" id="attendanceThresholdSaveBtn">Save</button>
       </div>
       <h2 style="margin-top:22px;">Behavior Grading</h2>
-      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sets how many points each school day is worth toward the weekly behavior/etiquette grade, and how many school days count in a week. Log infractions in the Behavior tab.</p>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-6px;">Sets how many points each school day is worth toward the weekly behavior/etiquette grade, and how many school days count in a week. Log Production Notes in the Behavior tab.</p>
       <div class="form-grid" style="max-width:320px;">
         <input type="number" id="behPointsPerDay" placeholder="Points per day" min="1" max="100">
         <input type="number" id="behDaysPerWeek" placeholder="Days per week" min="1" max="7">
@@ -999,7 +1007,7 @@
       </div>
       <div class="form-grid" style="max-width:460px;">
         <input type="text" id="ejsTemplateAbsence" placeholder="Template ID — Absence">
-        <input type="text" id="ejsTemplateBehavior" placeholder="Template ID — Behavior Infraction">
+        <input type="text" id="ejsTemplateBehavior" placeholder="Template ID — Production Note">
       </div>
       <div class="form-grid" style="max-width:460px;">
         <input type="text" id="ejsTemplateDeadline" placeholder="Template ID — Deadline (optional)">
@@ -1084,7 +1092,7 @@
     </div>
     <div class="card" id="archiveCard">
       <h2>Archive Old Records</h2>
-      <p style="font-size:12.5px;color:var(--paper-dim);">Once you've exported a grading period's CSV into your real gradebook (Ascender, etc.), you don't need this app to keep holding onto it — this permanently deletes daily reports and behavior infractions dated before the date you choose, across every department. Grades/behavior after that date are untouched. <b>Export your CSVs first</b> — this cannot be undone.</p>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Once you've exported a grading period's CSV into your real gradebook (Ascender, etc.), you don't need this app to keep holding onto it — this permanently deletes daily reports and Production Notes dated before the date you choose, across every department. Grades/behavior after that date are untouched. <b>Export your CSVs first</b> — this cannot be undone.</p>
       <div class="form-grid" style="max-width:260px;">
         <input type="date" id="archiveCutoffDate">
         <button class="btn danger small" id="archiveDeleteBtn">Delete Records Before This Date</button>
@@ -2642,12 +2650,14 @@ function fmtWeekLabel(weekStart){
   return `Week of ${fmtDate(weekStart)} – ${new Date(end+'T00:00').toLocaleDateString(undefined,{month:'short', day:'numeric'})}`;
 }
 // Weekly score for one student: full marks minus, for each day that had at least
-// one infraction, that day's deductions (capped so one bad day can't cost more than
-// its own share of the week).
+// one approved Production Note, that day's deductions (capped so one bad day can't cost
+// more than its own share of the week). Pending (not-yet-reviewed) notes don't count yet —
+// only after a Director approves them. Notes saved before this feature existed have no
+// status field at all; those count as already-approved so past grades never retroactively change.
 function behaviorScoreForStudent(crewId, weekStart){
   const cfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
   const weekEnd = weekEndISO(weekStart);
-  const incidents = state.behaviorIncidents.filter(i=>i.crewId===crewId && i.date>=weekStart && i.date<=weekEnd);
+  const incidents = state.behaviorIncidents.filter(i=>i.crewId===crewId && i.date>=weekStart && i.date<=weekEnd && (i.status==='approved' || i.status===undefined));
   const byDate = {};
   incidents.forEach(i=>{ byDate[i.date] = (byDate[i.date]||0) + (i.deduction||cfg.pointsPerDay); });
   let totalDeduction = 0;
@@ -2658,7 +2668,9 @@ function behaviorScoreForStudent(crewId, weekStart){
 
 // Participation grade for one student, in one department, for one week — same math as
 // behavior: everyone starts at full marks (pointsPerDay × daysPerWeek); a day only gets
-// docked if that student was actually flagged as a non-contributor on a report that date.
+// docked if that student was flagged as a non-contributor on a report the Director has
+// actually reviewed (Verified or Graded) — a report still sitting as "Submitted" has zero
+// effect on anyone's score yet, same principle as Production Notes needing approval first.
 // Days with no report at all simply aren't touched, same as days with no logged infraction.
 function participationScoreForStudent(crewId, deptKey, weekStart){
   const cfg = state.participationConfig || { pointsPerDay:20, daysPerWeek:5 };
@@ -2667,7 +2679,10 @@ function participationScoreForStudent(crewId, deptKey, weekStart){
   const reportsThisWeek = (depState?depState.reports:[]).filter(r=>
     r.date>=weekStart && r.date<=weekEnd && (r.teamMemberIds||[]).includes(crewId));
   const dockedDates = [];
-  reportsThisWeek.forEach(r=>{ if((r.nonContributorIds||[]).includes(crewId) && !dockedDates.includes(r.date)) dockedDates.push(r.date); });
+  reportsThisWeek.forEach(r=>{
+    const reviewed = r.status==='verified' || r.status==='graded';
+    if(reviewed && (r.nonContributorIds||[]).includes(crewId) && !dockedDates.includes(r.date)) dockedDates.push(r.date);
+  });
   const maxScore = cfg.pointsPerDay * cfg.daysPerWeek;
   const deduction = Math.min(dockedDates.length * cfg.pointsPerDay, maxScore);
   return { score: Math.max(0, maxScore - deduction), maxScore, dockedDates, reportsCount: reportsThisWeek.length };
@@ -2689,13 +2704,17 @@ function combinedParticipationForStudent(crewId, weekStart){
 }
 
 function switchBehaviorSub(sub){
-  if(sub==='summary' && !isDirector()){ sub = 'log'; } // Weekly Summary is grades/behavior viewing — Director only
+  if((sub==='summary' || sub==='pending') && !isDirector()){ sub = 'log'; } // Weekly Summary and Pending Review are Director-only
   ui.behaviorSub = sub;
   document.querySelectorAll('#behaviorSubtabs button').forEach(b=>b.classList.toggle('active', b.dataset.behSub===sub));
   document.getElementById('behSummaryTabBtn').style.display = isDirector() ? 'inline-block' : 'none';
+  document.getElementById('behPendingTabBtn').style.display = isDirector() ? 'inline-block' : 'none';
   document.getElementById('behaviorLogView').style.display = sub==='log' ? 'block' : 'none';
+  document.getElementById('behaviorPendingView').style.display = sub==='pending' ? 'block' : 'none';
   document.getElementById('behaviorSummaryView').style.display = sub==='summary' ? 'block' : 'none';
-  if(sub==='log') renderBehaviorLog(); else renderBehaviorSummary();
+  if(sub==='log') renderBehaviorLog();
+  else if(sub==='pending') renderBehaviorPending();
+  else renderBehaviorSummary();
 }
 function renderBehaviorView(){
   const authorized = canManageBehavior();
@@ -2713,6 +2732,12 @@ function renderBehaviorView(){
         banner.style.display = 'flex';
       } else banner.style.display = 'none';
     } else banner.style.display = 'none';
+    if(isDirector()){
+      const pendingCount = state.behaviorIncidents.filter(i=>i.status==='pending').length;
+      const badge = document.getElementById('behPendingBadge');
+      badge.style.display = pendingCount>0 ? 'inline-block' : 'none';
+      badge.textContent = pendingCount;
+    }
     if(!ui.behaviorWeekCursor) ui.behaviorWeekCursor = weekStartISO(todayISO());
     switchBehaviorSub(ui.behaviorSub || 'log');
     return;
@@ -2746,11 +2771,11 @@ function renderMyBehaviorView(){
   const cls = pct>=0.9 ? 'behavior-score-good' : pct>=0.6 ? 'behavior-score-mid' : 'behavior-score-bad';
   document.getElementById('myBehaviorScoreWrap').innerHTML = `
     <div class="stencil ${cls}" style="font-size:34px; font-weight:700;">${r.score}/${r.maxScore}</div>
-    <div class="mono" style="font-size:12px; color:var(--paper-dim); margin-top:4px;">${r.incidentCount} infraction${r.incidentCount!==1?'s':''} this week</div>
+    <div class="mono" style="font-size:12px; color:var(--paper-dim); margin-top:4px;">${r.incidentCount} Production Note${r.incidentCount!==1?'s':''} this week</div>
   `;
   const list = document.getElementById('myBehaviorIncidentList');
   if(!r.incidents.length){
-    list.innerHTML = `<div class="empty-state">No infractions logged for you this week. 🎉</div>`;
+    list.innerHTML = `<div class="empty-state">No Production Notes for you this week. 🎉</div>`;
     return;
   }
   list.innerHTML = [...r.incidents].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`
@@ -2773,27 +2798,48 @@ function renderBehaviorLog(){
   studentSel.innerHTML = students.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}${(c.departments||[]).includes('cast') && c.castRole ? ' as '+c.castRole : ''} — ${(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team'}</option>`).join('') || '<option value="">No students on roster</option>';
 
   document.getElementById('behRecentCard').style.display = isDirector() ? 'block' : 'none';
-  if(!isDirector()) return; // Stage Management can log infractions but cannot view existing ones
+  if(!isDirector()) return; // Stage Management can submit Production Notes but cannot view existing ones
   const list = document.getElementById('behaviorIncidentList');
-  const sorted = [...state.behaviorIncidents].sort((a,b)=>b.date.localeCompare(a.date) || b.timestamp.localeCompare(a.timestamp));
-  if(!sorted.length){ list.innerHTML = `<div class="empty-state">No infractions logged yet.</div>`; return; }
+  const sorted = [...state.behaviorIncidents].filter(i=>i.status==='approved' || i.status===undefined).sort((a,b)=>b.date.localeCompare(a.date) || b.timestamp.localeCompare(a.timestamp));
+  if(!sorted.length){ list.innerHTML = `<div class="empty-state">No Production Notes logged yet.</div>`; return; }
   list.innerHTML = sorted.slice(0,50).map(i=>`
     <div class="incident-card">
-      <div class="incident-top"><span><b>${i.crewName}</b></span><span class="mono" style="color:var(--red);">−${i.deduction} pts</span></div>
-      <div class="incident-meta">${fmtDate(i.date)} · ${i.reason||'No reason given'} · logged by ${i.loggedBy||'someone'}</div>
+      <div class="incident-top"><span><b>${escapeHtml(i.crewName)}</b></span><span class="mono" style="color:var(--red);">−${i.deduction} pts</span></div>
+      <div class="incident-meta">${fmtDate(i.date)} · ${escapeHtml(i.reason||'No reason given')} · logged by ${escapeHtml(i.loggedBy||'someone')}</div>
       ${i.notes?`<div class="incident-note">${escapeHtml(i.notes)}</div>`:''}
-      ${isDirector()?`<button class="btn danger small" style="margin-top:8px;" data-del-incident="${i.id}">Delete</button>`:''}
+      <button class="btn danger small" style="margin-top:8px;" data-del-incident="${i.id}">Delete</button>
     </div>
   `).join('');
   list.querySelectorAll('[data-del-incident]').forEach(btn=>btn.addEventListener('click', async ()=>{
-    if(!confirm('Delete this infraction record?')) return;
+    if(!confirm('Delete this Production Note?')) return;
     state.behaviorIncidents = state.behaviorIncidents.filter(i=>i.id!==btn.dataset.delIncident);
     await saveState(); renderBehaviorLog();
-    toast('Infraction deleted');
+    toast('Production Note deleted');
   }));
 }
+function renderBehaviorPending(){
+  if(!isDirector()) return;
+  const list = document.getElementById('behaviorPendingList');
+  const pending = state.behaviorIncidents.filter(i=>i.status==='pending').sort((a,b)=>a.timestamp.localeCompare(b.timestamp));
+  if(!pending.length){ list.innerHTML = `<div class="empty-state">Nothing waiting on review right now.</div>`; return; }
+  list.innerHTML = pending.map(i=>`
+    <div class="incident-card">
+      <div class="incident-top"><span><b>${escapeHtml(i.crewName)}</b></span><span class="mono" style="color:var(--amber);">−${i.deduction} pt(s) if approved</span></div>
+      <div class="incident-meta">${fmtDate(i.date)} · ${escapeHtml(i.reason||'No reason given')} · submitted by ${escapeHtml(i.loggedBy||'someone')}</div>
+      ${i.notes?`<div class="incident-note">${escapeHtml(i.notes)}</div>`:''}
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <button class="btn small" data-approve-note="${i.id}">Approve</button>
+        <button class="btn ghost small" data-edit-note="${i.id}">Edit</button>
+        <button class="btn danger small" data-reject-note="${i.id}">Reject</button>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-approve-note]').forEach(btn=>btn.addEventListener('click', ()=>approvePendingNote(btn.dataset.approveNote)));
+  list.querySelectorAll('[data-edit-note]').forEach(btn=>btn.addEventListener('click', ()=>editPendingNote(btn.dataset.editNote)));
+  list.querySelectorAll('[data-reject-note]').forEach(btn=>btn.addEventListener('click', ()=>rejectPendingNote(btn.dataset.rejectNote)));
+}
 async function logInfraction(){
-  if(!canManageBehavior()){ toast('Only Director or Stage Management can log infractions'); return; }
+  if(!canManageBehavior()){ toast('Only Director or Stage Management can log Production Notes'); return; }
   const crewId = document.getElementById('behStudent').value;
   const student = state.crew.find(c=>c.id===crewId);
   if(!student){ toast('Choose a student'); return; }
@@ -2803,16 +2849,63 @@ async function logInfraction(){
   const deduction = parseInt(document.getElementById('behDeduction').value) || (state.behaviorConfig||{pointsPerDay:20}).pointsPerDay;
   const notes = document.getElementById('behNotes').value.trim();
   const loggedBy = currentUser()?.name || authUser?.displayName || activeEmail() || 'someone';
+  // Only the Director's own entries auto-approve — anyone else's (Stage Management) sits as
+  // Pending Review and has zero effect on a score, zero notification to the student, until
+  // the Director actually reviews it. This is the whole point of the feature.
+  const autoApprove = isDirector();
   const incident = {
     id:cryptoId(), crewId, crewName:student.name, date, reason, deduction, notes,
-    loggedBy, loggedByEmail: activeEmail()||'', timestamp:new Date().toISOString()
+    loggedBy, loggedByEmail: activeEmail()||'', timestamp:new Date().toISOString(),
+    status: autoApprove ? 'approved' : 'pending'
   };
   state.behaviorIncidents.push(incident);
-  logChange(`Behavior infraction logged for ${escapeHtml(student.name)} (${fmtDate(date)}).`, {type:'crew', crewId});
-  await saveState(); renderBehaviorLog(); renderNotifications();
-  sendBehaviorInfractionEmail(student, incident);
+  if(autoApprove){
+    logChange(`Production Note logged for ${escapeHtml(student.name)} (${fmtDate(date)}).`, {type:'crew', crewId});
+    sendBehaviorInfractionEmail(student, incident);
+  } else {
+    logChange(`🔔 New Production Note submitted for ${escapeHtml(student.name)} by ${escapeHtml(loggedBy)} — awaiting your review.`, {type:'directorOnly'});
+  }
+  await saveState(); renderBehaviorLog(); renderNotifications(); renderDashboard();
   document.getElementById('behReason').value = ''; document.getElementById('behNotes').value = '';
-  toast('Infraction logged');
+  toast(autoApprove ? 'Production Note logged' : 'Submitted — awaiting Director review');
+}
+async function approvePendingNote(incidentId){
+  if(!isDirector()){ toast('Only the Director can approve a Production Note'); return; }
+  const incident = state.behaviorIncidents.find(i=>i.id===incidentId);
+  if(!incident) return;
+  incident.status = 'approved';
+  logChange(`Production Note approved for ${escapeHtml(incident.crewName)} (${fmtDate(incident.date)}).`, {type:'crew', crewId:incident.crewId});
+  await saveState();
+  const student = state.crew.find(c=>c.id===incident.crewId);
+  if(student) sendBehaviorInfractionEmail(student, incident);
+  renderBehaviorPending(); renderDashboard(); renderNotifications();
+  toast('Approved');
+}
+async function editPendingNote(incidentId){
+  if(!isDirector()) return;
+  const incident = state.behaviorIncidents.find(i=>i.id===incidentId);
+  if(!incident) return;
+  const newReason = prompt('Reason:', incident.reason);
+  if(newReason===null) return;
+  const newDeduction = prompt('Points to deduct:', incident.deduction);
+  if(newDeduction===null) return;
+  const newNotes = prompt('Notes:', incident.notes||'');
+  if(newNotes===null) return;
+  incident.reason = newReason.trim() || incident.reason;
+  incident.deduction = parseInt(newDeduction) || incident.deduction;
+  incident.notes = newNotes.trim();
+  await saveState();
+  renderBehaviorPending();
+  toast('Updated — click Approve when ready');
+}
+async function rejectPendingNote(incidentId){
+  if(!isDirector()){ toast('Only the Director can reject a Production Note'); return; }
+  const incident = state.behaviorIncidents.find(i=>i.id===incidentId);
+  if(!confirm(`Reject and permanently delete this Production Note${incident?' for '+incident.crewName:''}? This cannot be undone, and the student is never notified either way.`)) return;
+  state.behaviorIncidents = state.behaviorIncidents.filter(i=>i.id!==incidentId);
+  await saveState();
+  renderBehaviorPending(); renderDashboard();
+  toast('Rejected and deleted');
 }
 
 function renderBehaviorSummary(){
@@ -2839,7 +2932,7 @@ function renderBehaviorSummary(){
     <div class="att-grid-scroll">
     <table class="att-table" style="white-space:normal;">
       <thead><tr>
-        <th class="att-name-th">Student</th><th>Class</th><th>Team</th><th># Infractions</th><th>Score</th>
+        <th class="att-name-th">Student</th><th>Class</th><th>Team</th><th># Notes</th><th>Score</th>
       </tr></thead>
       <tbody>
         ${rows.map(r=>`<tr>
@@ -2873,7 +2966,7 @@ function exportBehaviorCsv(){
   if(!rows.length){ toast('Nothing to export'); return; }
   const weekLabel = ui.behaviorWeekCursor;
   const dataRows = rows.map(r=>[r.name, r.classPeriod, r.departments, r.incidentCount, r.score, r.maxScore, weekLabel]);
-  downloadCsvRows(['Student','Class Period','Team','Infractions','Score','Max Score','Week Of'], dataRows, `behavior-grades-${weekLabel}.csv`);
+  downloadCsvRows(['Student','Class Period','Team','Production Notes','Score','Max Score','Week Of'], dataRows, `behavior-grades-${weekLabel}.csv`);
 }
 
 // One row per student per report: uses that student's individual grade adjustment if the
@@ -3372,7 +3465,7 @@ function renderParticipationSub(content, dep, depState){
         <button class="btn ghost small" id="partThisWeekBtn">This Week</button>
         <button class="btn ghost small" id="partNextWeekBtn">Next Week ›</button>
       </div>
-      <p style="font-size:12px;color:var(--paper-dim); margin-top:-4px;">Each day is worth ${cfg.pointsPerDay} points (${cfg.pointsPerDay*cfg.daysPerWeek}/week). Everyone starts at full marks — a day only gets docked for a student flagged as a non-contributor on that day's report.</p>
+      <p style="font-size:12px;color:var(--paper-dim); margin-top:-4px;">Each day is worth ${cfg.pointsPerDay} points (${cfg.pointsPerDay*cfg.daysPerWeek}/week). Everyone starts at full marks — a day only gets docked for a student flagged as a non-contributor, and only once you've Verified or Graded that day's report in Reports &amp; Grading. A report still sitting as "Submitted" has no effect on scores yet, even if it flags someone.</p>
       <div style="display:flex; justify-content:flex-end; margin:10px 0;">
         <button class="btn ghost small" id="partExportCsvBtn">Download CSV for gradebook</button>
       </div>
