@@ -5543,6 +5543,7 @@ function renderReportDetail(r, dep, depState, container){
   if(r.status==='submitted') html += `<button class="btn ghost small" data-act="verify">Verify</button> `;
   if(r.status==='submitted' || r.status==='verified') html += `<button class="btn small" data-act="grade">Enter Final Grade & Feedback</button> <button class="btn danger small" data-act="return">Return for Revision</button> `;
   html += `<button class="btn ghost small" data-act="adjust" style="margin-top:8px;">+ Individual Grade Adjustment</button>`;
+  html += ` <button class="btn danger small" data-act="delete" style="margin-top:8px;">Delete This Report</button>`;
   actions.innerHTML = html;
 
   actions.querySelector('[data-act=verify]')?.addEventListener('click', async ()=>{
@@ -5579,6 +5580,14 @@ function renderReportDetail(r, dep, depState, container){
     await checkAndSendFailingGradeEmails(r, dep);
     await saveState();
     toast('Adjustment added');
+  });
+  actions.querySelector('[data-act=delete]')?.addEventListener('click', async ()=>{
+    if(!isDirector()) return;
+    if(!confirm(`Permanently delete this ${dep.label} report from ${fmtDate(r.date)}? This cannot be undone — if it's already reflected in a participation score, that will recalculate once it's gone.`)) return;
+    depState.reports = depState.reports.filter(x=>x.id!==r.id);
+    logChange(`${dep.label} report for ${fmtDate(r.date)} deleted.`, {type:'directorOnly'});
+    await saveState(); renderDepartments(); renderDashboard();
+    toast('Report deleted');
   });
 }
 
@@ -6447,4 +6456,3 @@ init();
 </script>
 </body>
 </html>
-
