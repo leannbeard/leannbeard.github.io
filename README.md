@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -647,6 +648,10 @@
       </div>
     </div>
     <div id="behaviorAuthorizedWrap">
+      <div id="behaviorOldRecordsBanner" class="lockmsg" style="display:none; border-color:var(--amber); color:var(--amber); justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span id="behaviorOldRecordsText"></span>
+        <button class="btn danger small" id="behClearOldBtn">Clear Records Older Than 30 Days</button>
+      </div>
       <div class="subtabs" id="behaviorSubtabs">
         <button data-beh-sub="log" class="active">Log Infraction</button>
         <button data-beh-sub="summary" id="behSummaryTabBtn">Weekly Summary</button>
@@ -1028,8 +1033,6 @@
         </div>
         <div class="form-grid">
           <input type="text" id="rosterEmail" placeholder="Their sign-in email (for Google login)">
-          <input type="text" id="rosterParentEmail" placeholder="Parent email (optional)">
-          <input type="text" id="rosterParentPhone" placeholder="Parent phone (optional)">
         </div>
         <button class="btn small" id="rosterAddBtn">Add Cast / Crew Member</button>
       </div>
@@ -1065,6 +1068,19 @@
       <div class="bar" style="margin-bottom:14px;"><div class="bar-fill" id="dataSizeBar" style="width:0%;"></div></div>
       <button class="btn ghost small" id="downloadBackupBtn" style="margin-right:8px;">Download Full Backup (JSON)</button>
       <button class="btn danger small" id="resetAllBtn">Reset All Production Data</button>
+    </div>
+    <div class="card" id="scrubParentCard">
+      <h2>Remove Parent Contact Info</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Parent email and phone are no longer collected by this app — new roster entries never ask for them. This button also goes back and permanently deletes any parent email/phone already stored from before, across <b>every</b> production, not just this one. Safe to run any time; it only removes those two fields and touches nothing else.</p>
+      <button class="btn danger small" id="scrubParentBtn">Scrub Parent Contact Info (All Productions)</button>
+    </div>
+    <div class="card" id="autoDeleteCard">
+      <h2>Automatic Data Cleanup</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">A safety net for busy weeks — once you've recorded grades in your real gradebook, there's no reason for the detailed write-ups to keep sitting here. Set a number of days, and daily reports and behavior records older than that get deleted automatically, no action needed from you. 0 turns this off.</p>
+      <div class="form-grid" style="max-width:260px;">
+        <input type="number" id="autoDeleteDays" min="0" step="1" placeholder="Days (0 = off)">
+        <button class="btn small" id="autoDeleteSaveBtn">Save</button>
+      </div>
     </div>
     <div class="card" id="archiveCard">
       <h2>Archive Old Records</h2>
@@ -1137,6 +1153,46 @@ function cryptoId(){ return 'id-' + Math.random().toString(36).slice(2,10) + Dat
 function fmtDate(d){ return new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'}); }
 function fmtDateTime(iso){ return new Date(iso).toLocaleString(undefined,{month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}); }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
+function daysAgoISO(n){ return new Date(Date.now()-n*86400000).toISOString().slice(0,10); }
+// Shared by the manual cutoff-date archive tool, the quick "clear old records" buttons on
+// the Behavior/Reports views, and the automatic retention safety net — one implementation,
+// three ways to trigger it, so they can never drift out of sync with each other.
+function countRecordsBeforeCutoff(cutoff){
+  let reportCount = 0;
+  DEPARTMENTS.forEach(d=>{ reportCount += state.departments[d.key].reports.filter(r=>r.date < cutoff).length; });
+  const incidentCount = state.behaviorIncidents.filter(i=>i.date < cutoff).length;
+  return { reportCount, incidentCount };
+}
+function deleteRecordsBeforeCutoff(cutoff){
+  let reportCount = 0;
+  DEPARTMENTS.forEach(d=>{
+    const dep = state.departments[d.key];
+    const kept = dep.reports.filter(r=>r.date >= cutoff);
+    reportCount += dep.reports.length - kept.length;
+    dep.reports = kept;
+  });
+  const keptIncidents = state.behaviorIncidents.filter(i=>i.date >= cutoff);
+  const incidentCount = state.behaviorIncidents.length - keptIncidents.length;
+  state.behaviorIncidents = keptIncidents;
+  return { reportCount, incidentCount };
+}
+// Single-type versions for the contextual "clear old records" banners on the Behavior and
+// Reports & Grading views specifically — each only touches the data type it's showing you,
+// so clicking "clear" on a behavior banner never silently deletes a different department's
+// unrelated reports.
+function countBehaviorIncidentsBeforeCutoff(cutoff){ return state.behaviorIncidents.filter(i=>i.date < cutoff).length; }
+function deleteBehaviorIncidentsBeforeCutoff(cutoff){
+  const before = state.behaviorIncidents.length;
+  state.behaviorIncidents = state.behaviorIncidents.filter(i=>i.date >= cutoff);
+  return before - state.behaviorIncidents.length;
+}
+function countDeptReportsBeforeCutoff(deptKey, cutoff){ return state.departments[deptKey].reports.filter(r=>r.date < cutoff).length; }
+function deleteDeptReportsBeforeCutoff(deptKey, cutoff){
+  const dep = state.departments[deptKey];
+  const before = dep.reports.length;
+  dep.reports = dep.reports.filter(r=>r.date >= cutoff);
+  return before - dep.reports.length;
+}
 
 function seedTasks(items){
   return items.map(([title, workType, priority, hours])=>({
@@ -1183,6 +1239,7 @@ function defaultProductionState(name, seeded){
     lightingCues:[],
     sandboxList:[],
     blockingNotes:[],
+    autoDeleteRecordsAfterDays:0,
     departments: freshDepartments(seeded)
   };
 }
@@ -1642,7 +1699,7 @@ function emailAlertsConfigured(kind){
 async function sendBehaviorInfractionEmail(student, incident){
   if(!emailAlertsConfigured('behavior')) return;
   const cfg = globalState.emailjs;
-  const recipients = [student.email, student.parentEmail].filter(Boolean);
+  const recipients = [student.email].filter(Boolean); // parent contact info is no longer collected/stored — student only
   if(!recipients.length) return;
   for(const to_email of recipients){
     try{
@@ -1664,7 +1721,7 @@ async function checkAndSendFailingGradeEmails(report, dep){
     if(effectiveGrade >= 60) continue;
     const student = state.crew.find(c=>c.id===crewId);
     if(!student) continue;
-    const recipients = [student.email, student.parentEmail].filter(Boolean);
+    const recipients = [student.email].filter(Boolean); // parent contact info is no longer collected/stored — student only
     for(const to_email of recipients){
       try{
         await emailjs.send(cfg.serviceId, cfg.templateFailingGrade, {
@@ -1679,7 +1736,7 @@ async function checkAndSendFailingGradeEmails(report, dep){
 async function sendAbsenceEmail(student, ev){
   if(!emailAlertsConfigured('absence')) return;
   const cfg = globalState.emailjs;
-  const recipients = [student.email, student.parentEmail].filter(Boolean);
+  const recipients = [student.email].filter(Boolean); // parent contact info is no longer collected/stored — student only
   if(!recipients.length) return;
   for(const to_email of recipients){
     try{
@@ -1690,6 +1747,17 @@ async function sendAbsenceEmail(student, ev){
   }
 }
 let deadlineCheckRanThisSession = false;
+async function checkAutoDeleteOldRecords(){
+  const days = state.autoDeleteRecordsAfterDays;
+  if(!days || days<=0) return;
+  const cutoff = daysAgoISO(days);
+  const preview = countRecordsBeforeCutoff(cutoff);
+  if(preview.reportCount===0 && preview.incidentCount===0) return;
+  const result = deleteRecordsBeforeCutoff(cutoff);
+  logChange(`🗑️ Auto-cleanup: deleted ${result.reportCount} report(s) and ${result.incidentCount} behavior record(s) older than ${days} days (past ${fmtDate(cutoff)}), per your retention setting in Setup.`, {type:'directorOnly'});
+  await saveState();
+  renderDashboard(); renderNotifications();
+}
 async function checkAndSendDeadlineAlerts(){
   if(!emailAlertsConfigured('deadline')) return;
   if(deadlineCheckRanThisSession) return;
@@ -2636,6 +2704,15 @@ function renderBehaviorView(){
     document.getElementById('behaviorNotSignedInMsg').style.display = 'none';
     document.getElementById('behaviorNotOnRosterMsg').style.display = 'none';
     document.getElementById('behaviorMyViewWrap').style.display = 'none';
+    const banner = document.getElementById('behaviorOldRecordsBanner');
+    if(isDirector()){
+      const cutoff = daysAgoISO(30);
+      const count = countRecordsBeforeCutoff(cutoff).incidentCount;
+      if(count > 0){
+        document.getElementById('behaviorOldRecordsText').textContent = `You have ${count} behavior record(s) older than 30 days still sitting here — if you've already recorded these grades, you can clear them now.`;
+        banner.style.display = 'flex';
+      } else banner.style.display = 'none';
+    } else banner.style.display = 'none';
     if(!ui.behaviorWeekCursor) ui.behaviorWeekCursor = weekStartISO(todayISO());
     switchBehaviorSub(ui.behaviorSub || 'log');
     return;
@@ -3232,6 +3309,22 @@ function renderReportsHistorySub(content, dep, depState){
   if(!visibleReports.length){ content.innerHTML = `<div class="empty-state"><div class="lamp">👻</div>No ${dep.label} reports filed yet${!isDirector() && u ? ' for '+u.classPeriod : ''}.</div>`; return; }
   content.innerHTML = '';
   if(isDirector()){
+    const cutoff = daysAgoISO(30);
+    const oldCount = countDeptReportsBeforeCutoff(dep.key, cutoff);
+    if(oldCount > 0){
+      const banner = document.createElement('div');
+      banner.className = 'lockmsg';
+      banner.style.cssText = 'border-color:var(--amber); color:var(--amber); display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;';
+      banner.innerHTML = `<span>You have ${oldCount} ${dep.label} report(s) older than 30 days still sitting here — if you've already recorded these grades, you can clear them now.</span><button class="btn danger small">Clear Records Older Than 30 Days</button>`;
+      banner.querySelector('button').addEventListener('click', async ()=>{
+        if(!confirm(`Permanently delete ${oldCount} ${dep.label} report(s) older than 30 days? Make sure grades are already recorded elsewhere. This cannot be undone.`)) return;
+        const deleted = deleteDeptReportsBeforeCutoff(dep.key, cutoff);
+        await saveState();
+        renderDepartments(); renderDashboard();
+        toast(`Deleted ${deleted} old report(s)`);
+      });
+      content.appendChild(banner);
+    }
     const exportBtn = document.createElement('button');
     exportBtn.className = 'btn ghost small';
     exportBtn.style.marginBottom = '14px';
@@ -4499,7 +4592,7 @@ function printStageDesignGroundPlan(){
   openPrintWindow(`${state.productionName} — Ground Plan`, body);
 }
 async function deleteSandbox(sandboxId){
-  if(!isDirectorOrStageMgmt()) return;
+  if(!isDirector()) return;
   const sbx = (state.sandboxList||[]).find(s=>s.id===sandboxId);
   if(!sbx) return;
   if(!confirm(`Delete the sandbox "${sbx.name}"? This removes everything in it — no undo.`)) return;
@@ -4529,7 +4622,7 @@ async function renderStageDesignView(){
   const u = currentUser();
   sandboxTabBtn.style.display = (u || isDirectorOrStageMgmt()) ? 'inline-block' : 'none';
   document.getElementById('sdSandboxBrowseWrap').style.display = (sdBoardMode==='sandbox') ? 'flex' : 'none';
-  document.getElementById('sdDeleteSandboxBtn').style.display = (sdBoardMode==='sandbox' && sdSandboxId && isDirectorOrStageMgmt()) ? 'inline-block' : 'none';
+  document.getElementById('sdDeleteSandboxBtn').style.display = (sdBoardMode==='sandbox' && sdSandboxId && isDirector()) ? 'inline-block' : 'none';
   if(sdBoardMode==='sandbox'){
     const sel = document.getElementById('sdSandboxBrowseSelect');
     const list = state.sandboxList || [];
@@ -5488,6 +5581,7 @@ function renderSetup(){
   const partCfg = state.participationConfig || { pointsPerDay:20, daysPerWeek:5 };
   document.getElementById('partPointsPerDay').value = partCfg.pointsPerDay;
   document.getElementById('partDaysPerWeek').value = partCfg.daysPerWeek;
+  document.getElementById('autoDeleteDays').value = state.autoDeleteRecordsAfterDays || 0;
 
   document.getElementById('emailAlertsCard').style.display = isDirector() ? 'block' : 'none';
   const ejs = globalState.emailjs || { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
@@ -5549,7 +5643,7 @@ function renderSetup(){
       ${isDirector() ? `<select class="mono" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:4px 7px; font-size:11.5px;" data-classperiod="${c.id}">
         ${['Class A','Class B','Class C','Class D'].map(cp=>`<option ${cp===c.classPeriod?'selected':''}>${cp}</option>`).join('')}
       </select>` : `<span class="rmeta">${c.classPeriod||''}</span>`}
-      ${isDirector() ? `${isCast?`<button class="btn ghost small" data-editrole="${c.id}">Edit Role</button>`:''}<button class="btn ghost small" data-editemail="${c.id}">Edit Email</button><button class="btn ghost small" data-editparent="${c.id}">Edit Parent Info</button><button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
+      ${isDirector() ? `${isCast?`<button class="btn ghost small" data-editrole="${c.id}">Edit Role</button>`:''}<button class="btn ghost small" data-editemail="${c.id}">Edit Email</button><button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
     wrap.appendChild(row);
     if(isDirector()){
       row.querySelector('[data-classperiod]').addEventListener('change', async (e)=>{
@@ -5566,16 +5660,6 @@ function renderSetup(){
         if(c.email){ const prodMeta = globalState.productions.find(p=>p.id===currentProductionId); rosterIndexAdd(c.email, currentProductionId, prodMeta?prodMeta.name:'', c.id); }
         await saveState(); await saveGlobalState(); renderSetup();
         toast('Email updated');
-      });
-      row.querySelector('[data-editparent]').addEventListener('click', async ()=>{
-        const emailVal = prompt(`Parent/guardian email for ${escapeHtml(c.name)}:`, c.parentEmail||'');
-        if(emailVal===null) return;
-        const phoneVal = prompt(`Parent/guardian phone for ${escapeHtml(c.name)}:`, c.parentPhone||'');
-        if(phoneVal===null) return;
-        c.parentEmail = emailVal.trim();
-        c.parentPhone = phoneVal.trim();
-        await saveState(); renderSetup();
-        toast('Parent info updated');
       });
       if(isCast){
         row.querySelector('[data-editrole]').addEventListener('click', async ()=>{
@@ -5622,7 +5706,7 @@ async function bulkImportCrew(){
     const name = parts[0];
     if(!name) return;
     const email = parts[1] && parts[1].includes('@') ? parts[1] : '';
-    const newMember = { id:cryptoId(), name, role:'student', classPeriod:'Class A', departments:[], castRole:'', email, parentEmail:'', parentPhone:'' };
+    const newMember = { id:cryptoId(), name, role:'student', classPeriod:'Class A', departments:[], castRole:'', email };
     state.crew.push(newMember);
     if(email) rosterIndexAdd(email, currentProductionId, prodMeta?prodMeta.name:'', newMember.id);
     count++;
@@ -5641,13 +5725,11 @@ async function addCrew(){
   const departments = Array.from(document.querySelectorAll('#rosterDeptChecks input:checked')).map(i=>i.value);
   const castRole = document.getElementById('rosterCastRole').value.trim();
   const email = document.getElementById('rosterEmail').value.trim();
-  const parentEmail = document.getElementById('rosterParentEmail').value.trim();
-  const parentPhone = document.getElementById('rosterParentPhone').value.trim();
   let prodIds = Array.from(document.querySelectorAll('#rosterProdChecks input:checked')).map(i=>i.value);
   if(!prodIds.length) prodIds = [currentProductionId]; // safety net — always add to at least the current show
 
   for(const prodId of prodIds){
-    const newMember = { id:cryptoId(), name, role, classPeriod, departments, castRole, email, parentEmail, parentPhone };
+    const newMember = { id:cryptoId(), name, role, classPeriod, departments, castRole, email };
     if(prodId === currentProductionId){
       state.crew.push(newMember);
       await saveState();
@@ -5678,7 +5760,7 @@ async function addCrew(){
     }catch(e){ console.warn('Pending approval cleanup failed to sync', e); }
   }
   await saveGlobalState();
-  document.getElementById('rosterName').value=''; document.getElementById('rosterCastRole').value=''; document.getElementById('rosterEmail').value=''; document.getElementById('rosterParentEmail').value=''; document.getElementById('rosterParentPhone').value='';
+  document.getElementById('rosterName').value=''; document.getElementById('rosterCastRole').value=''; document.getElementById('rosterEmail').value='';
   document.querySelectorAll('#rosterDeptChecks input').forEach(i=>i.checked=false);
   renderSetup(); renderHeader();
   toast(prodIds.length>1 ? `Crew member added to ${prodIds.length} productions` : 'Crew member added');
@@ -5752,6 +5834,7 @@ async function loadEverythingAndRender(){
   if(!state.lightingCues) state.lightingCues = [];
   if(!state.sandboxList) state.sandboxList = [];
   if(!state.blockingNotes) state.blockingNotes = [];
+  if(state.autoDeleteRecordsAfterDays===undefined) state.autoDeleteRecordsAfterDays = 0;
 
   if(!isApprovedUser()){
     await registerPendingApproval();
@@ -5763,7 +5846,7 @@ async function loadEverythingAndRender(){
   renderAll();
   renderCostumeMeasureGrid(); renderCostumePieces();
   initEmailJs();
-  if(isDirector()){ checkAndSendDeadlineAlerts(); checkAndSendGroupMeReminders(); }
+  if(isDirector()){ checkAndSendDeadlineAlerts(); checkAndSendGroupMeReminders(); checkAutoDeleteOldRecords(); }
 }
 
 async function init(){
@@ -5800,7 +5883,7 @@ async function init(){
       } else if(isSignedIn && state){
         renderDashboard(); renderProductionsView(); renderCalendarForm(); renderCalMonth(); renderCalendar();
         renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
-        if(isDirector()){ checkAndSendDeadlineAlerts(); checkAndSendGroupMeReminders(); }
+        if(isDirector()){ checkAndSendDeadlineAlerts(); checkAndSendGroupMeReminders(); checkAutoDeleteOldRecords(); }
       }
       renderHeader();
     });
@@ -5936,6 +6019,17 @@ async function init(){
   document.getElementById('calTodayBtn').addEventListener('click', ()=>{ const n=new Date(); ui.calMonthCursor = new Date(n.getFullYear(), n.getMonth(), 1); ui.calSelectedDate = todayISO(); renderCalMonth(); });
   document.getElementById('conflictAddBtn').addEventListener('click', submitConflict);
   document.getElementById('behLogBtn').addEventListener('click', logInfraction);
+  document.getElementById('behClearOldBtn').addEventListener('click', async ()=>{
+    if(!isDirector()) return;
+    const cutoff = daysAgoISO(30);
+    const count = countBehaviorIncidentsBeforeCutoff(cutoff);
+    if(count===0){ toast('Nothing old enough to clear'); return; }
+    if(!confirm(`Permanently delete ${count} behavior record(s) older than 30 days? Make sure grades are already recorded elsewhere. This cannot be undone.`)) return;
+    const deleted = deleteBehaviorIncidentsBeforeCutoff(cutoff);
+    await saveState();
+    renderBehaviorView(); renderDashboard();
+    toast(`Deleted ${deleted} old behavior record(s)`);
+  });
   document.getElementById('behPrevWeekBtn').addEventListener('click', ()=>{
     const d = new Date(ui.behaviorWeekCursor+'T00:00'); d.setDate(d.getDate()-7);
     ui.behaviorWeekCursor = d.toISOString().slice(0,10); renderBehaviorSummary();
@@ -6166,27 +6260,48 @@ async function init(){
     URL.revokeObjectURL(url);
     toast('Backup downloaded');
   });
+  document.getElementById('scrubParentBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can do this'); return; }
+    if(!confirm('Permanently delete any stored parent email/phone from every production\'s roster? This cannot be undone. Nothing else about any crew member is affected.')) return;
+    let recordsCleaned = 0, productionsTouched = 0;
+    for(const p of globalState.productions){
+      const isCurrent = p.id === currentProductionId;
+      const prodState = isCurrent ? state : await loadProductionState(p.id);
+      let touchedThisOne = false;
+      (prodState.crew||[]).forEach(c=>{
+        if(c.parentEmail!==undefined || c.parentPhone!==undefined){
+          delete c.parentEmail; delete c.parentPhone;
+          recordsCleaned++; touchedThisOne = true;
+        }
+      });
+      if(touchedThisOne){
+        productionsTouched++;
+        if(isCurrent) await saveState();
+        else await fsSet(PROD_COLLECTION, p.id, prodState);
+      }
+    }
+    toast(recordsCleaned>0 ? `Cleaned ${recordsCleaned} record(s) across ${productionsTouched} production(s)` : 'Nothing to clean — no parent info was stored');
+    renderSetup();
+  });
+  document.getElementById('autoDeleteSaveBtn').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can change this'); return; }
+    const days = parseInt(document.getElementById('autoDeleteDays').value) || 0;
+    state.autoDeleteRecordsAfterDays = Math.max(0, days);
+    await saveState();
+    toast(state.autoDeleteRecordsAfterDays>0 ? `Auto-cleanup set to ${state.autoDeleteRecordsAfterDays} days` : 'Auto-cleanup turned off');
+    if(isDirector()) checkAutoDeleteOldRecords();
+  });
   document.getElementById('archiveDeleteBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can archive records'); return; }
     const cutoff = document.getElementById('archiveCutoffDate').value;
     if(!cutoff){ toast('Pick a cutoff date first'); return; }
-    let reportCount = 0, incidentCount = 0;
-    const keptReportsByDept = {};
-    DEPARTMENTS.forEach(d=>{
-      const dep = state.departments[d.key];
-      const kept = dep.reports.filter(r=>r.date >= cutoff);
-      reportCount += dep.reports.length - kept.length;
-      keptReportsByDept[d.key] = kept;
-    });
-    const keptIncidents = state.behaviorIncidents.filter(i=>i.date >= cutoff);
-    incidentCount = state.behaviorIncidents.length - keptIncidents.length;
-    if(reportCount===0 && incidentCount===0){ toast('Nothing to delete before that date'); return; }
-    if(!confirm(`This will permanently delete ${reportCount} report(s) and ${incidentCount} behavior record(s) dated before ${fmtDate(cutoff)}. Make sure you've already exported the CSV(s) you need. This cannot be undone. Continue?`)) return;
-    DEPARTMENTS.forEach(d=>{ state.departments[d.key].reports = keptReportsByDept[d.key]; });
-    state.behaviorIncidents = keptIncidents;
+    const preview = countRecordsBeforeCutoff(cutoff);
+    if(preview.reportCount===0 && preview.incidentCount===0){ toast('Nothing to delete before that date'); return; }
+    if(!confirm(`This will permanently delete ${preview.reportCount} report(s) and ${preview.incidentCount} behavior record(s) dated before ${fmtDate(cutoff)}. Make sure you've already exported the CSV(s) you need. This cannot be undone. Continue?`)) return;
+    const result = deleteRecordsBeforeCutoff(cutoff);
     await saveState();
     renderSetup(); renderDashboard();
-    toast(`Deleted ${reportCount} report(s) and ${incidentCount} behavior record(s)`);
+    toast(`Deleted ${result.reportCount} report(s) and ${result.incidentCount} behavior record(s)`);
   });
   document.getElementById('resetAllBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can reset production data'); return; }
