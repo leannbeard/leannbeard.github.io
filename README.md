@@ -437,8 +437,8 @@
     <button data-view="calendar">Calendar</button>
     <button data-view="conflicts">Conflicts</button>
     <button data-view="attendance">Attendance</button>
-    <button data-view="behavior">Behavior</button>
-    <button data-view="departments">Departments</button>
+    <button data-view="behavior">Behavior<span id="behNavBadge" style="display:none; background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:8px; vertical-align:middle; margin-left:4px;">0</span></button>
+    <button data-view="departments">Departments<span id="deptNavBadge" style="display:none; background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:8px; vertical-align:middle; margin-left:4px;">0</span></button>
     <button data-view="costumes">Costumes</button>
     <button data-view="stagedesign">3D Set Design</button>
     <button data-view="lightinglab">Lighting Lab</button>
@@ -2868,6 +2868,7 @@ async function logInfraction(){
   await saveState(); renderBehaviorLog(); renderNotifications(); renderDashboard();
   document.getElementById('behReason').value = ''; document.getElementById('behNotes').value = '';
   toast(autoApprove ? 'Production Note logged' : 'Submitted — awaiting Director review');
+  updateSubmissionBadges();
 }
 async function approvePendingNote(incidentId){
   if(!isDirector()){ toast('Only the Director can approve a Production Note'); return; }
@@ -2880,6 +2881,7 @@ async function approvePendingNote(incidentId){
   if(student) sendBehaviorInfractionEmail(student, incident);
   renderBehaviorPending(); renderDashboard(); renderNotifications();
   toast('Approved');
+  updateSubmissionBadges();
 }
 async function editPendingNote(incidentId){
   if(!isDirector()) return;
@@ -2906,6 +2908,7 @@ async function rejectPendingNote(incidentId){
   await saveState();
   renderBehaviorPending(); renderDashboard();
   toast('Rejected and deleted');
+  updateSubmissionBadges();
 }
 
 function renderBehaviorSummary(){
@@ -3373,6 +3376,8 @@ function renderReportFormSub(content, dep, depState){
     const doneCount = depState.tasks.filter(t=>t.status==='done').length;
     const totalCount = depState.tasks.length;
     const suggestedGrade = totalCount ? Math.round(doneCount/totalCount*100) : 0;
+    const submittedBy = currentUser()?.name || authUser?.displayName || activeEmail() || 'Someone';
+    const submittedById = currentUser()?.id || null;
     const report = {
       id:cryptoId(), date: document.getElementById('repDate').value, shift: document.getElementById('repShift').value, classPeriod,
       teamMemberIds: teamIds, nonContributorIds: nonContribIds,
@@ -3381,12 +3386,15 @@ function renderReportFormSub(content, dep, depState){
       inProgressTasks: document.getElementById('repInProgress').value.trim(),
       notes: document.getElementById('repNotes').value.trim(), challenges: document.getElementById('repChallenges').value.trim(),
       tasksCompletedCount: doneCount, status:'submitted', grade: suggestedGrade, gradeLetter: letterFor(suggestedGrade),
-      teacherFeedback:'', verifiedBy:'', verifiedDate:'', individualAdjustments:[], failingGradeEmailedIds:[]
+      teacherFeedback:'', verifiedBy:'', verifiedDate:'', individualAdjustments:[], failingGradeEmailedIds:[],
+      submittedBy, submittedById
     };
     depState.reports.unshift(report);
     logChange(`${dep.label} (${classPeriod}) submitted a daily report for ${fmtDate(report.date)} (suggested grade ${suggestedGrade}).`, {type:'deptClass', dept:dep.key, classPeriod});
+    logChange(`🔔 ${escapeHtml(submittedBy)} submitted a ${dep.label} report for ${fmtDate(report.date)} — awaiting your review.`, {type:'directorOnly'});
     await saveState(); renderDepartments(); renderNotifications();
     toast('Report submitted for teacher review');
+    updateSubmissionBadges();
   });
 }
 
@@ -5513,6 +5521,7 @@ function renderReportDetail(r, dep, depState, container){
   const teamNames = r.teamMemberIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'—'; });
   const nonContribNames = r.nonContributorIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'—'; });
   container.innerHTML = `
+    ${(isDirector() && r.submittedBy)?`<div class="summary-line" style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--line); font-size:13px;"><span>Submitted by</span><span class="mono">${escapeHtml(r.submittedBy)}</span></div>`:''}
     <div class="summary-line" style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--line); font-size:13px;"><span>Team present</span><span class="mono">${teamNames.join(', ')||'—'}</span></div>
     ${(nonContribNames.length && isDirector())?`<div class="summary-line" style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--line); font-size:13px; color:var(--red);"><span>Flagged non-contributors</span><span class="mono">${nonContribNames.join(', ')}</span></div>`:''}
     ${r.goal?`<p style="font-size:13px; margin-top:10px;"><b>Goal:</b> ${escapeHtml(r.goal)}</p>`:''}
@@ -5550,6 +5559,7 @@ function renderReportDetail(r, dep, depState, container){
     r.status='verified'; r.verifiedBy = isDirector() ? (currentUser()?.name || 'Teacher') : ''; r.verifiedDate = new Date().toISOString();
     await saveState(); renderDepartments();
     toast('Report verified');
+    updateSubmissionBadges();
   });
   actions.querySelector('[data-act=grade]')?.addEventListener('click', async ()=>{
     const g = prompt('Final grade (0-100):', r.grade); if(g===null) return;
@@ -5560,12 +5570,14 @@ function renderReportDetail(r, dep, depState, container){
     await checkAndSendFailingGradeEmails(r, dep);
     await saveState();
     toast('Grade finalized');
+    updateSubmissionBadges();
   });
   actions.querySelector('[data-act=return]')?.addEventListener('click', async ()=>{
     r.status='returned';
     logChange(`${dep.label} report for ${fmtDate(r.date)} returned for revision.`, {type:'deptClass', dept:dep.key, classPeriod:r.classPeriod});
     await saveState(); renderDepartments(); renderNotifications();
     toast('Returned to team for revision');
+    updateSubmissionBadges();
   });
   actions.querySelector('[data-act=adjust]')?.addEventListener('click', async ()=>{
     if(!r.teamMemberIds.length){ toast('No team members listed on this report'); return; }
@@ -5588,6 +5600,7 @@ function renderReportDetail(r, dep, depState, container){
     logChange(`${dep.label} report for ${fmtDate(r.date)} deleted.`, {type:'directorOnly'});
     await saveState(); renderDepartments(); renderDashboard();
     toast('Report deleted');
+    updateSubmissionBadges();
   });
 }
 
@@ -5890,9 +5903,29 @@ function switchView(view){
   if(view==='notifications') renderNotifications();
   if(view==='setup') renderSetup();
 }
+// Nav-tab badges so the Director notices something needs review without having to open the
+// tab first — mirrors the existing Notifications badge pattern. Director-only since these
+// counts are about things only the Director can act on.
+function updateSubmissionBadges(){
+  if(!isDirector() || !state){
+    ['behNavBadge','deptNavBadge'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+    return;
+  }
+  const pendingNotes = (state.behaviorIncidents||[]).filter(i=>i.status==='pending').length;
+  const behBadge = document.getElementById('behNavBadge');
+  behBadge.style.display = pendingNotes>0 ? 'inline-block' : 'none';
+  behBadge.textContent = pendingNotes;
+
+  let submittedReports = 0;
+  DEPARTMENTS.forEach(d=>{ submittedReports += (state.departments[d.key].reports||[]).filter(r=>r.status==='submitted').length; });
+  const deptBadge = document.getElementById('deptNavBadge');
+  deptBadge.style.display = submittedReports>0 ? 'inline-block' : 'none';
+  deptBadge.textContent = submittedReports;
+}
 function renderAll(){
   renderHeader(); renderCalendarForm();
   renderDashboard(); renderProductionsView(); renderCalMonth(); renderCalendar(); renderConflicts(); renderAttendanceView(); renderBehaviorView(); renderDepartments(); renderCostumesView(); renderNotifications(); renderSetup();
+  updateSubmissionBadges();
 }
 
 async function loadEverythingAndRender(){
