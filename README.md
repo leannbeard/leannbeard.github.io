@@ -6400,11 +6400,15 @@ async function init(){
       await switchStageDesignBoard('production', null);
     } else {
       if(!currentUser() && !isDirectorOrStageMgmt()){ toast('Sign in to use a practice sandbox'); return; }
-      const list = state.sandboxList || [];
-      if(!list.length){ toast('No sandboxes exist yet — click "+ New Sandbox" to start one for your group'); return; }
-      if(!sdCheckSandboxAccess(list[0].id)) return;
       document.querySelectorAll('#sdBoardTabs button').forEach(b=>b.classList.toggle('active', b===btn));
-      await switchStageDesignBoard('sandbox', list[0].id);
+      const list = state.sandboxList || [];
+      if(!list.length){
+        toast('No sandboxes exist yet — click "+ New Sandbox" to start one for your group');
+        await switchStageDesignBoard('sandbox', null);
+      } else {
+        if(!sdCheckSandboxAccess(list[0].id)) return;
+        await switchStageDesignBoard('sandbox', list[0].id);
+      }
     }
     renderStageDesignView();
   }));
