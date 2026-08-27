@@ -435,7 +435,7 @@
     <button data-view="dashboard" class="active">Dashboard</button>
     <button data-view="productions">Productions</button>
     <button data-view="calendar">Calendar</button>
-    <button data-view="conflicts">Conflicts</button>
+    <button data-view="conflicts">Conflicts<span id="conflictNavBadge" style="display:none; background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:8px; vertical-align:middle; margin-left:4px;">0</span></button>
     <button data-view="attendance">Attendance</button>
     <button data-view="behavior">Behavior<span id="behNavBadge" style="display:none; background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:8px; vertical-align:middle; margin-left:4px;">0</span></button>
     <button data-view="departments">Departments<span id="deptNavBadge" style="display:none; background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:8px; vertical-align:middle; margin-left:4px;">0</span></button>
@@ -458,6 +458,12 @@
   <div class="lamp" style="font-size:30px; margin-bottom:10px;">⏳</div>
   <h2 style="margin-bottom:6px;">Waiting for approval</h2>
   <p style="font-size:15px; color:var(--paper-dim); line-height:1.6;">You're signed in as <b id="pendingApprovalEmail" style="color:var(--paper);"></b>, but you're not on the roster yet. Your Director needs to approve your account before you can get in — let them know you're waiting, then check back and refresh this page.</p>
+</div>
+
+<div id="wrongDomainShell" style="display:none; max-width:520px; margin:70px auto; text-align:center; padding:0 24px;">
+  <div class="lamp" style="font-size:30px; margin-bottom:10px;">🚫</div>
+  <h2 style="margin-bottom:6px;">Wrong account</h2>
+  <p style="font-size:15px; color:var(--paper-dim); line-height:1.6;">This app is only for Groesbeck ISD accounts (<b style="color:var(--paper);">@groesbeckisd.net</b>). You signed in with <b id="wrongDomainEmail" style="color:var(--paper);"></b>, which isn't one — you've been signed out. Sign in again with your school account.</p>
 </div>
 
 <div id="showPickerShell" style="display:none; max-width:520px; margin:70px auto; text-align:center; padding:0 24px;">
@@ -1125,6 +1131,10 @@
   const db = getFirestore(app);
   const auth = getAuth(app);
   const googleProvider = new GoogleAuthProvider();
+  // Hints Google's own account picker toward this domain — a nicer sign-in experience, not
+  // a security boundary by itself. The real enforcement is the post-sign-in check below,
+  // which runs no matter which account someone actually picks.
+  googleProvider.setCustomParameters({ hd: 'groesbeckisd.net' });
 
   window.__fb = { db, doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, onSnapshot, deleteDoc, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail };
   window.__firebaseReady = true;
@@ -1253,7 +1263,7 @@ function defaultProductionState(name, seeded){
 }
 // Production defaults are created via defaultProductionState(name, seeded) above.
 
-const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null, emailjs:{ publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' }, groupme:{ botId:'' }, rosterIndex:{}, pendingApprovals:[] };
+const DEFAULT_GLOBAL = { directorEmails:[], attendanceAlertThreshold:3, productions:[], activeProductionId:null, emailjs:{ publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' }, groupme:{ botId:'' }, rosterIndex:{}, rosterProdIds:{}, pendingApprovals:[] };
 
 let state = null;
 let globalState = null;
@@ -1419,6 +1429,7 @@ function showSignedOutShell(){
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('signedOutShell').style.display = 'block';
   document.getElementById('pendingApprovalShell').style.display = 'none';
+  document.getElementById('wrongDomainShell').style.display = 'none';
   document.getElementById('showPickerShell').style.display = 'none';
 }
 function showAppShell(){
@@ -1426,6 +1437,7 @@ function showAppShell(){
   document.getElementById('mainContent').style.display = 'block';
   document.getElementById('signedOutShell').style.display = 'none';
   document.getElementById('pendingApprovalShell').style.display = 'none';
+  document.getElementById('wrongDomainShell').style.display = 'none';
   document.getElementById('showPickerShell').style.display = 'none';
   updateTabsScrollButtons();
 }
@@ -1434,15 +1446,27 @@ function showPendingApprovalShell(){
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('signedOutShell').style.display = 'none';
   document.getElementById('pendingApprovalShell').style.display = 'block';
+  document.getElementById('wrongDomainShell').style.display = 'none';
   document.getElementById('showPickerShell').style.display = 'none';
   const emailEl = document.getElementById('pendingApprovalEmail');
   if(emailEl) emailEl.textContent = activeEmail() || '';
+}
+function showWrongDomainShell(rejectedEmail){
+  document.getElementById('tabsWrap').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('signedOutShell').style.display = 'none';
+  document.getElementById('pendingApprovalShell').style.display = 'none';
+  document.getElementById('wrongDomainShell').style.display = 'block';
+  document.getElementById('showPickerShell').style.display = 'none';
+  const emailEl = document.getElementById('wrongDomainEmail');
+  if(emailEl) emailEl.textContent = rejectedEmail || '';
 }
 function showProductionPickerShell(matches){
   document.getElementById('tabsWrap').style.display = 'none';
   document.getElementById('mainContent').style.display = 'none';
   document.getElementById('signedOutShell').style.display = 'none';
   document.getElementById('pendingApprovalShell').style.display = 'none';
+  document.getElementById('wrongDomainShell').style.display = 'none';
   document.getElementById('showPickerShell').style.display = 'block';
   const list = document.getElementById('showPickerList');
   list.innerHTML = matches.map(m=>`<button class="btn" style="display:block; width:100%; margin-bottom:10px;" data-prodid="${m.prodId}">${escapeHtml(m.prodName)}</button>`).join('');
@@ -1555,6 +1579,15 @@ let authUser = null; // { email, displayName } once signed in via Google or Emai
 
 // Reading any data now requires real Firebase Auth (Firestore rules enforce this), so
 // identity is simply whether authUser is set — there's no unverified fallback anymore.
+// Only school-issued accounts get past sign-in — a real, enforced check run on every
+// sign-in, not just a hint on the Google account picker. Not itself the security boundary
+// (the roster/Director checks in the database rules are), but it stops a random Google
+// account from even reaching the pending-approval screen in the first place.
+const ALLOWED_EMAIL_DOMAIN = 'groesbeckisd.net';
+function isAllowedEmailDomain(email){
+  if(!email) return false;
+  return email.toLowerCase().endsWith('@' + ALLOWED_EMAIL_DOMAIN);
+}
 function activeEmail(){ return authUser ? authUser.email : null; }
 function isVerified(){ return !!authUser; }
 function currentUser(){
@@ -1574,35 +1607,63 @@ function rosterIndexAdd(email, prodId, prodName, crewId){
   const list = globalState.rosterIndex[key] || [];
   if(!list.some(m=>m.prodId===prodId)) list.push({ prodId, prodName, crewId });
   globalState.rosterIndex[key] = list;
+  // Parallel simple structure (email -> plain list of production ID strings, no nested
+  // objects) purely so Firestore's security rules can check "is this production ID in this
+  // person's list" directly — rules can't easily inspect a field inside a list of objects,
+  // but checking membership in a list of plain strings is trivial and well-supported.
+  if(!globalState.rosterProdIds) globalState.rosterProdIds = {};
+  const idList = globalState.rosterProdIds[key] || [];
+  if(!idList.includes(prodId)) idList.push(prodId);
+  globalState.rosterProdIds[key] = idList;
 }
 function rosterIndexRemove(email, prodId){
   if(!email || !globalState.rosterIndex) return;
   const key = email.toLowerCase();
   const list = globalState.rosterIndex[key];
-  if(!list) return;
-  globalState.rosterIndex[key] = list.filter(m=>m.prodId!==prodId);
-  if(!globalState.rosterIndex[key].length) delete globalState.rosterIndex[key];
+  if(list){
+    globalState.rosterIndex[key] = list.filter(m=>m.prodId!==prodId);
+    if(!globalState.rosterIndex[key].length) delete globalState.rosterIndex[key];
+  }
+  if(globalState.rosterProdIds && globalState.rosterProdIds[key]){
+    globalState.rosterProdIds[key] = globalState.rosterProdIds[key].filter(id=>id!==prodId);
+    if(!globalState.rosterProdIds[key].length) delete globalState.rosterProdIds[key];
+  }
 }
 // One-time backfill for productions that already had crew before this index existed —
-// scans every production once and rebuilds the index from scratch. Safe to call repeatedly;
-// only actually does the (relatively expensive) scan when the index looks empty/missing.
+// scans every production once and rebuilds both the display index and the rules-facing
+// index from scratch. Safe to call repeatedly; only actually does the (relatively
+// expensive) scan when the index looks empty/missing.
 async function ensureRosterIndexBackfilled(){
-  if(globalState.rosterIndex && Object.keys(globalState.rosterIndex).length) return;
+  if(globalState.rosterIndex && Object.keys(globalState.rosterIndex).length
+     && globalState.rosterProdIds && Object.keys(globalState.rosterProdIds).length) return;
   if(!globalState.productions || !globalState.productions.length) return;
   const freshIndex = {};
+  const freshProdIds = {};
+  let anyReadSucceeded = false;
   for(const p of globalState.productions){
     const data = await fsGet(PROD_COLLECTION, p.id);
     if(data && Array.isArray(data.crew)){
+      anyReadSucceeded = true;
       data.crew.forEach(c=>{
         if(!c.email) return;
         const key = c.email.toLowerCase();
         const list = freshIndex[key] || [];
         list.push({ prodId:p.id, prodName:p.name, crewId:c.id });
         freshIndex[key] = list;
+        const idList = freshProdIds[key] || [];
+        if(!idList.includes(p.id)) idList.push(p.id);
+        freshProdIds[key] = idList;
       });
     }
   }
+  // If nothing was readable at all, whoever triggered this isn't yet rostered anywhere and
+  // isn't the Director — almost certainly a student loading the app before the Director has
+  // loaded it even once since this security update went live. Don't save an empty result
+  // over what should exist; leave it for the next person (typically the Director, who can
+  // read everything) to complete correctly. This makes the backfill safe to retry.
+  if(!anyReadSucceeded) return;
   globalState.rosterIndex = freshIndex;
+  globalState.rosterProdIds = freshProdIds;
   await saveGlobalState();
 }
 function isDirector(){
@@ -2504,6 +2565,7 @@ async function setConflictStatus(id, status){
   await saveState(); renderConflicts(); renderNotifications(); renderDashboard();
   if(ui.calSub==='month') renderCalMonth(); else renderCalendar();
   toast(`Conflict ${status}`);
+  updateSubmissionBadges();
 }
 // ---------------- ATTENDANCE ----------------
 // ---------------- ATTENDANCE ----------------
@@ -3034,6 +3096,7 @@ async function submitConflict(){
   document.querySelectorAll('#conflictEventChecks input').forEach(i=>i.checked=false);
   renderConflicts();
   toast(count>1 ? `Submitted ${count} conflicts` : 'Conflict submitted');
+  updateSubmissionBadges();
 }
 
 // ---------------- DEPARTMENTS: pills + subtabs ----------------
@@ -5908,7 +5971,7 @@ function switchView(view){
 // counts are about things only the Director can act on.
 function updateSubmissionBadges(){
   if(!isDirector() || !state){
-    ['behNavBadge','deptNavBadge'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+    ['behNavBadge','deptNavBadge','conflictNavBadge'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     return;
   }
   const pendingNotes = (state.behaviorIncidents||[]).filter(i=>i.status==='pending').length;
@@ -5921,6 +5984,11 @@ function updateSubmissionBadges(){
   const deptBadge = document.getElementById('deptNavBadge');
   deptBadge.style.display = submittedReports>0 ? 'inline-block' : 'none';
   deptBadge.textContent = submittedReports;
+
+  const pendingConflicts = (state.conflicts||[]).filter(c=>c.status==='pending').length;
+  const conflictBadge = document.getElementById('conflictNavBadge');
+  conflictBadge.style.display = pendingConflicts>0 ? 'inline-block' : 'none';
+  conflictBadge.textContent = pendingConflicts;
 }
 function renderAll(){
   renderHeader(); renderCalendarForm();
@@ -5931,6 +5999,7 @@ function renderAll(){
 async function loadEverythingAndRender(){
   globalState = await loadOrMigrateGlobalState();
   if(!globalState.rosterIndex) globalState.rosterIndex = {};
+  if(!globalState.rosterProdIds) globalState.rosterProdIds = {};
   if(!globalState.pendingApprovals) globalState.pendingApprovals = [];
   if(!globalState.activeProductionId && globalState.productions.length){ globalState.activeProductionId = globalState.productions[0].id; }
   if(!globalState.emailjs) globalState.emailjs = { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
@@ -6000,12 +6069,28 @@ async function init(){
     });
     authUser = firstUser ? { email:firstUser.email, displayName:firstUser.displayName } : null;
 
-    if(authUser) await loadEverythingAndRender();
-    else showSignedOutShell();
+    if(authUser && !isAllowedEmailDomain(authUser.email)){
+      const rejectedEmail = authUser.email;
+      authUser = null;
+      await window.__fb.signOut(window.__fb.auth).catch(()=>{});
+      showWrongDomainShell(rejectedEmail);
+    } else if(authUser){
+      await loadEverythingAndRender();
+    } else {
+      showSignedOutShell();
+    }
     renderHeader();
 
     // Ongoing listener for sign-in/out events that happen after this initial load.
     window.__fb.onAuthStateChanged(window.__fb.auth, async (user)=>{
+      if(user && !isAllowedEmailDomain(user.email)){
+        const rejectedEmail = user.email;
+        authUser = null;
+        await window.__fb.signOut(window.__fb.auth).catch(()=>{});
+        showWrongDomainShell(rejectedEmail);
+        renderHeader();
+        return;
+      }
       const wasSignedIn = !!authUser;
       authUser = user ? { email:user.email, displayName:user.displayName } : null;
       const isSignedIn = !!authUser;
