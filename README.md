@@ -6007,6 +6007,19 @@ async function loadEverythingAndRender(){
   if(globalState.emailjs.templateFailingGrade === undefined) globalState.emailjs.templateFailingGrade = '';
   if(!globalState.groupme) globalState.groupme = { botId:'' };
   await ensureRosterIndexBackfilled();
+  // Self-heals the exact bug that caused today's lockout: directorEmails must be stored in
+  // lowercase for the (also-lowercasing) Firestore rule comparison to ever match. The app's
+  // own isDirector() check has always been case-insensitive, so a mixed-case entry saved
+  // long ago could look fine here while silently failing the stricter database check.
+  // Normalizes automatically the moment anyone recognized as Director loads the app.
+  if(activeEmail() && (globalState.directorEmails||[]).map(e=>e.toLowerCase()).includes(activeEmail().toLowerCase())){
+    const normalized = (globalState.directorEmails||[]).map(e=>e.toLowerCase());
+    const alreadyNormalized = JSON.stringify(normalized) === JSON.stringify(globalState.directorEmails);
+    if(!alreadyNormalized){
+      globalState.directorEmails = normalized;
+      await saveGlobalState();
+    }
+  }
 
   // Directors manage whichever production they've switched to (Productions tab).
   // Everyone else lands in whichever show(s) their own email is actually rostered on —
@@ -6147,7 +6160,7 @@ async function init(){
   });
   document.getElementById('claimDirectorBtn').addEventListener('click', async ()=>{
     if(!authUser) return;
-    globalState.directorEmails = [authUser.email];
+    globalState.directorEmails = [authUser.email.toLowerCase()];
     await saveGlobalState();
     renderHeader(); renderSetup(); renderDashboard();
     toast('You are now the Director');
