@@ -1083,6 +1083,12 @@
       <button class="btn ghost small" id="downloadBackupBtn" style="margin-right:8px;">Download Full Backup (JSON)</button>
       <button class="btn danger small" id="resetAllBtn">Reset All Production Data</button>
     </div>
+    <div class="card" id="recoverSandboxCard">
+      <h2>Recover Older Practice Sandboxes</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Before sandboxes had names and PINs, each one belonged to a single student directly. If any of those still exist from before that change, they'd no longer show up in the new "Practice Sandboxes" picker — this looks for them and, if found, adds them back to the list under that student's name so they're visible and restorable again. Safe to run any time; it only adds entries, never deletes anything.</p>
+      <button class="btn small" id="recoverSandboxBtn">Scan for Older Sandboxes</button>
+      <div id="recoverSandboxResult" style="margin-top:10px; font-size:12.5px;"></div>
+    </div>
     <div class="card" id="scrubParentCard">
       <h2>Remove Parent Contact Info</h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">Parent email and phone are no longer collected by this app — new roster entries never ask for them. This button also goes back and permanently deletes any parent email/phone already stored from before, across <b>every</b> production, not just this one. Safe to run any time; it only removes those two fields and touches nothing else.</p>
@@ -4311,6 +4317,43 @@ function renderSdVersionHistory(){
 // Creates a brand new, empty, freely-named sandbox (e.g. "Group 1") and switches into it.
 // Uses an atomic array append so two groups creating sandboxes at the same moment can't
 // clobber each other's entry in the shared sandbox list.
+// Recovers sandboxes created before the named/PIN-protected redesign, which used a simpler
+// per-student document naming scheme that the current code no longer looks for. Copies any
+// found data forward into a properly-named new document and adds it to the visible list —
+// never touches or deletes the original, so this is safe to run even if it finds nothing,
+// and safe to run more than once (won't create duplicates for something already recovered).
+async function recoverOldSandboxes(){
+  if(!isDirector()){ toast('Only the Director can do this'); return; }
+  const resultEl = document.getElementById('recoverSandboxResult');
+  resultEl.textContent = 'Scanning...';
+  let found = 0, recovered = 0;
+  for(const c of state.crew){
+    const oldDocId = currentProductionId + '_' + c.id;
+    try{
+      const ref = window.__fb.doc(window.__fb.db, 'stagedesign_sandboxes', oldDocId);
+      const snap = await window.__fb.getDoc(ref);
+      if(snap.exists()){
+        const data = snap.data();
+        if(data && Array.isArray(data.pieces) && data.pieces.length){
+          found++;
+          const alreadyRecovered = (state.sandboxList||[]).some(s=>s.recoveredFrom===oldDocId);
+          if(!alreadyRecovered){
+            const newId = cryptoId();
+            const newRef = window.__fb.doc(window.__fb.db, 'stagedesign_sandboxes', currentProductionId+'_sbx_'+newId);
+            await window.__fb.setDoc(newRef, { pieces: data.pieces });
+            if(!state.sandboxList) state.sandboxList = [];
+            state.sandboxList.push({ id:newId, name:`Recovered: ${c.name}'s Sandbox`, createdBy:'Recovery scan', createdAt:new Date().toISOString(), recoveredFrom:oldDocId });
+            recovered++;
+          }
+        }
+      }
+    }catch(e){ console.warn('Sandbox recovery check failed for', oldDocId, e); }
+  }
+  if(recovered>0){ await saveState(); renderSetup(); }
+  resultEl.textContent = found===0
+    ? 'No older sandboxes found — either there weren\'t any, or they were already recovered in an earlier scan.'
+    : `Found ${found} older sandbox(es), recovered ${recovered} new one(s) — check "Practice Sandboxes" in 3D Set Design.`;
+}
 async function createNewSandbox(){
   if(!currentUser() && !isDirectorOrStageMgmt()){ toast('Sign in to create a sandbox'); return; }
   const name = prompt('Name this sandbox (e.g. "Group 1", "2nd Period Team A"):', '');
@@ -6493,6 +6536,7 @@ async function init(){
     URL.revokeObjectURL(url);
     toast('Backup downloaded');
   });
+  document.getElementById('recoverSandboxBtn').addEventListener('click', recoverOldSandboxes);
   document.getElementById('scrubParentBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can do this'); return; }
     if(!confirm('Permanently delete any stored parent email/phone from every production\'s roster? This cannot be undone. Nothing else about any crew member is affected.')) return;
