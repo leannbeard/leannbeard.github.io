@@ -3255,6 +3255,8 @@ function renderTaskCard(t, dep, depState){
     await saveState();
   });
   metaRow.appendChild(assignee);
+  const editBtn = document.createElement('button'); editBtn.className='btn ghost small'; editBtn.textContent='Edit'; editBtn.style.marginRight='4px';
+  metaRow.insertBefore(editBtn, assignee);
   if(isDirector()){
     const del = document.createElement('button'); del.className='task-del'; del.textContent='✕';
     del.addEventListener('click', async ()=>{
@@ -3264,6 +3266,42 @@ function renderTaskCard(t, dep, depState){
     metaRow.appendChild(del);
   }
   body.appendChild(metaRow);
+
+  const editWrap = document.createElement('div');
+  editWrap.className = 'add-form';
+  editWrap.style.marginTop = '8px';
+  const deptCrewForEdit = state.crew.filter(c=>(c.departments||[]).includes(dep.key));
+  editWrap.innerHTML = `
+    <div class="add-form-row"><input type="text" name="editTitle" value="${escapeHtml(t.title)}" placeholder="Task title"></div>
+    <div class="add-form-row">
+      <select name="editWorkType">${WORK_TYPES.map(w=>`<option ${w===t.workType?'selected':''}>${w}</option>`).join('')}</select>
+      <select name="editPriority">${PRIORITIES.map(p=>`<option value="${p}" ${p===t.priority?'selected':''}>${p}</option>`).join('')}</select>
+      <input type="date" name="editDueDate" value="${t.dueDate||todayISO()}">
+      <input type="number" name="editHours" value="${t.estimatedHours||1}" min="0.5" step="0.5" style="width:70px;">
+    </div>
+    <textarea name="editDescription" placeholder="Instructions / notes (optional)" style="width:100%; min-height:54px; background:var(--ink); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:8px 10px; font-size:13px; font-family:'Inter',sans-serif; resize:vertical;">${escapeHtml(t.description||'')}</textarea>
+    <div style="display:flex; gap:8px;">
+      <button class="btn small" data-editsave>Save Changes</button>
+      <button class="btn ghost small" data-editcancel>Cancel</button>
+    </div>
+  `;
+  editWrap.classList.remove('open');
+  body.appendChild(editWrap);
+  editBtn.addEventListener('click', ()=>{ editWrap.classList.toggle('open'); });
+  editWrap.querySelector('[data-editcancel]').addEventListener('click', ()=>{ editWrap.classList.remove('open'); });
+  editWrap.querySelector('[data-editsave]').addEventListener('click', async ()=>{
+    const newTitle = editWrap.querySelector('[name=editTitle]').value.trim();
+    if(!newTitle){ toast('Give the task a title'); return; }
+    t.title = newTitle;
+    t.workType = editWrap.querySelector('[name=editWorkType]').value;
+    t.priority = editWrap.querySelector('[name=editPriority]').value;
+    t.dueDate = editWrap.querySelector('[name=editDueDate]').value || t.dueDate;
+    t.estimatedHours = parseFloat(editWrap.querySelector('[name=editHours]').value) || t.estimatedHours;
+    t.description = editWrap.querySelector('[name=editDescription]').value.trim();
+    t.deadlineAlertSent = false; // date/details changed — re-arm the deadline alert
+    await saveState(); renderDepartments(); renderDashboard();
+    toast('Task updated');
+  });
 
   const expanded = ui.expandedTasks.has(t.id);
   const expandBtn = document.createElement('button');
