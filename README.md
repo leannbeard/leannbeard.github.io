@@ -1036,7 +1036,7 @@
       <div id="rosterAddFormWrap">
         <div class="form-grid">
           <input type="text" id="rosterName" placeholder="Full name">
-          <select id="rosterRole"><option value="student">Student</option><option value="teacher">Teacher/Director</option></select>
+          <select id="rosterRole"><option value="student">Student</option><option value="team_leader">Student — Team Leader</option><option value="teacher">Teacher/Director</option></select>
           <select id="rosterClassPeriod"><option>Class A</option><option>Class B</option><option>Class C</option><option>Class D</option></select>
         </div>
         <div class="checkbox-row" id="rosterDeptChecks" style="margin-bottom:10px;"></div>
@@ -1605,6 +1605,10 @@ function isAllowedEmailDomain(email){
   if(!email) return false;
   return email.toLowerCase().endsWith('@' + ALLOWED_EMAIL_DOMAIN);
 }
+// Team Leaders are still students for every attendance/grading/roster purpose — "Team Leader"
+// is a leadership designation on top of being a student, not a replacement for it. Everywhere
+// the app already asks "is this person a student," this now also includes Team Leaders.
+function isStudentLike(c){ return !!c && (c.role==='student' || c.role==='team_leader'); }
 function activeEmail(){ return authUser ? authUser.email : null; }
 function isVerified(){ return !!authUser; }
 function currentUser(){
@@ -1753,13 +1757,22 @@ function canViewDept(deptKey){
 }
 function canViewCostumes(){ return canViewDept('costumes'); }
 function isDirectorOrStageMgmt(){ return isDirector() || canViewDept('stage_mgmt'); }
+// Adding a new task is a coordination privilege, not something every team member needs —
+// Stage Management can add across any department (matches their existing elevated access);
+// a Team Leader can add for their own department(s) only; regular students can still mark
+// status and get reassigned, just not create new tasks.
+function canAddTask(deptKey){
+  if(isDirectorOrStageMgmt()) return true;
+  const u = currentUser();
+  return !!(u && u.role==='team_leader' && (u.departments||[]).includes(deptKey));
+}
 function canTakeAttendance(){ return isDirectorOrStageMgmt(); }
 function canManageBehavior(){ return isDirectorOrStageMgmt(); }
 function expectedAttendees(ev){
   if(ev.isSpecificCall){
-    return state.crew.filter(c=>c.role==='student' && ((ev.calledStudentIds||[]).includes(c.id) || (c.departments||[]).some(d=>(ev.calledDepartments||[]).includes(d))));
+    return state.crew.filter(c=>isStudentLike(c) && ((ev.calledStudentIds||[]).includes(c.id) || (c.departments||[]).some(d=>(ev.calledDepartments||[]).includes(d))));
   }
-  return state.crew.filter(c=>c.role==='student');
+  return state.crew.filter(c=>isStudentLike(c));
 }
 function attendanceStatus(ev, crewId){
   if(ev.attendance && ev.attendance[crewId]) return ev.attendance[crewId];
@@ -2004,7 +2017,7 @@ function deptCompletionPct(deptKey){
 function approvedConflictCount(crewId){ return state.conflicts.filter(c=>c.crewId===crewId && c.status==='approved').length; }
 function attendanceAlerts(){
   const threshold = globalState.attendanceAlertThreshold || 3;
-  return state.crew.filter(c=>c.role==='student').map(c=>({ crew:c, count: absentCount(c.id) })).filter(x=>x.count>=threshold).sort((a,b)=>b.count-a.count);
+  return state.crew.filter(c=>isStudentLike(c)).map(c=>({ crew:c, count: absentCount(c.id) })).filter(x=>x.count>=threshold).sort((a,b)=>b.count-a.count);
 }
 // ---------------- PRODUCTIONS ----------------
 function renderProductionsView(){
@@ -2194,7 +2207,7 @@ function renderCalendarForm(){
   const specific = document.getElementById('calSpecific');
   specific.onchange = ()=>{ document.getElementById('calStudentPickWrap').style.display = specific.checked ? 'block' : 'none'; };
   const studentWrap = document.getElementById('calStudentChecks');
-  studentWrap.innerHTML = state.crew.filter(c=>c.role==='student').map(c=>`<label><input type="checkbox" value="${c.id}"> ${escapeHtml(c.name)}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No students on roster yet.</span>';
+  studentWrap.innerHTML = state.crew.filter(c=>isStudentLike(c)).map(c=>`<label><input type="checkbox" value="${c.id}"> ${escapeHtml(c.name)}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No students on roster yet.</span>';
 }
 function visibleToCurrentUser(ev){
   if(isDirector() || !ev.isSpecificCall) return true;
@@ -2373,7 +2386,7 @@ function buildEventCardEl(ev){
       </div>
       <div class="edit-student-wrap" style="display:${ev.isSpecificCall?'block':'none'}; margin-bottom:10px;">
         <div class="checkbox-row edit-student-checks">
-          ${state.crew.filter(c=>c.role==='student').map(c=>`<label><input type="checkbox" value="${c.id}" ${(ev.calledStudentIds||[]).includes(c.id)?'checked':''}> ${escapeHtml(c.name)}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No students on roster yet.</span>'}
+          ${state.crew.filter(c=>isStudentLike(c)).map(c=>`<label><input type="checkbox" value="${c.id}" ${(ev.calledStudentIds||[]).includes(c.id)?'checked':''}> ${escapeHtml(c.name)}</label>`).join('') || '<span style="font-size:12px;color:var(--paper-dim)">No students on roster yet.</span>'}
         </div>
       </div>
       <textarea class="edit-notes full-width" style="min-height:50px;" placeholder="Notes">${ev.notes||''}</textarea>
@@ -2668,7 +2681,7 @@ function renderAttendanceGrid(){
   gridLocked.style.display = 'none';
 
   const events = [...state.calendar].sort((a,b)=>a.date.localeCompare(b.date));
-  const crewList = [...state.crew].filter(c=>c.role==='student').sort((a,b)=>{
+  const crewList = [...state.crew].filter(c=>isStudentLike(c)).sort((a,b)=>{
     const da = (a.departments||[])[0] || '', db = (b.departments||[])[0] || '';
     return da.localeCompare(db) || a.name.localeCompare(b.name);
   });
@@ -2873,7 +2886,7 @@ function renderBehaviorLog(){
   document.getElementById('behDate').value = document.getElementById('behDate').value || todayISO();
 
   const studentSel = document.getElementById('behStudent');
-  const students = state.crew.filter(c=>c.role==='student').sort((a,b)=>a.name.localeCompare(b.name));
+  const students = state.crew.filter(c=>isStudentLike(c)).sort((a,b)=>a.name.localeCompare(b.name));
   studentSel.innerHTML = students.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}${(c.departments||[]).includes('cast') && c.castRole ? ' as '+c.castRole : ''} — ${(c.departments||[]).map(d=>deptInfo(d).label).join(', ')||'No team'}</option>`).join('') || '<option value="">No students on roster</option>';
 
   document.getElementById('behRecentCard').style.display = isDirector() ? 'block' : 'none';
@@ -2998,7 +3011,7 @@ function renderBehaviorSummary(){
   }
   document.getElementById('behWeekLabel').textContent = fmtWeekLabel(ui.behaviorWeekCursor);
   const cfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
-  const students = state.crew.filter(c=>c.role==='student').sort((a,b)=>a.name.localeCompare(b.name));
+  const students = state.crew.filter(c=>isStudentLike(c)).sort((a,b)=>a.name.localeCompare(b.name));
   const wrap = document.getElementById('behaviorSummaryWrap');
   if(!students.length){ wrap.innerHTML = `<div class="empty-state">No students on the roster yet.</div>`; return; }
 
@@ -3162,6 +3175,7 @@ function renderTasksSub(content, dep, depState){
       <button class="btn ghost small" id="printTaskListBtn">🖨 Print Task List</button>
     </div>
     <div class="task-row" id="taskRow"></div>
+    ${canAddTask(dep.key) ? `
     <div class="add-form" id="addForm">
       <div class="add-form-row">
         <input type="text" name="title" placeholder="Task title">
@@ -3180,13 +3194,16 @@ function renderTasksSub(content, dep, depState){
       <div><button class="btn small" id="addTaskConfirm">Add Task</button></div>
     </div>
     <button class="btn ghost small" id="toggleAddForm" style="margin-top:10px;">+ Add task</button>
+    ` : ''}
   `;
   const row = document.getElementById('taskRow');
   if(!depState.tasks.length){ row.innerHTML = `<div class="empty-state"><div class="lamp">🔦</div>Nothing on the ${dep.label} board yet.</div>`; }
   depState.tasks.forEach(t=>row.appendChild(renderTaskCard(t, dep, depState)));
-  document.getElementById('toggleAddForm').addEventListener('click', ()=>document.getElementById('addForm').classList.toggle('open'));
   document.getElementById('printTaskListBtn').addEventListener('click', ()=>printTaskList(dep.key));
+  if(!canAddTask(dep.key)) return;
+  document.getElementById('toggleAddForm').addEventListener('click', ()=>document.getElementById('addForm').classList.toggle('open'));
   document.getElementById('addTaskConfirm').addEventListener('click', async ()=>{
+    if(!canAddTask(dep.key)){ toast('Only Stage Management, Team Leaders, or the Director can add tasks'); return; }
     const form = document.getElementById('addForm');
     const title = form.querySelector('[name=title]').value.trim();
     if(!title){ toast('Give the task a title'); return; }
@@ -3255,8 +3272,11 @@ function renderTaskCard(t, dep, depState){
     await saveState();
   });
   metaRow.appendChild(assignee);
-  const editBtn = document.createElement('button'); editBtn.className='btn ghost small'; editBtn.textContent='Edit'; editBtn.style.marginRight='4px';
-  metaRow.insertBefore(editBtn, assignee);
+  let editBtn = null;
+  if(isDirector()){
+    editBtn = document.createElement('button'); editBtn.className='btn ghost small'; editBtn.textContent='Edit'; editBtn.style.marginRight='4px';
+    metaRow.insertBefore(editBtn, assignee);
+  }
   if(isDirector()){
     const del = document.createElement('button'); del.className='task-del'; del.textContent='✕';
     del.addEventListener('click', async ()=>{
@@ -3267,6 +3287,7 @@ function renderTaskCard(t, dep, depState){
   }
   body.appendChild(metaRow);
 
+  if(isDirector()){
   const editWrap = document.createElement('div');
   editWrap.className = 'add-form';
   editWrap.style.marginTop = '8px';
@@ -3290,6 +3311,7 @@ function renderTaskCard(t, dep, depState){
   editBtn.addEventListener('click', ()=>{ editWrap.classList.toggle('open'); });
   editWrap.querySelector('[data-editcancel]').addEventListener('click', ()=>{ editWrap.classList.remove('open'); });
   editWrap.querySelector('[data-editsave]').addEventListener('click', async ()=>{
+    if(!isDirector()){ toast('Only the Director can edit a task'); return; } // defensive re-check, matching the delete button's pattern
     const newTitle = editWrap.querySelector('[name=editTitle]').value.trim();
     if(!newTitle){ toast('Give the task a title'); return; }
     t.title = newTitle;
@@ -3302,6 +3324,7 @@ function renderTaskCard(t, dep, depState){
     await saveState(); renderDepartments(); renderDashboard();
     toast('Task updated');
   });
+  }
 
   const expanded = ui.expandedTasks.has(t.id);
   const expandBtn = document.createElement('button');
@@ -3583,7 +3606,7 @@ function renderParticipationSub(content, dep, depState){
   const cfg = state.participationConfig || { pointsPerDay:20, daysPerWeek:5 };
 
   if(isDirector()){
-    const teamCrew = state.crew.filter(c=>c.role==='student' && (c.departments||[]).includes(dep.key)).sort((a,b)=>a.name.localeCompare(b.name));
+    const teamCrew = state.crew.filter(c=>isStudentLike(c) && (c.departments||[]).includes(dep.key)).sort((a,b)=>a.name.localeCompare(b.name));
     content.innerHTML = `
       <div class="cal-nav">
         <button class="btn ghost small" id="partPrevWeekBtn">‹ Prev Week</button>
@@ -5907,8 +5930,8 @@ function renderSetup(){
     const wrap = document.createElement('div');
     const row = document.createElement('div'); row.className = 'roster-row';
     const isCast = (c.departments||[]).includes('cast');
-    row.innerHTML = `<span class="dot" style="background:${c.role==='teacher'?'var(--gold)':'var(--amber)'}"></span>
-      <span class="rname">${escapeHtml(c.name)}${c.role==='teacher'?' <span class="mono" style="font-size:10px;color:var(--gold)">TEACHER</span>':''}${isCast && c.castRole?` <span class="mono" style="font-size:10.5px;color:var(--cast,#8C3B3B);">as ${escapeHtml(c.castRole)}</span>`:''}<br><span class="mono" style="font-size:10px;color:var(--paper-dim);">${c.email||'no sign-in email set'}</span></span>
+    row.innerHTML = `<span class="dot" style="background:${c.role==='teacher'?'var(--gold)':(c.role==='team_leader'?'var(--sage)':'var(--amber)')}"></span>
+      <span class="rname">${escapeHtml(c.name)}${c.role==='teacher'?' <span class="mono" style="font-size:10px;color:var(--gold)">TEACHER</span>':''}${c.role==='team_leader'?' <span class="mono" style="font-size:10px;color:var(--sage)">TEAM LEADER</span>':''}${isCast && c.castRole?` <span class="mono" style="font-size:10.5px;color:var(--cast,#8C3B3B);">as ${escapeHtml(c.castRole)}</span>`:''}<br><span class="mono" style="font-size:10px;color:var(--paper-dim);">${c.email||'no sign-in email set'}</span></span>
       <span class="rmeta">${(c.departments||[]).map(k=>deptInfo(k).label).join(', ')||'No team yet'}</span>
       ${isDirector() ? `<select class="mono" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:4px 7px; font-size:11.5px;" data-classperiod="${c.id}">
         ${['Class A','Class B','Class C','Class D'].map(cp=>`<option ${cp===c.classPeriod?'selected':''}>${cp}</option>`).join('')}
@@ -6683,7 +6706,7 @@ async function init(){
   document.getElementById('allPartExportCsvBtn').addEventListener('click', ()=>{
     if(!isDirector()){ toast('Only the Director can export grades'); return; }
     const weekLabel = ui.allPartWeekCursor || weekStartISO(todayISO());
-    const students = state.crew.filter(c=>c.role==='student').sort((a,b)=>a.name.localeCompare(b.name));
+    const students = state.crew.filter(c=>isStudentLike(c)).sort((a,b)=>a.name.localeCompare(b.name));
     const rows = students.map(c=>{
       const combined = combinedParticipationForStudent(c.id, weekLabel);
       const depts = (c.departments||[]).map(k=>deptInfo(k).label).join(', ') || 'No team';
@@ -6804,3 +6827,4 @@ init();
 </script>
 </body>
 </html>
+
