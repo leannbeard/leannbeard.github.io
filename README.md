@@ -154,6 +154,7 @@
   .status-btn.todo{ background:rgba(255,255,255,0.08); color:var(--paper-dim); }
   .status-btn.in_progress{ background:rgba(232,163,61,0.18); color:var(--amber); }
   .status-btn.done{ background:rgba(107,143,113,0.2); color:var(--sage); }
+  .status-btn.pending_review{ background:rgba(76,122,147,0.22); color:#7fb3d5; }
   .task-card.done .task-title{ text-decoration:line-through; text-decoration-color:var(--sage); opacity:.75; }
   .task-body{ flex:1; min-width:0; }
   .task-title{ font-weight:600; font-size:14.5px; margin-bottom:4px; }
@@ -1199,6 +1200,17 @@ function deptInfo(key){ return DEPARTMENTS.find(d=>d.key===key) || DEPARTMENTS[0
 function cryptoId(){ return 'id-' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
 function fmtDate(d){ return new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'}); }
 function fmtDateTime(iso){ return new Date(iso).toLocaleString(undefined,{month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}); }
+function fmtRelativeTime(iso){
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs/60000);
+  if(mins < 1) return 'just now';
+  if(mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins/60);
+  if(hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours/24);
+  if(days < 7) return `${days}d ago`;
+  return fmtDateTime(iso);
+}
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function daysAgoISO(n){ return new Date(Date.now()-n*86400000).toISOString().slice(0,10); }
 // Shared by the manual cutoff-date archive tool, the quick "clear old records" buttons on
@@ -3234,9 +3246,22 @@ function renderTasksSub(content, dep, depState){
   });
 }
 
+// The Director's own status changes are self-trusted, same principle as Production Notes —
+// there's no one else who needs to approve something the Director did themselves. Anyone
+// else marking a task "done" sends it to Pending Completion instead of actually completing
+// it — nothing counts as finished, and no progress numbers move, until the Director reviews
+// it. Clicking again from Pending Completion is a self-undo back to To Do, in case it was
+// clicked by mistake — it is NOT a way to self-approve; only the Director's own Approve
+// button can do that.
 function cycleStatus(t){
-  const order = ['todo','in_progress','done'];
-  t.status = order[(order.indexOf(t.status)+1)%order.length];
+  if(isDirector()){
+    const order = ['todo','in_progress','done'];
+    t.status = order[(order.indexOf(t.status)+1)%order.length];
+  } else {
+    const order = ['todo','in_progress','pending_review'];
+    const idx = order.indexOf(t.status);
+    t.status = idx===-1 ? 'todo' : order[(idx+1)%order.length];
+  }
 }
 function renderTaskCard(t, dep, depState){
   if(!t.checklist) t.checklist = [];
@@ -3246,23 +3271,55 @@ function renderTaskCard(t, dep, depState){
 
   const statusBtn = document.createElement('button');
   statusBtn.className = 'status-btn ' + t.status;
-  statusBtn.textContent = t.status.replace('_',' ');
+  statusBtn.textContent = t.status==='pending_review' ? 'pending review' : t.status.replace('_',' ');
+  const directorReviewMode = isDirector() && t.status==='pending_review';
+  if(directorReviewMode) statusBtn.disabled = true; // Director reviews via the Approve/Kick Back buttons below, not the generic cycle click
   statusBtn.addEventListener('click', async ()=>{
+    if(directorReviewMode) return;
+    const wasStatus = t.status;
     cycleStatus(t);
     if(t.status==='done'){
       const who = currentUser()?.name || authUser?.displayName || 'Someone';
       logChange(`✅ "${escapeHtml(t.title)}" marked done in ${dep.label} by ${escapeHtml(who)}.`, {type:'directorOnly'});
+    } else if(t.status==='pending_review' && wasStatus!=='pending_review'){
+      const who = currentUser()?.name || authUser?.displayName || 'Someone';
+      logChange(`🔔 "${escapeHtml(t.title)}" (${dep.label}) marked done by ${escapeHtml(who)} — awaiting your approval.`, {type:'directorOnly'});
     }
-    await saveState(); renderDepartments(); renderDashboard();
+    await saveState(); renderDepartments(); renderDashboard(); updateSubmissionBadges();
   });
   card.appendChild(statusBtn);
+  if(t.status==='pending_review' && isDirector()){
+    const approveBtn = document.createElement('button'); approveBtn.className='btn small'; approveBtn.textContent='✓ Approve'; approveBtn.style.marginLeft='6px';
+    approveBtn.addEventListener('click', async ()=>{
+      t.status = 'done';
+      logChange(`✅ "${escapeHtml(t.title)}" completion approved in ${dep.label}.`, {type:'directorOnly'});
+      await saveState(); renderDepartments(); renderDashboard(); updateSubmissionBadges();
+      toast('Marked done');
+    });
+    card.appendChild(approveBtn);
+    const kickBtn = document.createElement('button'); kickBtn.className='btn ghost small'; kickBtn.textContent='↩ Kick Back'; kickBtn.style.marginLeft='4px';
+    kickBtn.addEventListener('click', async ()=>{
+      const note = prompt('What still needs to happen before this is really done?', '');
+      if(note===null) return;
+      t.status = 'in_progress';
+      if(!t.comments) t.comments = [];
+      const who = currentUser()?.name || authUser?.displayName || 'the Director';
+      t.comments.push({ id:cryptoId(), author:who, text: note.trim() ? `Kicked back: ${note.trim()}` : 'Kicked back — not quite done yet.', at:new Date().toISOString() });
+      await saveState(); renderDepartments(); renderDashboard(); updateSubmissionBadges();
+      toast('Sent back to In Progress');
+    });
+    card.appendChild(kickBtn);
+  }
 
   const body = document.createElement('div'); body.className = 'task-body';
   const clDone = t.checklist.filter(i=>i.done).length;
+  if(!t.comments) t.comments = [];
+  const lastLog = t.comments.length ? t.comments[t.comments.length-1] : null;
   body.innerHTML = `
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
       <div class="task-title" style="margin-bottom:0;">${escapeHtml(t.title)}</div>
       ${t.checklist.length ? `<span class="task-checklist-progress">☑ ${clDone}/${t.checklist.length}</span>` : ''}
+      ${lastLog ? `<span class="tag" style="background:rgba(76,122,147,0.18); color:var(--paper-dim);" title="${escapeHtml(lastLog.text)}">🕓 ${escapeHtml(lastLog.author)} · ${fmtRelativeTime(lastLog.at)}</span>` : ''}
     </div>
   `;
   const metaRow = document.createElement('div'); metaRow.className = 'task-meta-row';
@@ -3343,7 +3400,7 @@ function renderTaskCard(t, dep, depState){
   const expandBtn = document.createElement('button');
   expandBtn.className = 'task-expand-btn';
   expandBtn.style.marginTop = '8px';
-  expandBtn.innerHTML = `${expanded?'▾':'▸'} Instructions &amp; checklist`;
+  expandBtn.innerHTML = `${expanded?'▾':'▸'} Instructions, checklist &amp; work log${t.comments.length?` (${t.comments.length})`:''}`;
   expandBtn.addEventListener('click', ()=>{
     if(ui.expandedTasks.has(t.id)) ui.expandedTasks.delete(t.id); else ui.expandedTasks.add(t.id);
     renderDepartments();
@@ -3395,6 +3452,45 @@ function renderTaskCard(t, dep, depState){
     addInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addBtn.click(); } });
     addRow.appendChild(addBtn);
     panel.appendChild(addRow);
+
+    const logLabel = document.createElement('label');
+    logLabel.className = 'checklist-label';
+    logLabel.style.marginTop = '14px';
+    logLabel.textContent = "Work Log — who's touched this task, so everyone across every class period can see what's already been done";
+    panel.appendChild(logLabel);
+
+    const logList = document.createElement('div');
+    [...t.comments].reverse().forEach(entry=>{
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:6px 0; border-bottom:1px dashed var(--line); font-size:12.5px; display:flex; justify-content:space-between; gap:8px;';
+      row.innerHTML = `<span><b>${escapeHtml(entry.author)}</b> <span class="mono" style="color:var(--paper-dim); font-size:11px;">${fmtRelativeTime(entry.at)}</span>${entry.text?'<br>'+escapeHtml(entry.text):''}</span>${isDirector()?'<button class="cl-del" data-dellog="'+entry.id+'">✕</button>':''}`;
+      logList.appendChild(row);
+    });
+    if(!t.comments.length){ const empty = document.createElement('div'); empty.className='empty-state'; empty.style.padding='8px 0'; empty.textContent='No work logged yet.'; logList.appendChild(empty); }
+    panel.appendChild(logList);
+    logList.querySelectorAll('[data-dellog]').forEach(btn=>btn.addEventListener('click', async ()=>{
+      if(!isDirector()) return;
+      t.comments = t.comments.filter(x=>x.id!==btn.dataset.dellog);
+      await saveState(); renderDepartments();
+    }));
+
+    const logAddRow = document.createElement('div');
+    logAddRow.className = 'checklist-add-row';
+    const logInput = document.createElement('input');
+    logInput.type = 'text'; logInput.placeholder = "What did you just do? (e.g. \"Cut lumber for the platform frame\")";
+    logAddRow.appendChild(logInput);
+    const logBtn = document.createElement('button');
+    logBtn.className = 'btn small'; logBtn.textContent = 'Log Work';
+    logBtn.addEventListener('click', async ()=>{
+      const who = currentUser()?.name || authUser?.displayName || activeEmail() || 'Someone';
+      t.comments.push({ id:cryptoId(), author:who, text:logInput.value.trim(), at:new Date().toISOString() });
+      logInput.value='';
+      await saveState(); renderDepartments();
+      toast('Logged');
+    });
+    logInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); logBtn.click(); } });
+    logAddRow.appendChild(logBtn);
+    panel.appendChild(logAddRow);
 
     body.appendChild(panel);
   }
@@ -3507,7 +3603,7 @@ function renderReportFormSub(content, dep, depState){
       <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">Daily / Weekly Goal</label>
       <textarea id="repGoal" class="notes-field" placeholder="What's the team aiming to accomplish today or this week?"></textarea>
       <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">Completed tasks</label>
-      <textarea id="repCompleted" class="notes-field">${depState.tasks.filter(t=>t.status==='done').map(t=>'• '+t.title).join('\\n')}</textarea>
+      <textarea id="repCompleted" class="notes-field">${depState.tasks.filter(t=>t.status==='done'||t.status==='pending_review').map(t=>'• '+t.title+(t.status==='pending_review'?' (awaiting your approval)':'')).join('\\n')}</textarea>
       <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">In progress</label>
       <textarea id="repInProgress" class="notes-field">${depState.tasks.filter(t=>t.status==='in_progress').map(t=>'• '+t.title).join('\\n')}</textarea>
       <label style="font-size:11.5px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;">Notes & reflections</label>
@@ -6282,7 +6378,10 @@ function updateSubmissionBadges(){
   behBadge.textContent = pendingNotes;
 
   let submittedReports = 0;
-  DEPARTMENTS.forEach(d=>{ submittedReports += (state.departments[d.key].reports||[]).filter(r=>r.status==='submitted').length; });
+  DEPARTMENTS.forEach(d=>{
+    submittedReports += (state.departments[d.key].reports||[]).filter(r=>r.status==='submitted').length;
+    submittedReports += (state.departments[d.key].tasks||[]).filter(t=>t.status==='pending_review').length;
+  });
   const deptBadge = document.getElementById('deptNavBadge');
   deptBadge.style.display = submittedReports>0 ? 'inline-block' : 'none';
   deptBadge.textContent = submittedReports;
