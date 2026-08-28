@@ -1083,6 +1083,17 @@
       <button class="btn ghost small" id="downloadBackupBtn" style="margin-right:8px;">Download Full Backup (JSON)</button>
       <button class="btn danger small" id="resetAllBtn">Reset All Production Data</button>
     </div>
+    <div class="card" id="bulkTaskImportCard">
+      <h2>Bulk Import Tasks (All Departments)</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Paste a structured task list covering one or more departments — headings in ALL CAPS mark which department, a heading with a date range in parentheses (like "Research &amp; Design (Aug 28–Sep 20)") sets the due date for the tasks under it, and each <code>[ ]</code> line becomes one task. Nothing is added until you review the preview and confirm.</p>
+      <textarea id="bulkTaskImportText" class="full-width" style="min-height:140px; font-family:monospace; font-size:12px;" placeholder="SET DESIGN & CONSTRUCTION&#10;======================================================================&#10;&#10;Research & Design (Aug 28–Sep 20)&#10;  [ ] Read the full script and note every scene and location change&#10;  [ ] Sketch 2-3 rough set concepts&#10;..."></textarea>
+      <button class="btn small" id="bulkTaskPreviewBtn" style="margin-top:8px;">Preview Import</button>
+      <div id="bulkTaskPreviewWrap" style="display:none; margin-top:14px;">
+        <div id="bulkTaskPreviewSummary"></div>
+        <button class="btn" id="bulkTaskConfirmBtn" style="margin-top:10px;">Confirm — Add These Tasks</button>
+        <button class="btn ghost" id="bulkTaskCancelBtn" style="margin-top:10px;">Cancel</button>
+      </div>
+    </div>
     <div class="card" id="recoverSandboxCard">
       <h2>Recover Older Practice Sandboxes</h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">Before sandboxes had names and PINs, each one belonged to a single student directly. If any of those still exist from before that change, they'd no longer show up in the new "Practice Sandboxes" picker — this looks for them and, if found, adds them back to the list under that student's name so they're visible and restorable again. Safe to run any time; it only adds entries, never deletes anything.</p>
@@ -5915,6 +5926,120 @@ function renderSetup(){
     await saveState(); renderSetup(); renderHeader();
   }));
 }
+// ---------------- BULK TASK IMPORT (paste a structured, phased task list across departments) ----------------
+const DEPT_HEADER_ALIASES = {
+  'SET DESIGN & CONSTRUCTION':'set_design', 'SET DESIGN':'set_design', 'SET':'set_design', 'CONSTRUCTION':'set_design',
+  'PROPS':'props', 'PROP':'props',
+  'COSTUMES':'costumes', 'COSTUME':'costumes',
+  'HAIR & MAKEUP':'hair_makeup', 'HAIR AND MAKEUP':'hair_makeup', 'HAIR/MAKEUP':'hair_makeup', 'MAKEUP':'hair_makeup', 'HAIR':'hair_makeup',
+  'LIGHTING':'lighting', 'LIGHTING DESIGN':'lighting',
+  'SOUND':'sound', 'SOUND DESIGN':'sound',
+  'STAGE MANAGEMENT':'stage_mgmt', 'STAGE MGMT':'stage_mgmt',
+  'RUN CREW':'run_crew', 'RUN CREW & STRIKE':'run_crew',
+  'PUBLICITY':'marketing', 'MARKETING':'marketing', 'PUBLICITY / MARKETING':'marketing', 'PUBLICITY & MARKETING':'marketing',
+  'CAST':'cast'
+};
+const MONTH_MAP = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function parseBulkTaskImport(text){
+  const lines = text.split('\n');
+  const tasksByDept = {}; // deptKey -> [{title, dueDate}]
+  const unmatchedHeaders = [];
+  let currentDept = null;
+  let currentDueDate = '';
+  const yearMatch = text.match(/\b(20\d{2})\b/);
+  const inferredYear = yearMatch ? parseInt(yearMatch[1]) : new Date().getFullYear();
+
+  function parseDateToken(token){
+    const m = token.trim().match(/^([A-Za-z]{3,})\.?\s+(\d{1,2})$/);
+    if(!m) return '';
+    const mon = MONTH_MAP[m[1].slice(0,3).toLowerCase()];
+    if(!mon) return '';
+    return `${inferredYear}-${String(mon).padStart(2,'0')}-${String(parseInt(m[2])).padStart(2,'0')}`;
+  }
+
+  lines.forEach(rawLine=>{
+    const line = rawLine.trim();
+    if(!line) return;
+    if(/^[=\-]{3,}$/.test(line)) return; // separator rule line
+
+    const taskMatch = line.match(/^\[[ xX]?\]\s*(.+)$/);
+    if(taskMatch){
+      if(!currentDept) return; // no department context yet — ignore rather than guess
+      if(!tasksByDept[currentDept]) tasksByDept[currentDept] = [];
+      tasksByDept[currentDept].push({ title: taskMatch[1].trim(), dueDate: currentDueDate });
+      return;
+    }
+
+    // "ONGOING" / "NOT PHASE-TIED" / "IDEA BANK" markers clear the due date for what follows,
+    // checked before the department-header test so a line like "...— ONGOING / NOT PHASE-TIED"
+    // never gets mistaken for a new department.
+    if(/ONGOING/i.test(line) || /NOT PHASE-TIED/i.test(line) || /IDEA BANK/i.test(line)){
+      currentDueDate = '';
+      return;
+    }
+
+    // Department header: a short, fully-uppercase line (allowing &, /, spaces, digits, punctuation)
+    if(line.length>1 && line.length<60 && line===line.toUpperCase() && /[A-Z]/.test(line) && /^[A-Z0-9 &\/,.'-]+$/.test(line) && line!=='SHOW INFO'){
+      const key = DEPT_HEADER_ALIASES[line.replace(/\s+/g,' ').trim()];
+      if(key){ currentDept = key; currentDueDate = ''; }
+      else if(!unmatchedHeaders.includes(line)){ unmatchedHeaders.push(line); currentDept = null; }
+      return;
+    }
+
+    // Phase header with a date (range) in trailing parentheses, e.g. "Research & Design (Aug 28–Sep 20)"
+    const phaseMatch = line.match(/\(([^)]+)\)\s*$/);
+    if(phaseMatch){
+      const parts = phaseMatch[1].split(/–|—|-/).map(s=>s.trim()).filter(Boolean);
+      const endToken = parts[parts.length-1];
+      const parsed = endToken ? parseDateToken(endToken) : '';
+      if(parsed) currentDueDate = parsed;
+      return;
+    }
+    // Anything else (show info, instructions, plain notes) is silently ignored.
+  });
+  return { tasksByDept, unmatchedHeaders };
+}
+let bulkTaskImportParsed = null;
+function renderBulkTaskPreview(){
+  const text = document.getElementById('bulkTaskImportText').value;
+  if(!text.trim()){ toast('Paste a task list first'); return; }
+  const { tasksByDept, unmatchedHeaders } = parseBulkTaskImport(text);
+  bulkTaskImportParsed = tasksByDept;
+  const totalTasks = Object.values(tasksByDept).reduce((sum,arr)=>sum+arr.length, 0);
+  const wrap = document.getElementById('bulkTaskPreviewWrap');
+  const summary = document.getElementById('bulkTaskPreviewSummary');
+  if(!totalTasks){
+    summary.innerHTML = `<div class="empty-state">Nothing recognized — check that department names are in ALL CAPS and tasks start with <code>[ ]</code>.</div>`;
+    document.getElementById('bulkTaskConfirmBtn').style.display = 'none';
+  } else {
+    document.getElementById('bulkTaskConfirmBtn').style.display = 'inline-block';
+    summary.innerHTML = Object.entries(tasksByDept).map(([key,tasks])=>{
+      const dep = deptInfo(key);
+      const sample = tasks.slice(0,3).map(t=>`<li>${escapeHtml(t.title)}${t.dueDate?' <span class="mono" style="color:var(--paper-dim);">(due '+t.dueDate+')</span>':''}</li>`).join('');
+      return `<div style="margin-bottom:10px;"><b style="color:${dep.color};">${dep.label}</b> — ${tasks.length} task(s)<ul style="margin:4px 0 0 18px; font-size:12px;">${sample}${tasks.length>3?`<li>...and ${tasks.length-3} more</li>`:''}</ul></div>`;
+    }).join('') + (unmatchedHeaders.length ? `<div style="margin-top:8px; color:var(--amber); font-size:12px;">⚠️ Didn't recognize as a department, so skipped: ${unmatchedHeaders.map(h=>escapeHtml(h)).join(', ')}</div>` : '');
+  }
+  wrap.style.display = 'block';
+}
+async function confirmBulkTaskImport(){
+  if(!isDirector()){ toast('Only the Director can import tasks'); return; }
+  if(!bulkTaskImportParsed){ toast('Preview the import first'); return; }
+  let count = 0;
+  const deptCount = Object.keys(bulkTaskImportParsed).length;
+  Object.entries(bulkTaskImportParsed).forEach(([key, tasks])=>{
+    const dep = state.departments[key]; if(!dep) return;
+    tasks.forEach(t=>{
+      dep.tasks.push({ id:cryptoId(), title:t.title, description:'', workType:'Other', priority:'medium', dueDate:t.dueDate||todayISO(), estimatedHours:1, status:'todo', assignedTo:'', assignedToCrewId:null, deadlineAlertSent:false, checklist:[], comments:[] });
+      count++;
+    });
+  });
+  await saveState();
+  document.getElementById('bulkTaskImportText').value = '';
+  document.getElementById('bulkTaskPreviewWrap').style.display = 'none';
+  bulkTaskImportParsed = null;
+  renderDepartments(); renderDashboard();
+  toast(`Added ${count} task(s) across ${deptCount} department(s)`);
+}
 async function bulkImportCrew(){
   if(!isDirector()){ toast('Only the Director can import crew'); return; }
   const raw = document.getElementById('bulkImportText').value;
@@ -6539,6 +6664,12 @@ async function init(){
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast('Backup downloaded');
+  });
+  document.getElementById('bulkTaskPreviewBtn').addEventListener('click', renderBulkTaskPreview);
+  document.getElementById('bulkTaskConfirmBtn').addEventListener('click', confirmBulkTaskImport);
+  document.getElementById('bulkTaskCancelBtn').addEventListener('click', ()=>{
+    document.getElementById('bulkTaskPreviewWrap').style.display = 'none';
+    bulkTaskImportParsed = null;
   });
   document.getElementById('recoverSandboxBtn').addEventListener('click', recoverOldSandboxes);
   document.getElementById('scrubParentBtn').addEventListener('click', async ()=>{
