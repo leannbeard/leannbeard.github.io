@@ -1083,6 +1083,18 @@
       <button class="btn ghost small" id="downloadBackupBtn" style="margin-right:8px;">Download Full Backup (JSON)</button>
       <button class="btn danger small" id="resetAllBtn">Reset All Production Data</button>
     </div>
+    <div class="card" id="characterListCard">
+      <h2>Show Character List</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Set the actual character names for this show once, and "Edit Role" on the roster becomes a checklist instead of free typing — so the exact same text is used everywhere a character name shows up (conflicts, calendar calls, rehearsal lists), with no typos or inconsistent spelling between entries.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+        <button class="btn ghost small" id="loadStarcatcherPresetBtn">Load "Peter and the Starcatcher" Character List</button>
+      </div>
+      <div class="form-grid" style="max-width:400px;">
+        <input type="text" id="newCharacterInput" placeholder="Add a character name">
+        <button class="btn small" id="addCharacterBtn">Add</button>
+      </div>
+      <div id="characterListWrap" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+    </div>
     <div class="card" id="bulkTaskImportCard">
       <h2>Bulk Import Tasks (All Departments)</h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">Paste a structured task list covering one or more departments — headings in ALL CAPS mark which department, a heading with a date range in parentheses (like "Research &amp; Design (Aug 28–Sep 20)") sets the due date for the tasks under it, and each <code>[ ]</code> line becomes one task. Nothing is added until you review the preview and confirm.</p>
@@ -1275,6 +1287,7 @@ function defaultProductionState(name, seeded){
     sandboxList:[],
     blockingNotes:[],
     autoDeleteRecordsAfterDays:0,
+    showCharacterList:[],
     departments: freshDepartments(seeded)
   };
 }
@@ -5875,6 +5888,7 @@ function renderSetup(){
   document.getElementById('partPointsPerDay').value = partCfg.pointsPerDay;
   document.getElementById('partDaysPerWeek').value = partCfg.daysPerWeek;
   document.getElementById('autoDeleteDays').value = state.autoDeleteRecordsAfterDays || 0;
+  renderCharacterList();
 
   document.getElementById('emailAlertsCard').style.display = isDirector() ? 'block' : 'none';
   const ejs = globalState.emailjs || { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
@@ -5955,13 +5969,24 @@ function renderSetup(){
         toast('Email updated');
       });
       if(isCast){
-        row.querySelector('[data-editrole]').addEventListener('click', async ()=>{
-          const val = prompt(`Cast role / character for ${escapeHtml(c.name)}:`, c.castRole||'');
-          if(val===null) return;
-          c.castRole = val.trim();
-          await saveState(); renderSetup();
-          toast('Cast role updated');
+        const roleEditRow = document.createElement('div');
+        roleEditRow.className = 'checkbox-row';
+        roleEditRow.style.display = 'none';
+        roleEditRow.style.marginBottom = '10px';
+        const currentRoles = (c.castRole||'').split(',').map(s=>s.trim()).filter(Boolean);
+        const charList = state.showCharacterList||[];
+        roleEditRow.innerHTML = charList.length
+          ? charList.map(name=>`<label><input type="checkbox" value="${escapeHtml(name)}" ${currentRoles.includes(name)?'checked':''}> ${escapeHtml(name)}</label>`).join('')
+          : `<span style="font-size:12px;color:var(--paper-dim);">No characters on the show list yet — add them in the "Show Character List" card above.</span>`;
+        wrap.appendChild(roleEditRow);
+        row.querySelector('[data-editrole]').addEventListener('click', ()=>{
+          roleEditRow.style.display = roleEditRow.style.display==='none' ? 'flex' : 'none';
         });
+        roleEditRow.querySelectorAll('input').forEach(inp=>inp.addEventListener('change', async ()=>{
+          const selected = Array.from(roleEditRow.querySelectorAll('input:checked')).map(i=>i.value);
+          c.castRole = selected.join(', ');
+          await saveState(); renderSetup();
+        }));
       }
       const editRow = document.createElement('div');
       editRow.className = 'checkbox-row';
@@ -6100,6 +6125,54 @@ async function confirmBulkTaskImport(){
   bulkTaskImportParsed = null;
   renderDepartments(); renderDashboard();
   toast(`Added ${count} task(s) across ${deptCount} department(s)`);
+}
+// ---------------- SHOW CHARACTER LIST (so "Edit Role" is a checklist, not free typing) ----------------
+// This is the exact text from the user's own rehearsal calendar call list (Full-company table
+// read call) — not a generic researched list. Matching this verbatim is the entire point:
+// whatever's already typed into the calendar's call list is the authority, not a script guide.
+const PETER_STARCATCHER_CHARACTERS = [
+  'Boy/Peter', 'Prentiss', 'Ted', 'Lord Leonard Aster', 'Molly Aster', 'Mrs. Bumbrake',
+  'Captain Robert Falcon Scott', 'Grempkin', 'Bill Slank', 'Alf', 'Mack', 'Black Stache',
+  'Smee/Greggors', 'Sanchez', 'Fighting Prawn', 'Hawking Clam', 'Teacher',
+  'Neverland Sailor 1', 'Neverland Sailor 2', 'Neverland Sailor 3', 'Neverland Sailor 4 (if cast)',
+  'Pirate/Seaman 1', 'Pirate/Seaman 2', 'Pirate/Seaman 3', 'Pirate/Seaman 4 (if cast)',
+  'Mollusk 1', 'Mollusk 2', 'Mollusk 3', 'Mollusk 4 (if cast)',
+  'Mermaid Ensemble 1', 'Mermaid Ensemble 2', 'Creature/Movement Ensemble 1'
+];
+function renderCharacterList(){
+  const wrap = document.getElementById('characterListWrap');
+  if(!wrap) return;
+  const list = state.showCharacterList || [];
+  if(!list.length){ wrap.innerHTML = `<span style="font-size:12px;color:var(--paper-dim);">No characters added yet.</span>`; return; }
+  wrap.innerHTML = list.map(name=>`
+    <span class="tag" style="display:inline-flex; align-items:center; gap:6px;">${escapeHtml(name)}${isDirector()?`<button data-removechar="${escapeHtml(name)}" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:12px; padding:0;">✕</button>`:''}</span>
+  `).join('');
+  wrap.querySelectorAll('[data-removechar]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    state.showCharacterList = (state.showCharacterList||[]).filter(n=>n!==btn.dataset.removechar);
+    await saveState(); renderCharacterList();
+  }));
+}
+async function addCharacterToList(){
+  if(!isDirector()){ toast('Only the Director can edit the character list'); return; }
+  const input = document.getElementById('newCharacterInput');
+  const name = input.value.trim();
+  if(!name){ toast('Enter a character name'); return; }
+  if(!state.showCharacterList) state.showCharacterList = [];
+  if(state.showCharacterList.includes(name)){ toast('Already on the list'); return; }
+  state.showCharacterList.push(name);
+  await saveState();
+  input.value = '';
+  renderCharacterList();
+}
+async function loadStarcatcherPreset(){
+  if(!isDirector()){ toast('Only the Director can edit the character list'); return; }
+  if(!state.showCharacterList) state.showCharacterList = [];
+  let added = 0;
+  PETER_STARCATCHER_CHARACTERS.forEach(name=>{
+    if(!state.showCharacterList.includes(name)){ state.showCharacterList.push(name); added++; }
+  });
+  await saveState(); renderCharacterList();
+  toast(added>0 ? `Added ${added} character(s)` : 'Already all on the list');
 }
 async function bulkImportCrew(){
   if(!isDirector()){ toast('Only the Director can import crew'); return; }
@@ -6281,6 +6354,7 @@ async function loadEverythingAndRender(){
   if(!state.sandboxList) state.sandboxList = [];
   if(!state.blockingNotes) state.blockingNotes = [];
   if(state.autoDeleteRecordsAfterDays===undefined) state.autoDeleteRecordsAfterDays = 0;
+  if(!state.showCharacterList) state.showCharacterList = [];
 
   if(!isApprovedUser()){
     await registerPendingApproval();
@@ -6733,6 +6807,8 @@ async function init(){
     bulkTaskImportParsed = null;
   });
   document.getElementById('recoverSandboxBtn').addEventListener('click', recoverOldSandboxes);
+  document.getElementById('addCharacterBtn').addEventListener('click', addCharacterToList);
+  document.getElementById('loadStarcatcherPresetBtn').addEventListener('click', loadStarcatcherPreset);
   document.getElementById('scrubParentBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only the Director can do this'); return; }
     if(!confirm('Permanently delete any stored parent email/phone from every production\'s roster? This cannot be undone. Nothing else about any crew member is affected.')) return;
