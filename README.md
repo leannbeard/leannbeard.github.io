@@ -1084,6 +1084,17 @@
       <button class="btn ghost small" id="downloadBackupBtn" style="margin-right:8px;">Download Full Backup (JSON)</button>
       <button class="btn danger small" id="resetAllBtn">Reset All Production Data</button>
     </div>
+    <div class="card" id="callListUpdateCard">
+      <h2>Update Rehearsal Call Lists by Character</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">For existing calendar events tagged broadly as "Cast" when really only specific characters are needed. One line per date: <code>YYYY-MM-DD: Character1, Character2</code> — names must match your Show Character List exactly (the same checklist used in "Edit Role"). Use <code>Full Company</code> instead of a character list for a day that really does need everyone. This replaces that date's call list with exactly what's listed, and only touches dates you list — matches the one calendar event on that date; if more than one event shares a date, that date is skipped and flagged so it doesn't guess wrong.</p>
+      <textarea id="callListUpdateText" class="full-width" style="min-height:120px; font-family:monospace; font-size:12px;" placeholder="2026-09-15: Boy/Peter, Molly Aster, Lord Leonard Aster&#10;2026-09-16: Full Company&#10;2026-09-17: Black Stache, Smee/Greggors"></textarea>
+      <button class="btn small" id="callListPreviewBtn" style="margin-top:8px;">Preview Update</button>
+      <div id="callListPreviewWrap" style="display:none; margin-top:14px;">
+        <div id="callListPreviewSummary"></div>
+        <button class="btn" id="callListConfirmBtn" style="margin-top:10px;">Confirm — Update These Call Lists</button>
+        <button class="btn ghost" id="callListCancelBtn" style="margin-top:10px;">Cancel</button>
+      </div>
+    </div>
     <div class="card" id="characterListCard">
       <h2>Show Character List</h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">Set the actual character names for this show once, and "Edit Role" on the roster becomes a checklist instead of free typing — so the exact same text is used everywhere a character name shows up (conflicts, calendar calls, rehearsal lists), with no typos or inconsistent spelling between entries.</p>
@@ -2543,6 +2554,80 @@ async function addCalendarEvent(){
   if(ui.calSub==='month') renderCalMonth();
   sendGroupMe(`🗓️ New call added: "${title}" on ${fmtDate(date)}${startTime?' at '+startTime:''}${location?' — '+location:''}${groupMeCallInfo({isSpecificCall, calledDepartments, calledStudentIds})}.`);
   toast('Added to calendar');
+}
+// ---------------- UPDATE REHEARSAL CALL LISTS BY CHARACTER (narrow an existing "Cast" call to only the characters actually needed) ----------------
+function parseCallListUpdate(text){
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const updates = [];
+  const noColon = [], dateNotFound = [], ambiguousDates = [];
+  lines.forEach(line=>{
+    const colonIdx = line.indexOf(':');
+    if(colonIdx===-1){ noColon.push(line); return; }
+    const datePart = line.slice(0, colonIdx).trim();
+    const rest = line.slice(colonIdx+1).trim();
+    const matches = state.calendar.filter(e=>e.date===datePart);
+    if(matches.length===0){ dateNotFound.push(datePart); return; }
+    if(matches.length>1){ ambiguousDates.push(datePart); return; }
+    const ev = matches[0];
+    if(/^full company$/i.test(rest)){
+      updates.push({ date:datePart, eventId:ev.id, eventTitle:ev.title, fullCompany:true, studentIds:[], characters:[], unmatchedChars:[] });
+      return;
+    }
+    const charNames = rest.split(',').map(s=>s.trim()).filter(Boolean);
+    const studentIds = [];
+    const unmatchedChars = [];
+    charNames.forEach(charName=>{
+      const matchedCrew = state.crew.filter(c=>(c.castRole||'').split(',').map(s=>s.trim().toLowerCase()).includes(charName.toLowerCase()));
+      if(!matchedCrew.length) unmatchedChars.push(charName);
+      matchedCrew.forEach(c=>{ if(!studentIds.includes(c.id)) studentIds.push(c.id); });
+    });
+    updates.push({ date:datePart, eventId:ev.id, eventTitle:ev.title, fullCompany:false, studentIds, characters:charNames, unmatchedChars });
+  });
+  return { updates, noColon, dateNotFound, ambiguousDates };
+}
+let callListUpdateParsed = null;
+function renderCallListPreview(){
+  const text = document.getElementById('callListUpdateText').value;
+  if(!text.trim()){ toast('Paste a list first'); return; }
+  const { updates, noColon, dateNotFound, ambiguousDates } = parseCallListUpdate(text);
+  callListUpdateParsed = updates;
+  const wrap = document.getElementById('callListPreviewWrap');
+  const summary = document.getElementById('callListPreviewSummary');
+  document.getElementById('callListConfirmBtn').style.display = updates.length ? 'inline-block' : 'none';
+  let html = '';
+  if(updates.length){
+    html += `<div style="margin-bottom:8px;">Will update <b>${updates.length}</b> call(s):</div><ul style="margin:0 0 0 18px; font-size:12.5px;">` +
+      updates.map(u=>{
+        if(u.fullCompany) return `<li><b>${fmtDate(u.date)}</b> — ${escapeHtml(u.eventTitle)} → Full Company</li>`;
+        const names = u.studentIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'?'; });
+        return `<li><b>${fmtDate(u.date)}</b> — ${escapeHtml(u.eventTitle)} → ${names.map(escapeHtml).join(', ')||'(nobody matched)'}${u.unmatchedChars.length?` <span style="color:var(--amber);">— no match for: ${u.unmatchedChars.map(escapeHtml).join(', ')}</span>`:''}</li>`;
+      }).join('') + `</ul>`;
+  } else {
+    html += `<div class="empty-state">Nothing recognized — check the "Date: Characters" format below.</div>`;
+  }
+  if(dateNotFound.length) html += `<div style="margin-top:10px; color:var(--amber); font-size:12px;">⚠️ No calendar event on this date, skipped: ${dateNotFound.map(escapeHtml).join(', ')}</div>`;
+  if(ambiguousDates.length) html += `<div style="margin-top:6px; color:var(--red); font-size:12px;">⚠️ More than one event on this date — too ambiguous to guess, skipped: ${ambiguousDates.map(escapeHtml).join(', ')}</div>`;
+  if(noColon.length) html += `<div style="margin-top:6px; color:var(--red); font-size:12px;">⚠️ Couldn't read (missing the ":"), skipped: ${noColon.map(escapeHtml).join(', ')}</div>`;
+  summary.innerHTML = html;
+  wrap.style.display = 'block';
+}
+async function confirmCallListUpdate(){
+  if(!isDirector()){ toast('Only the Director can update call lists'); return; }
+  if(!callListUpdateParsed || !callListUpdateParsed.length){ toast('Preview the update first'); return; }
+  let count = 0;
+  callListUpdateParsed.forEach(u=>{
+    const ev = state.calendar.find(e=>e.id===u.eventId); if(!ev) return;
+    ev.isSpecificCall = true;
+    if(u.fullCompany){ ev.calledDepartments = ['cast']; ev.calledStudentIds = []; }
+    else { ev.calledDepartments = []; ev.calledStudentIds = u.studentIds; }
+    count++;
+  });
+  await saveState();
+  document.getElementById('callListUpdateText').value = '';
+  document.getElementById('callListPreviewWrap').style.display = 'none';
+  callListUpdateParsed = null;
+  renderCalMonth(); renderCalendar();
+  toast(`Updated ${count} call list(s)`);
 }
 async function bulkImportCalendar(){
   if(!isDirectorOrStageMgmt()){ toast('Only the Director or Stage Management can import calendar entries'); return; }
@@ -6702,6 +6787,12 @@ async function init(){
   document.getElementById('toggleCalBulkImport').addEventListener('click', ()=>{
     const wrap = document.getElementById('calBulkImportWrap');
     wrap.style.display = wrap.style.display==='none' ? 'block' : 'none';
+  });
+  document.getElementById('callListPreviewBtn').addEventListener('click', renderCallListPreview);
+  document.getElementById('callListConfirmBtn').addEventListener('click', confirmCallListUpdate);
+  document.getElementById('callListCancelBtn').addEventListener('click', ()=>{
+    document.getElementById('callListPreviewWrap').style.display = 'none';
+    callListUpdateParsed = null;
   });
   document.getElementById('calBulkImportBtn').addEventListener('click', bulkImportCalendar);
   document.getElementById('calClearAllBtn').addEventListener('click', async ()=>{
