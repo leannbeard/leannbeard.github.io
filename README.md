@@ -1096,6 +1096,17 @@
       </div>
       <div id="characterListWrap" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;"></div>
     </div>
+    <div class="card" id="bulkRosterUpdateCard">
+      <h2>Bulk Update Cast &amp; Crew Assignments</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">For finalizing/locking down roles once casting is set — one line per student: <code>Name: Department1, Department2</code>, and for cast, add their character(s) after "as", like <code>Ava Thompson: Cast as Molly Aster</code>. This <b>replaces</b> that student's current team/role assignments with exactly what's listed — it doesn't add on top. Matches students by name already on your roster; anyone not found is skipped and listed so you can fix a typo and re-paste.</p>
+      <textarea id="bulkRosterUpdateText" class="full-width" style="min-height:120px; font-family:monospace; font-size:12px;" placeholder="Ava Thompson: Cast as Molly Aster, Wendy Darling&#10;Jordan Ellis: Set Design, Stage Management&#10;Maya Chen: Costumes"></textarea>
+      <button class="btn small" id="bulkRosterPreviewBtn" style="margin-top:8px;">Preview Update</button>
+      <div id="bulkRosterPreviewWrap" style="display:none; margin-top:14px;">
+        <div id="bulkRosterPreviewSummary"></div>
+        <button class="btn" id="bulkRosterConfirmBtn" style="margin-top:10px;">Confirm — Update These Students</button>
+        <button class="btn ghost" id="bulkRosterCancelBtn" style="margin-top:10px;">Cancel</button>
+      </div>
+    </div>
     <div class="card" id="bulkTaskImportCard">
       <h2>Bulk Import Tasks (All Departments)</h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">Paste a structured task list covering one or more departments — headings in ALL CAPS mark which department, a heading with a date range in parentheses (like "Research &amp; Design (Aug 28–Sep 20)") sets the due date for the tasks under it, and each <code>[ ]</code> line becomes one task. Nothing is added until you review the preview and confirm.</p>
@@ -6270,6 +6281,70 @@ async function loadStarcatcherPreset(){
   await saveState(); renderCharacterList();
   toast(added>0 ? `Added ${added} character(s)` : 'Already all on the list');
 }
+// ---------------- BULK UPDATE ROSTER ASSIGNMENTS (finalize/lock down teams & cast roles) ----------------
+function parseBulkRosterUpdate(text){
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const updates = []; // {crewId, name, depts:[], castRole}
+  const notFound = [];
+  const noColon = [];
+  lines.forEach(line=>{
+    const colonIdx = line.indexOf(':');
+    if(colonIdx===-1){ noColon.push(line); return; }
+    const name = line.slice(0, colonIdx).trim();
+    const rest = line.slice(colonIdx+1).trim();
+    let deptPart = rest, castRole = '';
+    const asIdx = rest.toLowerCase().indexOf(' as ');
+    if(asIdx!==-1){ deptPart = rest.slice(0, asIdx); castRole = rest.slice(asIdx+4).trim(); }
+    const deptKeys = [];
+    deptPart.split(',').map(s=>s.trim()).filter(Boolean).forEach(tok=>{
+      const key = DEPT_HEADER_ALIASES[tok.toUpperCase()];
+      if(key && !deptKeys.includes(key)) deptKeys.push(key);
+    });
+    if(castRole && !deptKeys.includes('cast')) deptKeys.push('cast');
+    const match = state.crew.find(c=>c.name.trim().toLowerCase()===name.toLowerCase());
+    if(!match){ notFound.push(name); return; }
+    updates.push({ crewId: match.id, name: match.name, depts: deptKeys, castRole });
+  });
+  return { updates, notFound, noColon };
+}
+let bulkRosterUpdateParsed = null;
+function renderBulkRosterPreview(){
+  const text = document.getElementById('bulkRosterUpdateText').value;
+  if(!text.trim()){ toast('Paste a list first'); return; }
+  const { updates, notFound, noColon } = parseBulkRosterUpdate(text);
+  bulkRosterUpdateParsed = updates;
+  const wrap = document.getElementById('bulkRosterPreviewWrap');
+  const summary = document.getElementById('bulkRosterPreviewSummary');
+  document.getElementById('bulkRosterConfirmBtn').style.display = updates.length ? 'inline-block' : 'none';
+  let html = '';
+  if(updates.length){
+    html += `<div style="margin-bottom:8px;">Will update <b>${updates.length}</b> student(s):</div><ul style="margin:0 0 0 18px; font-size:12.5px;">` +
+      updates.map(u=>`<li><b>${escapeHtml(u.name)}</b> → ${u.depts.map(k=>deptInfo(k).label).join(', ')||'(no team)'}${u.castRole?` as <i>${escapeHtml(u.castRole)}</i>`:''}</li>`).join('') + `</ul>`;
+  } else {
+    html += `<div class="empty-state">Nothing recognized — check the "Name: Department" format below.</div>`;
+  }
+  if(notFound.length) html += `<div style="margin-top:10px; color:var(--amber); font-size:12px;">⚠️ Not found on your roster, skipped: ${notFound.map(escapeHtml).join(', ')} — check spelling matches exactly, then re-paste just these.</div>`;
+  if(noColon.length) html += `<div style="margin-top:6px; color:var(--red); font-size:12px;">⚠️ Couldn't read (missing the ":"), skipped: ${noColon.map(escapeHtml).join(', ')}</div>`;
+  summary.innerHTML = html;
+  wrap.style.display = 'block';
+}
+async function confirmBulkRosterUpdate(){
+  if(!isDirector()){ toast('Only the Director can update the roster'); return; }
+  if(!bulkRosterUpdateParsed || !bulkRosterUpdateParsed.length){ toast('Preview the update first'); return; }
+  let count = 0;
+  bulkRosterUpdateParsed.forEach(u=>{
+    const c = state.crew.find(x=>x.id===u.crewId); if(!c) return;
+    c.departments = u.depts;
+    if(u.castRole) c.castRole = u.castRole;
+    count++;
+  });
+  await saveState();
+  document.getElementById('bulkRosterUpdateText').value = '';
+  document.getElementById('bulkRosterPreviewWrap').style.display = 'none';
+  bulkRosterUpdateParsed = null;
+  renderSetup();
+  toast(`Updated ${count} student(s)`);
+}
 async function bulkImportCrew(){
   if(!isDirector()){ toast('Only the Director can import crew'); return; }
   const raw = document.getElementById('bulkImportText').value;
@@ -6898,6 +6973,12 @@ async function init(){
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast('Backup downloaded');
+  });
+  document.getElementById('bulkRosterPreviewBtn').addEventListener('click', renderBulkRosterPreview);
+  document.getElementById('bulkRosterConfirmBtn').addEventListener('click', confirmBulkRosterUpdate);
+  document.getElementById('bulkRosterCancelBtn').addEventListener('click', ()=>{
+    document.getElementById('bulkRosterPreviewWrap').style.display = 'none';
+    bulkRosterUpdateParsed = null;
   });
   document.getElementById('bulkTaskPreviewBtn').addEventListener('click', renderBulkTaskPreview);
   document.getElementById('bulkTaskConfirmBtn').addEventListener('click', confirmBulkTaskImport);
