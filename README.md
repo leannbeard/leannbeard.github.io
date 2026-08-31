@@ -1086,7 +1086,7 @@
     </div>
     <div class="card" id="callListUpdateCard">
       <h2>Update Rehearsal Call Lists by Character</h2>
-      <p style="font-size:12.5px;color:var(--paper-dim);">For existing calendar events tagged broadly as "Cast" when really only specific characters are needed. One line per date: <code>YYYY-MM-DD: Character1, Character2</code> — names must match your Show Character List exactly (the same checklist used in "Edit Role"). Use <code>Full Company</code> instead of a character list for a day that really does need everyone. This replaces that date's call list with exactly what's listed, and only touches dates you list — matches the one calendar event on that date; if more than one event shares a date, that date is skipped and flagged so it doesn't guess wrong.</p>
+      <p style="font-size:12.5px;color:var(--paper-dim);">For existing calendar events tagged broadly as "Cast" when really only specific characters are needed. One line per date: <code>YYYY-MM-DD: Character1, Character2</code> — names must match your Show Character List exactly (the same checklist used in "Edit Role"). Use <code>Full Company</code> instead of a character list for a day that really does need everyone. This replaces that date's call list with exactly what's listed, and only touches dates you list. If more than one event shares a date (like a two-show day), add a bit of its title after a <code>|</code> to say which one: <code>2026-11-21 | Performance 3: Full Company</code> — otherwise an ambiguous date is skipped and flagged rather than guessed.</p>
       <textarea id="callListUpdateText" class="full-width" style="min-height:120px; font-family:monospace; font-size:12px;" placeholder="2026-09-15: Boy/Peter, Molly Aster, Lord Leonard Aster&#10;2026-09-16: Full Company&#10;2026-09-17: Black Stache, Smee/Greggors"></textarea>
       <button class="btn small" id="callListPreviewBtn" style="margin-top:8px;">Preview Update</button>
       <div id="callListPreviewWrap" style="display:none; margin-top:14px;">
@@ -2563,11 +2563,15 @@ function parseCallListUpdate(text){
   lines.forEach(line=>{
     const colonIdx = line.indexOf(':');
     if(colonIdx===-1){ noColon.push(line); return; }
-    const datePart = line.slice(0, colonIdx).trim();
+    let datePart = line.slice(0, colonIdx).trim();
     const rest = line.slice(colonIdx+1).trim();
-    const matches = state.calendar.filter(e=>e.date===datePart);
-    if(matches.length===0){ dateNotFound.push(datePart); return; }
-    if(matches.length>1){ ambiguousDates.push(datePart); return; }
+    let titleHint = '';
+    const pipeIdx = datePart.indexOf('|');
+    if(pipeIdx!==-1){ titleHint = datePart.slice(pipeIdx+1).trim().toLowerCase(); datePart = datePart.slice(0, pipeIdx).trim(); }
+    let matches = state.calendar.filter(e=>e.date===datePart);
+    if(matches.length>1 && titleHint){ matches = matches.filter(e=>e.title.toLowerCase().includes(titleHint)); }
+    if(matches.length===0){ dateNotFound.push(line.slice(0, colonIdx).trim()); return; }
+    if(matches.length>1){ ambiguousDates.push(line.slice(0, colonIdx).trim()); return; }
     const ev = matches[0];
     if(/^full company$/i.test(rest)){
       updates.push({ date:datePart, eventId:ev.id, eventTitle:ev.title, fullCompany:true, studentIds:[], characters:[], unmatchedChars:[] });
