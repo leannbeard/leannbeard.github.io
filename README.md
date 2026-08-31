@@ -6060,13 +6060,22 @@ function renderSetup(){
       ${isDirector() ? `<select class="mono" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:4px 7px; font-size:11.5px;" data-classperiod="${c.id}">
         ${['Class A','Class B','Class C','Class D'].map(cp=>`<option ${cp===c.classPeriod?'selected':''}>${cp}</option>`).join('')}
       </select>` : `<span class="rmeta">${c.classPeriod||''}</span>`}
-      ${isDirector() ? `${isCast?`<button class="btn ghost small" data-editrole="${c.id}">Edit Role</button>`:''}<button class="btn ghost small" data-editemail="${c.id}">Edit Email</button><button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
+      ${isDirector() ? `${isCast?`<button class="btn ghost small" data-editrole="${c.id}">Edit Role</button>`:''}<button class="btn ghost small" data-editname="${c.id}">Edit Name</button><button class="btn ghost small" data-editemail="${c.id}">Edit Email</button><button class="btn ghost small" data-edit="${c.id}">Edit Teams</button><button class="task-del" data-id="${c.id}">✕</button>` : ''}`;
     wrap.appendChild(row);
     if(isDirector()){
       row.querySelector('[data-classperiod]').addEventListener('change', async (e)=>{
         c.classPeriod = e.target.value;
         await saveState(); renderSetup();
         toast(`${escapeHtml(c.name)} moved to ${c.classPeriod}`);
+      });
+      row.querySelector('[data-editname]').addEventListener('click', async ()=>{
+        const val = prompt(`Name for this crew member:`, c.name||'');
+        if(val===null) return;
+        const trimmed = val.trim();
+        if(!trimmed){ toast('Name cannot be blank'); return; }
+        c.name = trimmed;
+        await saveState(); renderSetup();
+        toast('Name updated');
       });
       row.querySelector('[data-editemail]').addEventListener('click', async ()=>{
         const val = prompt(`Sign-in email for ${escapeHtml(c.name)}:`, c.email||'');
