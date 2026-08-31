@@ -1098,7 +1098,7 @@
     </div>
     <div class="card" id="bulkRosterUpdateCard">
       <h2>Bulk Update Cast &amp; Crew Assignments</h2>
-      <p style="font-size:12.5px;color:var(--paper-dim);">For finalizing/locking down roles once casting is set — one line per student: <code>Name: Department1, Department2</code>, and for cast, add their character(s) after "as", like <code>Ava Thompson: Cast as Molly Aster</code>. This <b>replaces</b> that student's current team/role assignments with exactly what's listed — it doesn't add on top. Matches students by name already on your roster; anyone not found is skipped and listed so you can fix a typo and re-paste.</p>
+      <p style="font-size:12.5px;color:var(--paper-dim);">For finalizing/locking down roles once casting is set — one line per student: <code>Name: Department1, Department2</code>, and for cast, add their character(s) after "as", like <code>Ava Thompson: Cast as Molly Aster</code>. Add <code>[TL]</code> anywhere in a line to also mark that student a Team Leader, like <code>Jordan Ellis: Set Design [TL]</code>. This <b>replaces</b> that student's current team/role assignments with exactly what's listed — it doesn't add on top. Matches students by name already on your roster; anyone not found is skipped and listed so you can fix a typo and re-paste.</p>
       <textarea id="bulkRosterUpdateText" class="full-width" style="min-height:120px; font-family:monospace; font-size:12px;" placeholder="Ava Thompson: Cast as Molly Aster, Wendy Darling&#10;Jordan Ellis: Set Design, Stage Management&#10;Maya Chen: Costumes"></textarea>
       <button class="btn small" id="bulkRosterPreviewBtn" style="margin-top:8px;">Preview Update</button>
       <div id="bulkRosterPreviewWrap" style="display:none; margin-top:14px;">
@@ -1192,6 +1192,7 @@ const DEPARTMENTS = [
   { key:'hair_makeup', label:'Hair & Makeup',    color:'#C97B84' },
   { key:'lighting',    label:'Lighting Design',  color:'#4C7A93' },
   { key:'sound',       label:'Sound Design',     color:'#4A8C82' },
+  { key:'special_effects', label:'Special Effects', color:'#6B4E8E' },
   { key:'stage_mgmt',  label:'Stage Management', color:'#6E7B8B' },
   { key:'run_crew',    label:'Run Crew',         color:'#7A8450' },
   { key:'marketing',   label:'Marketing',        color:'#C9A227' },
@@ -1280,6 +1281,7 @@ function freshDepartments(seeded){
       hair_makeup: defaultDeptState([]),
       lighting: defaultDeptState([['Focus front wash','Install','high',2],['Program cues 1–10','Coordinate','medium',3]]),
       sound: defaultDeptState([['Mic check all wireless packs','Install','high',1],['Build cue playback list','Coordinate','medium',2]]),
+      special_effects: defaultDeptState([]),
       stage_mgmt: defaultDeptState([]),
       run_crew: defaultDeptState([]),
       marketing: defaultDeptState([]),
@@ -1542,6 +1544,7 @@ async function finishLoadingChosenProduction(){
   if(!state.lightingCues) state.lightingCues = [];
   if(!state.sandboxList) state.sandboxList = [];
   if(!state.blockingNotes) state.blockingNotes = [];
+  DEPARTMENTS.forEach(d=>{ if(!state.departments[d.key]) state.departments[d.key] = defaultDeptState([]); });
   if(!isApprovedUser()){
     await registerPendingApproval();
     showPendingApprovalShell();
@@ -6127,6 +6130,7 @@ const DEPT_HEADER_ALIASES = {
   'HAIR & MAKEUP':'hair_makeup', 'HAIR AND MAKEUP':'hair_makeup', 'HAIR/MAKEUP':'hair_makeup', 'MAKEUP':'hair_makeup', 'HAIR':'hair_makeup',
   'LIGHTING':'lighting', 'LIGHTING DESIGN':'lighting',
   'SOUND':'sound', 'SOUND DESIGN':'sound',
+  'SPECIAL EFFECTS':'special_effects', 'SPECIAL FX':'special_effects', 'FX':'special_effects',
   'STAGE MANAGEMENT':'stage_mgmt', 'STAGE MGMT':'stage_mgmt',
   'RUN CREW':'run_crew', 'RUN CREW & STRIKE':'run_crew',
   'PUBLICITY':'marketing', 'MARKETING':'marketing', 'PUBLICITY / MARKETING':'marketing', 'PUBLICITY & MARKETING':'marketing',
@@ -6284,10 +6288,12 @@ async function loadStarcatcherPreset(){
 // ---------------- BULK UPDATE ROSTER ASSIGNMENTS (finalize/lock down teams & cast roles) ----------------
 function parseBulkRosterUpdate(text){
   const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const updates = []; // {crewId, name, depts:[], castRole}
+  const updates = []; // {crewId, name, depts:[], castRole, teamLeader}
   const notFound = [];
   const noColon = [];
-  lines.forEach(line=>{
+  lines.forEach(rawLine=>{
+    const teamLeader = /\[TL\]/i.test(rawLine);
+    const line = rawLine.replace(/\[TL\]/i, '').trim();
     const colonIdx = line.indexOf(':');
     if(colonIdx===-1){ noColon.push(line); return; }
     const name = line.slice(0, colonIdx).trim();
@@ -6303,7 +6309,7 @@ function parseBulkRosterUpdate(text){
     if(castRole && !deptKeys.includes('cast')) deptKeys.push('cast');
     const match = state.crew.find(c=>c.name.trim().toLowerCase()===name.toLowerCase());
     if(!match){ notFound.push(name); return; }
-    updates.push({ crewId: match.id, name: match.name, depts: deptKeys, castRole });
+    updates.push({ crewId: match.id, name: match.name, depts: deptKeys, castRole, teamLeader });
   });
   return { updates, notFound, noColon };
 }
@@ -6319,7 +6325,7 @@ function renderBulkRosterPreview(){
   let html = '';
   if(updates.length){
     html += `<div style="margin-bottom:8px;">Will update <b>${updates.length}</b> student(s):</div><ul style="margin:0 0 0 18px; font-size:12.5px;">` +
-      updates.map(u=>`<li><b>${escapeHtml(u.name)}</b> → ${u.depts.map(k=>deptInfo(k).label).join(', ')||'(no team)'}${u.castRole?` as <i>${escapeHtml(u.castRole)}</i>`:''}</li>`).join('') + `</ul>`;
+      updates.map(u=>`<li><b>${escapeHtml(u.name)}</b>${u.teamLeader?' <span class="mono" style="color:var(--sage); font-size:10.5px;">TEAM LEADER</span>':''} → ${u.depts.map(k=>deptInfo(k).label).join(', ')||'(no team)'}${u.castRole?` as <i>${escapeHtml(u.castRole)}</i>`:''}</li>`).join('') + `</ul>`;
   } else {
     html += `<div class="empty-state">Nothing recognized — check the "Name: Department" format below.</div>`;
   }
@@ -6336,6 +6342,7 @@ async function confirmBulkRosterUpdate(){
     const c = state.crew.find(x=>x.id===u.crewId); if(!c) return;
     c.departments = u.depts;
     if(u.castRole) c.castRole = u.castRole;
+    if(u.teamLeader && c.role==='student') c.role = 'team_leader';
     count++;
   });
   await saveState();
@@ -6529,6 +6536,7 @@ async function loadEverythingAndRender(){
   if(!state.blockingNotes) state.blockingNotes = [];
   if(state.autoDeleteRecordsAfterDays===undefined) state.autoDeleteRecordsAfterDays = 0;
   if(!state.showCharacterList) state.showCharacterList = [];
+  DEPARTMENTS.forEach(d=>{ if(!state.departments[d.key]) state.departments[d.key] = defaultDeptState([]); });
 
   if(!isApprovedUser()){
     await registerPendingApproval();
