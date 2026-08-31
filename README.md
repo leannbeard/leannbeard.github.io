@@ -1086,7 +1086,7 @@
     </div>
     <div class="card" id="callListUpdateCard">
       <h2>Update Rehearsal Call Lists by Character</h2>
-      <p style="font-size:12.5px;color:var(--paper-dim);">For existing calendar events tagged broadly as "Cast" when really only specific characters are needed. One line per date: <code>YYYY-MM-DD: Character1, Character2</code> — names must match your Show Character List exactly (the same checklist used in "Edit Role"). Use <code>Full Company</code> instead of a character list for a day that really does need everyone. This only ever adjusts the <b>Cast</b> side of who's called — Stage Management, Run Crew, or any other department already on that call stays exactly as it was, untouched. Only touches dates you list. If more than one event shares a date (like a two-show day), add a bit of its title after a <code>|</code> to say which one: <code>2026-11-21 | Performance 3: Full Company</code> — otherwise an ambiguous date is skipped and flagged rather than guessed.</p>
+      <p style="font-size:12.5px;color:var(--paper-dim);">For existing calendar events tagged broadly as "Cast" when really only specific characters are needed. One line per date: <code>YYYY-MM-DD: Character1, Character2</code> — names must match your Show Character List exactly (the same checklist used in "Edit Role"). Use <code>Full Company</code> instead of a character list for a day that really does need everyone. This only ever adjusts the <b>Cast</b> side of who's called — Stage Management, Run Crew, or any other department already on that call stays exactly as it was, untouched. To make sure a department like Stage Management is called even if it wasn't set on that event before, add <code> + Stage Management</code> at the end of the line: <code>2026-09-09: Full Company + Stage Management</code>. Only touches dates you list. If more than one event shares a date (like a two-show day), add a bit of its title after a <code>|</code> to say which one: <code>2026-11-21 | Performance 3: Full Company</code> — otherwise an ambiguous date is skipped and flagged rather than guessed.</p>
       <textarea id="callListUpdateText" class="full-width" style="min-height:120px; font-family:monospace; font-size:12px;" placeholder="2026-09-15: Boy/Peter, Molly Aster, Lord Leonard Aster&#10;2026-09-16: Full Company&#10;2026-09-17: Black Stache, Smee/Greggors"></textarea>
       <button class="btn small" id="callListPreviewBtn" style="margin-top:8px;">Preview Update</button>
       <div id="callListPreviewWrap" style="display:none; margin-top:14px;">
@@ -2564,7 +2564,7 @@ function parseCallListUpdate(text){
     const colonIdx = line.indexOf(':');
     if(colonIdx===-1){ noColon.push(line); return; }
     let datePart = line.slice(0, colonIdx).trim();
-    const rest = line.slice(colonIdx+1).trim();
+    let rest = line.slice(colonIdx+1).trim();
     let titleHint = '';
     const pipeIdx = datePart.indexOf('|');
     if(pipeIdx!==-1){ titleHint = datePart.slice(pipeIdx+1).trim().toLowerCase(); datePart = datePart.slice(0, pipeIdx).trim(); }
@@ -2573,8 +2573,21 @@ function parseCallListUpdate(text){
     if(matches.length===0){ dateNotFound.push(line.slice(0, colonIdx).trim()); return; }
     if(matches.length>1){ ambiguousDates.push(line.slice(0, colonIdx).trim()); return; }
     const ev = matches[0];
+    // An explicit "+ Department, Department" suffix ADDS standing departments to the call —
+    // for crew (like Stage Management) that should be there regardless of which characters
+    // are called, even if they were never on this call's data to begin with.
+    let addDeptKeys = [];
+    const plusIdx = rest.indexOf(' + ');
+    if(plusIdx!==-1){
+      const addPart = rest.slice(plusIdx+3).trim();
+      rest = rest.slice(0, plusIdx).trim();
+      addPart.split(',').map(s=>s.trim()).filter(Boolean).forEach(tok=>{
+        const key = DEPT_HEADER_ALIASES[tok.toUpperCase()];
+        if(key && !addDeptKeys.includes(key)) addDeptKeys.push(key);
+      });
+    }
     if(/^full company$/i.test(rest)){
-      updates.push({ date:datePart, eventId:ev.id, eventTitle:ev.title, fullCompany:true, studentIds:[], characters:[], unmatchedChars:[] });
+      updates.push({ date:datePart, eventId:ev.id, eventTitle:ev.title, fullCompany:true, studentIds:[], characters:[], unmatchedChars:[], addDeptKeys });
       return;
     }
     const charNames = rest.split(',').map(s=>s.trim()).filter(Boolean);
@@ -2585,7 +2598,7 @@ function parseCallListUpdate(text){
       if(!matchedCrew.length) unmatchedChars.push(charName);
       matchedCrew.forEach(c=>{ if(!studentIds.includes(c.id)) studentIds.push(c.id); });
     });
-    updates.push({ date:datePart, eventId:ev.id, eventTitle:ev.title, fullCompany:false, studentIds, characters:charNames, unmatchedChars });
+    updates.push({ date:datePart, eventId:ev.id, eventTitle:ev.title, fullCompany:false, studentIds, characters:charNames, unmatchedChars, addDeptKeys });
   });
   return { updates, noColon, dateNotFound, ambiguousDates };
 }
@@ -2603,8 +2616,8 @@ function renderCallListPreview(){
     html += `<div style="margin-bottom:8px;">Will update <b>${updates.length}</b> call(s):</div><ul style="margin:0 0 0 18px; font-size:12.5px;">` +
       updates.map(u=>{
         const ev = state.calendar.find(e=>e.id===u.eventId);
-        const keptDepts = (ev?.calledDepartments||[]).filter(d=>d!=='cast').map(k=>deptInfo(k).label);
-        const keptNote = keptDepts.length ? ` <span style="color:var(--paper-dim);">(${keptDepts.join(', ')} unaffected — still called)</span>` : '';
+        const keptDepts = [...new Set([...(ev?.calledDepartments||[]).filter(d=>d!=='cast'), ...(u.addDeptKeys||[])])].map(k=>deptInfo(k).label);
+        const keptNote = keptDepts.length ? ` <span style="color:var(--paper-dim);">(${keptDepts.join(', ')} also called)</span>` : '';
         if(u.fullCompany) return `<li><b>${fmtDate(u.date)}</b> — ${escapeHtml(u.eventTitle)} → Full Company${keptNote}</li>`;
         const names = u.studentIds.map(id=>{ const c=state.crew.find(x=>x.id===id); return c?c.name:'?'; });
         return `<li><b>${fmtDate(u.date)}</b> — ${escapeHtml(u.eventTitle)} → ${names.map(escapeHtml).join(', ')||'(nobody matched)'}${keptNote}${u.unmatchedChars.length?` <span style="color:var(--amber);">— no match for: ${u.unmatchedChars.map(escapeHtml).join(', ')}</span>`:''}</li>`;
@@ -2630,11 +2643,12 @@ async function confirmCallListUpdate(){
     // untouched, since narrowing which characters are needed should never silently drop
     // the crew who are supposed to be there running the room.
     const nonCastDepts = (ev.calledDepartments||[]).filter(d=>d!=='cast');
+    const keepDepts = [...new Set([...nonCastDepts, ...(u.addDeptKeys||[])])];
     if(u.fullCompany){
-      ev.calledDepartments = [...nonCastDepts, 'cast'];
+      ev.calledDepartments = [...keepDepts, 'cast'];
       ev.calledStudentIds = (ev.calledStudentIds||[]).filter(id=>{ const c=state.crew.find(x=>x.id===id); return c && !(c.departments||[]).includes('cast'); });
     } else {
-      ev.calledDepartments = nonCastDepts;
+      ev.calledDepartments = keepDepts;
       const nonCastStudentIds = (ev.calledStudentIds||[]).filter(id=>{ const c=state.crew.find(x=>x.id===id); return c && !(c.departments||[]).includes('cast'); });
       ev.calledStudentIds = [...new Set([...nonCastStudentIds, ...u.studentIds])];
     }
