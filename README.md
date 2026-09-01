@@ -777,22 +777,7 @@
       </div>
       <div id="sdToolbarWrap" style="display:none;">
         <p style="font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; margin:10px 0 4px;">Standard UIL One-Act Play Set (32-piece)</p>
-        <div class="wb-toolbar" id="sdToolbarUil">
-          <button class="wb-tool-btn" data-piece="uil_platform_4x8">▭ 4×8 Platform</button>
-          <button class="wb-tool-btn" data-piece="uil_platform_4x4">▭ 4×4 Platform</button>
-          <button class="wb-tool-btn" data-piece="uil_platform_1x1">▪ 1×1 Platform</button>
-          <button class="wb-tool-btn" data-piece="uil_ramp_4x4">◺ 4×4 Ramp</button>
-          <button class="wb-tool-btn" data-piece="uil_step_4">▲ 4' Steps</button>
-          <button class="wb-tool-btn" data-piece="uil_step_2">▲ 2' Steps</button>
-          <button class="wb-tool-btn" data-piece="uil_pylon_8">▮ 8' Pylon</button>
-          <button class="wb-tool-btn" data-piece="uil_pylon_6">▮ 6' Pylon</button>
-          <button class="wb-tool-btn" data-piece="uil_pylon_4">▮ 4' Pylon</button>
-          <button class="wb-tool-btn" data-piece="uil_door">▯ Door Unit</button>
-          <button class="wb-tool-btn" data-piece="uil_window">▯ Window Unit</button>
-          <button class="wb-tool-btn" data-piece="uil_french_door">▯ French Door</button>
-          <button class="wb-tool-btn" data-piece="uil_bifold_flat">▯ Bifold Flat</button>
-          <button class="wb-tool-btn" data-piece="uil_trifold_flat">▯ Trifold Flat</button>
-        </div>
+        <div class="wb-toolbar" id="sdToolbarUil"></div>
         <p style="font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; margin:12px 0 4px;">Extra Furniture &amp; Set Dressing</p>
         <div class="wb-toolbar" id="sdToolbar">
           <button class="wb-tool-btn" data-piece="platform">▭ Platform</button>
@@ -1084,6 +1069,12 @@
       <button class="btn ghost small" id="downloadBackupBtn" style="margin-right:8px;">Download Full Backup (JSON)</button>
       <button class="btn danger small" id="resetAllBtn">Reset All Production Data</button>
     </div>
+    <div class="card" id="uilInventoryCard">
+      <h2>UIL Piece Inventory Limits</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Cap how many of each standard UIL piece students can place on the <b>Production Set</b> (your actual plan), matching what you physically own — leave blank or 0 for no limit. This only applies to the real Production Set, not Practice Sandboxes, so students can still freely explore designs there without being boxed in by real inventory.</p>
+      <div id="uilInventoryGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:8px;"></div>
+      <button class="btn small" id="uilInventorySaveBtn" style="margin-top:10px;">Save Limits</button>
+    </div>
     <div class="card" id="callListUpdateCard">
       <h2>Update Rehearsal Call Lists by Character</h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">For existing calendar events tagged broadly as "Cast" when really only specific characters are needed. One line per date: <code>YYYY-MM-DD: Character1, Character2</code> — names must match your Show Character List exactly (the same checklist used in "Edit Role"). Use <code>Full Company</code> instead of a character list for a day that really does need everyone. This only ever adjusts the <b>Cast</b> side of who's called — Stage Management, Run Crew, or any other department already on that call stays exactly as it was, untouched. To make sure a department like Stage Management is called even if it wasn't set on that event before, add <code> + Stage Management</code> at the end of the line: <code>2026-09-09: Full Company + Stage Management</code>. Only touches dates you list. If more than one event shares a date (like a two-show day), add a bit of its title after a <code>|</code> to say which one: <code>2026-11-21 | Performance 3: Full Company</code> — otherwise an ambiguous date is skipped and flagged rather than guessed.</p>
@@ -1324,6 +1315,7 @@ function defaultProductionState(name, seeded){
     blockingNotes:[],
     autoDeleteRecordsAfterDays:0,
     showCharacterList:[],
+    uilInventoryLimits:{},
     departments: freshDepartments(seeded)
   };
 }
@@ -1556,6 +1548,7 @@ async function finishLoadingChosenProduction(){
   if(!state.sandboxList) state.sandboxList = [];
   if(!state.blockingNotes) state.blockingNotes = [];
   DEPARTMENTS.forEach(d=>{ if(!state.departments[d.key]) state.departments[d.key] = defaultDeptState([]); });
+  if(!state.uilInventoryLimits) state.uilInventoryLimits = {};
   if(!isApprovedUser()){
     await registerPendingApproval();
     showPendingApprovalShell();
@@ -4672,9 +4665,12 @@ async function createNewSandbox(){
   if(name===null) return;
   const trimmed = name.trim();
   if(!trimmed){ toast('Give it a name'); return; }
+  const modeInput = prompt('Practice mode — type "UIL" to practice within your real UIL piece limits (same caps as the Production Set), or leave blank for open practice with no piece limits:', '');
+  if(modeInput===null) return;
+  const mode = /^uil$/i.test(modeInput.trim()) ? 'uil' : 'open';
   const pin = prompt('Optional: set a PIN so other groups can\'t get into this one (leave blank for no PIN):', '');
   const trimmedPin = pin ? pin.trim() : '';
-  const entry = { id:cryptoId(), name:trimmed, pin: trimmedPin||null, createdBy: currentUser()?.name || authUser?.displayName || 'Someone', createdAt:new Date().toISOString() };
+  const entry = { id:cryptoId(), name:trimmed, mode, pin: trimmedPin||null, createdBy: currentUser()?.name || authUser?.displayName || 'Someone', createdAt:new Date().toISOString() };
   if(!state.sandboxList) state.sandboxList = [];
   state.sandboxList.push(entry);
   sdUnlockedSandboxes.add(entry.id); // the creator doesn't need to re-enter their own PIN
@@ -4688,7 +4684,7 @@ async function createNewSandbox(){
   }catch(e){ console.warn('Sandbox creation failed to sync, falling back to full save', e); await saveState(); }
   await switchStageDesignBoard('sandbox', entry.id);
   renderStageDesignView();
-  toast(trimmedPin ? `Created "${trimmed}" — share the name AND PIN with your group` : `Created "${trimmed}" — share this name with your group`);
+  toast(trimmedPin ? `Created "${trimmed}" (${mode==='uil'?'UIL practice':'open practice'}) — share the name AND PIN with your group` : `Created "${trimmed}" (${mode==='uil'?'UIL practice':'open practice'}) — share this name with your group`);
 }
 // Returns true if the person may proceed into this sandbox — staff always can (they need to
 // review any group's work), the sandbox's own creator never has to re-enter their PIN, and
@@ -4717,6 +4713,7 @@ async function switchStageDesignBoard(mode, sandboxId){
   stageDesignCache = { pieces:[] };
   if(sdScene) syncStageDesignScene();
   document.getElementById('sdToolbarWrap').style.display = canEditActiveBoard() ? 'block' : 'none';
+  renderSdUilToolbar();
   await startStageDesignListener();
   renderSdPieceList(); renderSdPropsPanel();
 }
@@ -4959,7 +4956,22 @@ function pauseStageDesignScene(){
   if(sdAnimFrame){ cancelAnimationFrame(sdAnimFrame); sdAnimFrame=null; }
   stopStageDesignListener();
 }
+function renderSdUilToolbar(){
+  const wrap = document.getElementById('sdToolbarUil');
+  if(!wrap) return;
+  const icons = { uil_platform_4x8:'▭', uil_platform_4x4:'▭', uil_platform_1x1:'▪', uil_ramp_4x4:'◺', uil_step_4:'▲', uil_step_2:'▲',
+    uil_pylon_8:'▮', uil_pylon_6:'▮', uil_pylon_4:'▮', uil_door:'▯', uil_window:'▯', uil_french_door:'▯', uil_bifold_flat:'▯', uil_trifold_flat:'▯' };
+  wrap.innerHTML = Object.entries(PIECE_TYPES).filter(([,def])=>def.uil).map(([key,def])=>{
+    const limit = sdPieceLimit(key);
+    const count = sdPieceCountOnBoard(key);
+    const atLimit = sdAtPieceLimit(key);
+    const countLabel = (limit!==null && sdBoardMode==='production') ? ` (${count}/${limit})` : '';
+    return `<button class="wb-tool-btn" data-piece="${key}" ${atLimit?'disabled title="No more available — remove one first"':''}>${icons[key]||'▯'} ${escapeHtml(def.label)}${countLabel}</button>`;
+  }).join('');
+  wrap.querySelectorAll('[data-piece]').forEach(btn=>btn.addEventListener('click', ()=>addStagePiece(btn.dataset.piece)));
+}
 function syncStageDesignScene(){
+  renderSdUilToolbar();
   if(!sdScene) return;
   const THREE = THREE_MOD;
   const ids = new Set(stageDesignCache.pieces.map(p=>p.id));
@@ -4982,9 +4994,44 @@ function syncStageDesignScene(){
     group.traverse(o=>{ if(o.material) o.material.emissive = new THREE.Color(p.id===sdSelectedId ? 0x333333 : 0x000000); });
   });
 }
+// How many of this UIL piece type are already on the CURRENT board, and how many the
+// Director says are actually owned — limits only ever apply to the real Production Set,
+// never to Practice Sandboxes, so students can still explore freely there.
+function sdPieceCountOnBoard(type){ return stageDesignCache.pieces.filter(p=>p.type===type).length; }
+function sdPieceLimit(type){ const n = (state.uilInventoryLimits||{})[type]; return (n && n>0) ? n : null; }
+function sdAtPieceLimit(type){
+  if(sdBoardMode!=='production') return false;
+  const limit = sdPieceLimit(type);
+  if(limit===null) return false;
+  return sdPieceCountOnBoard(type) >= limit;
+}
+function renderUilInventoryGrid(){
+  const grid = document.getElementById('uilInventoryGrid');
+  if(!grid) return;
+  const limits = state.uilInventoryLimits || {};
+  grid.innerHTML = Object.entries(PIECE_TYPES).filter(([,def])=>def.uil).map(([key,def])=>`
+    <label style="display:flex; flex-direction:column; gap:3px; font-size:11.5px; color:var(--paper-dim);">
+      ${escapeHtml(def.label)}
+      <input type="number" min="0" step="1" data-limit-key="${key}" value="${limits[key]||''}" placeholder="No limit" style="background:rgba(0,0,0,0.2); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:5px 7px; font-size:12.5px;">
+    </label>
+  `).join('');
+}
+async function saveUilInventoryLimits(){
+  if(!isDirector()){ toast('Only the Director can set inventory limits'); return; }
+  const newLimits = {};
+  document.querySelectorAll('#uilInventoryGrid [data-limit-key]').forEach(inp=>{
+    const n = parseInt(inp.value);
+    if(n && n>0) newLimits[inp.dataset.limitKey] = n;
+  });
+  state.uilInventoryLimits = newLimits;
+  await saveState();
+  toast('Inventory limits saved');
+  if(document.getElementById('view-stagedesign').classList.contains('active')) renderStageDesignView();
+}
 async function addStagePiece(type){
   if(!canEditActiveBoard()){ toast('Only Set Design, Stage Management, or the Director can edit the set'); return; }
   const def = PIECE_TYPES[type]; if(!def) return;
+  if(sdAtPieceLimit(type)){ toast(`You only have ${sdPieceLimit(type)} ${def.label}${sdPieceLimit(type)===1?'':'s'} available — remove one first, or use a different piece.`); return; }
   const author = currentUser()?.name || authUser?.displayName || 'Someone';
   const piece = { id:cryptoId(), type, label:def.label, x:(Math.random()-0.5)*10, y:0, z:(Math.random()-0.5)*6,
     rotationY:0, width:def.defaultW, depth:def.defaultD, height:def.defaultH, color:def.color,
@@ -5136,6 +5183,7 @@ async function renderStageDesignView(){
   document.getElementById('stageDesignWrap').style.display = canView ? 'block' : 'none';
   if(!canView){ pauseStageDesignScene(); return; }
   document.getElementById('sdToolbarWrap').style.display = canEditActiveBoard() ? 'block' : 'none';
+  renderSdUilToolbar();
 
   const sandboxTabBtn = document.querySelector('#sdBoardTabs [data-board="sandbox"]');
   const u = currentUser();
@@ -5145,8 +5193,11 @@ async function renderStageDesignView(){
   if(sdBoardMode==='sandbox'){
     const sel = document.getElementById('sdSandboxBrowseSelect');
     const list = state.sandboxList || [];
-    sel.innerHTML = list.length ? list.map(sbx=>`<option value="${sbx.id}" ${sbx.id===sdSandboxId?'selected':''}>${escapeHtml(sbx.name)}</option>`).join('')
-      : `<option value="">No sandboxes yet — create one</option>`;
+    if(!list.length){ sel.innerHTML = `<option value="">No sandboxes yet — create one</option>`; }
+    else {
+      const placeholder = sdSandboxId ? '' : `<option value="" selected disabled>— Select a sandbox —</option>`;
+      sel.innerHTML = placeholder + list.map(sbx=>`<option value="${sbx.id}" ${sbx.id===sdSandboxId?'selected':''}>${escapeHtml(sbx.name)}${sbx.mode==='uil'?' (UIL practice)':''}</option>`).join('');
+    }
   }
 
   await initStageDesignSceneIfNeeded();
@@ -6116,6 +6167,7 @@ function renderSetup(){
   document.getElementById('partDaysPerWeek').value = partCfg.daysPerWeek;
   document.getElementById('autoDeleteDays').value = state.autoDeleteRecordsAfterDays || 0;
   renderCharacterList();
+  renderUilInventoryGrid();
 
   document.getElementById('emailAlertsCard').style.display = isDirector() ? 'block' : 'none';
   const ejs = globalState.emailjs || { publicKey:'', serviceId:'', templateAbsence:'', templateDeadline:'', templateBehavior:'', templateFailingGrade:'' };
@@ -6663,6 +6715,7 @@ async function loadEverythingAndRender(){
   if(state.autoDeleteRecordsAfterDays===undefined) state.autoDeleteRecordsAfterDays = 0;
   if(!state.showCharacterList) state.showCharacterList = [];
   DEPARTMENTS.forEach(d=>{ if(!state.departments[d.key]) state.departments[d.key] = defaultDeptState([]); });
+  if(!state.uilInventoryLimits) state.uilInventoryLimits = {};
 
   if(!isApprovedUser()){
     await registerPendingApproval();
@@ -6976,13 +7029,13 @@ async function init(){
       if(!currentUser() && !isDirectorOrStageMgmt()){ toast('Sign in to use a practice sandbox'); return; }
       document.querySelectorAll('#sdBoardTabs button').forEach(b=>b.classList.toggle('active', b===btn));
       const list = state.sandboxList || [];
-      if(!list.length){
-        toast('No sandboxes exist yet — click "+ New Sandbox" to start one for your group');
-        await switchStageDesignBoard('sandbox', null);
-      } else {
-        if(!sdCheckSandboxAccess(list[0].id)) return;
-        await switchStageDesignBoard('sandbox', list[0].id);
-      }
+      // Never auto-pick and PIN-gate a specific sandbox here — that locks a student out of
+      // everything (no picker, no "+ New Sandbox") if that one PIN fails or isn't theirs.
+      // Always land on the picker itself; choosing a specific sandbox (and its PIN check,
+      // if any) happens in the dropdown's own change handler below, same as it already does.
+      if(!list.length) toast('No sandboxes exist yet — click "+ New Sandbox" to start one for your group');
+      else toast('Pick a sandbox below, or create a new one for your group');
+      await switchStageDesignBoard('sandbox', null);
     }
     renderStageDesignView();
   }));
@@ -7126,6 +7179,7 @@ async function init(){
     document.getElementById('bulkTaskPreviewWrap').style.display = 'none';
     bulkTaskImportParsed = null;
   });
+  document.getElementById('uilInventorySaveBtn').addEventListener('click', saveUilInventoryLimits);
   document.getElementById('recoverSandboxBtn').addEventListener('click', recoverOldSandboxes);
   document.getElementById('addCharacterBtn').addEventListener('click', addCharacterToList);
   document.getElementById('loadStarcatcherPresetBtn').addEventListener('click', loadStarcatcherPreset);
