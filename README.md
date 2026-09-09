@@ -4197,9 +4197,32 @@ function openPracticeModePicker(sceneId, mode){
   document.getElementById('backToScenesBtn').addEventListener('click', renderDepartments);
 }
 function startLineDrill(sceneId, character){
-  lineDrillState = { sceneId, character, index:0, revealed:false, correctCount:0, missedLines:[] };
+  lineDrillState = { sceneId, character, index:0, revealed:false, correctCount:0, missedLines:[], checkResult:null };
   lineDrillActive = true;
   renderLineDrillStep();
+}
+// Compares what the student typed against the real line, word by word. Uses a longest-
+// common-subsequence match (not just position-by-position) so skipping or adding one word
+// doesn't wrongly flag every word after it as incorrect too.
+function wordDiff(actual, typed){
+  const normalize = w => w.toLowerCase().replace(/[^\w']/g, '');
+  const aWords = actual.split(/\s+/).filter(Boolean);
+  const tWords = typed.split(/\s+/).filter(Boolean);
+  const aNorm = aWords.map(normalize), tNorm = tWords.map(normalize);
+  const n = aNorm.length, m = tNorm.length;
+  const dp = Array.from({length:n+1}, ()=>new Array(m+1).fill(0));
+  for(let i=1;i<=n;i++) for(let j=1;j<=m;j++){
+    dp[i][j] = aNorm[i-1]===tNorm[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  }
+  const matched = new Array(n).fill(false);
+  let i=n, j=m;
+  while(i>0 && j>0){
+    if(aNorm[i-1]===tNorm[j-1]){ matched[i-1]=true; i--; j--; }
+    else if(dp[i-1][j] >= dp[i][j-1]) i--;
+    else j--;
+  }
+  const matchCount = matched.filter(Boolean).length;
+  return { aWords, matched, matchCount, total:n };
 }
 function renderLineDrillStep(){
   const content = document.getElementById('deptContent');
@@ -4224,24 +4247,37 @@ function renderLineDrillStep(){
   }
   const line = scene.lines[lineDrillState.index];
   const isMyLine = line.character === lineDrillState.character;
+  const checked = lineDrillState.checkResult;
   content.innerHTML = `
     <div class="card">
       <div style="font-size:11px;color:var(--paper-dim); margin-bottom:10px;">${escapeHtml(scene.title)} — line ${lineDrillState.index+1} of ${scene.lines.length} — drilling <b>${escapeHtml(lineDrillState.character)}</b></div>
       <div style="font-size:13px; color:var(--paper-dim); margin-bottom:4px;">${escapeHtml(line.character)}</div>
       ${isMyLine && !lineDrillState.revealed
-        ? `<div style="font-size:16px; padding:20px; text-align:center; border:1px dashed var(--line); border-radius:6px; color:var(--paper-dim);">Your line — try to recall it, then reveal</div>
-           <button class="btn small" id="revealBtn" style="margin-top:10px;">Reveal Line</button>`
+        ? (checked
+          ? `<div style="font-size:16px; padding:12px 0; line-height:1.7;">${checked.aWords.map((w,idx)=>`<span style="${checked.matched[idx]?'color:var(--sage);':'color:var(--red); text-decoration:underline;'}">${escapeHtml(w)}</span>`).join(' ')}</div>
+             <div style="font-size:12px; color:var(--paper-dim); margin-bottom:10px;">${checked.matchCount} of ${checked.total} words matched — green means right, red means off.</div>
+             <div style="display:flex; gap:8px;"><button class="btn small" id="gotItBtn">✓ Close enough — got it</button><button class="btn ghost small" id="missedItBtn">✗ Need more work</button></div>`
+          : `<textarea id="typedGuessInput" placeholder="Type the line from memory..." style="width:100%; min-height:70px; background:var(--ink); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:8px 10px; font-size:15px; font-family:'Inter',sans-serif; resize:vertical;"></textarea>
+             <div style="display:flex; gap:8px; margin-top:10px;">
+               <button class="btn small" id="checkGuessBtn">Check</button>
+               <button class="btn ghost small" id="revealBtn">Just Reveal It</button>
+             </div>`)
         : `<div style="font-size:16px; padding:12px 0;">${escapeHtml(line.text)}</div>
            ${isMyLine ? `<div style="display:flex; gap:8px; margin-top:10px;"><button class="btn small" id="gotItBtn">✓ Got it</button><button class="btn ghost small" id="missedItBtn">✗ Missed it</button></div>`
                       : `<button class="btn small" id="nextLineBtn" style="margin-top:10px;">Next →</button>`}`}
       <button class="btn ghost small" id="exitDrillBtn" style="margin-top:14px; display:block;">Exit Drill</button>
     </div>
   `;
-  if(isMyLine && !lineDrillState.revealed){
+  if(isMyLine && !lineDrillState.revealed && !checked){
+    document.getElementById('checkGuessBtn').addEventListener('click', ()=>{
+      const typed = document.getElementById('typedGuessInput').value;
+      lineDrillState.checkResult = wordDiff(line.text, typed);
+      renderLineDrillStep();
+    });
     document.getElementById('revealBtn').addEventListener('click', ()=>{ lineDrillState.revealed=true; renderLineDrillStep(); });
   } else if(isMyLine){
-    document.getElementById('gotItBtn').addEventListener('click', ()=>{ lineDrillState.correctCount++; lineDrillState.index++; lineDrillState.revealed=false; renderLineDrillStep(); });
-    document.getElementById('missedItBtn').addEventListener('click', ()=>{ lineDrillState.missedLines.push(line.text); lineDrillState.index++; lineDrillState.revealed=false; renderLineDrillStep(); });
+    document.getElementById('gotItBtn').addEventListener('click', ()=>{ lineDrillState.correctCount++; lineDrillState.index++; lineDrillState.revealed=false; lineDrillState.checkResult=null; renderLineDrillStep(); });
+    document.getElementById('missedItBtn').addEventListener('click', ()=>{ lineDrillState.missedLines.push(line.text); lineDrillState.index++; lineDrillState.revealed=false; lineDrillState.checkResult=null; renderLineDrillStep(); });
   } else {
     document.getElementById('nextLineBtn').addEventListener('click', ()=>{ lineDrillState.index++; renderLineDrillStep(); });
   }
