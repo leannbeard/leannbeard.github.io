@@ -4066,7 +4066,7 @@ function renderLinesSub(content, dep, depState){
   content.innerHTML = `
     <div class="card">
       <h2>Line Memorization</h2>
-      <p style="font-size:12.5px;color:var(--paper-dim);">Pick a scene below and a practice mode — <b>Drill</b> quizzes you line by line, <b>Fade-Away</b> gradually blacks out your lines to wean off the page.</p>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Pick a scene below and a practice mode — <b>Drill</b> hides your lines behind a simple reveal button, <b>Type to Reveal</b> has you type each line from memory and checks it word by word, <b>Fade-Away</b> gradually blacks out your lines to wean off the page.</p>
       ${canManage ? `<button class="btn ghost small" id="toggleAddSceneForm">+ Add Scene</button>
       <div class="add-form" id="addSceneForm">
         <input type="text" id="newSceneTitle" placeholder="Scene title (e.g. &quot;Act I Scene 3 — Cabin&quot;)">
@@ -4098,6 +4098,7 @@ function renderLinesSub(content, dep, depState){
           <div><b>${escapeHtml(sc.title)}</b> <span class="mono" style="color:var(--paper-dim); font-size:11px;">${sc.lines.length} lines</span></div>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
             <button class="btn small" data-drill="${sc.id}">Drill</button>
+            <button class="btn small" data-typereveal="${sc.id}">Type to Reveal</button>
             <button class="btn small" data-fade="${sc.id}">Fade-Away</button>
             ${canManage?`<button class="btn danger small" data-delscene="${sc.id}">✕</button>`:''}
           </div>
@@ -4110,6 +4111,7 @@ function renderLinesSub(content, dep, depState){
       </div>
     `;}).join('');
     list.querySelectorAll('[data-drill]').forEach(btn=>btn.addEventListener('click', ()=>openPracticeModePicker(btn.dataset.drill,'drill')));
+    list.querySelectorAll('[data-typereveal]').forEach(btn=>btn.addEventListener('click', ()=>openPracticeModePicker(btn.dataset.typereveal,'typereveal')));
     list.querySelectorAll('[data-fade]').forEach(btn=>btn.addEventListener('click', ()=>openPracticeModePicker(btn.dataset.fade,'fadeaway')));
     list.querySelectorAll('[data-offbook]').forEach(inp=>inp.addEventListener('change', async ()=>{
       const [sceneId, character] = inp.dataset.offbook.split('|');
@@ -4180,10 +4182,11 @@ function openPracticeModePicker(sceneId, mode){
   if(!scene) return;
   const chars = [...new Set(scene.lines.map(l=>l.character))];
   const content = document.getElementById('deptContent');
+  const verbs = { drill:'drilling', typereveal:'typing lines for', fadeaway:'fading' };
   content.innerHTML = `
     <div class="card">
       <h2>${escapeHtml(scene.title)}</h2>
-      <p style="font-size:12.5px;color:var(--paper-dim);">Which character are you ${mode==='drill'?'drilling':'fading'}?</p>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Which character are you ${verbs[mode]||'practicing'}?</p>
       <div style="display:flex; flex-wrap:wrap; gap:8px;">
         ${chars.map(c=>`<button class="btn ghost small" data-char="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}
       </div>
@@ -4191,13 +4194,14 @@ function openPracticeModePicker(sceneId, mode){
     </div>
   `;
   content.querySelectorAll('[data-char]').forEach(btn=>btn.addEventListener('click', ()=>{
-    if(mode==='drill') startLineDrill(sceneId, btn.dataset.char);
+    if(mode==='drill') startLineDrill(sceneId, btn.dataset.char, false);
+    else if(mode==='typereveal') startLineDrill(sceneId, btn.dataset.char, true);
     else startFadeAway(sceneId, btn.dataset.char);
   }));
   document.getElementById('backToScenesBtn').addEventListener('click', renderDepartments);
 }
-function startLineDrill(sceneId, character){
-  lineDrillState = { sceneId, character, index:0, revealed:false, correctCount:0, missedLines:[], checkResult:null };
+function startLineDrill(sceneId, character, useTypedCheck){
+  lineDrillState = { sceneId, character, index:0, revealed:false, correctCount:0, missedLines:[], checkResult:null, useTypedCheck: !!useTypedCheck };
   lineDrillActive = true;
   renderLineDrillStep();
 }
@@ -4228,53 +4232,58 @@ function renderLineDrillStep(){
   const content = document.getElementById('deptContent');
   const scene = (state.scriptScenes||[]).find(s=>s.id===lineDrillState.sceneId);
   if(!scene){ lineDrillActive=false; lineDrillState=null; renderDepartments(); return; }
+  const modeLabel = lineDrillState.useTypedCheck ? 'Type to Reveal' : 'Drill';
   if(lineDrillState.index >= scene.lines.length){
     const total = scene.lines.filter(l=>l.character===lineDrillState.character).length;
     content.innerHTML = `
       <div class="card">
-        <h2>Drill Complete — ${escapeHtml(scene.title)}</h2>
+        <h2>${modeLabel} Complete — ${escapeHtml(scene.title)}</h2>
         <p style="font-size:14px;">You got <b>${lineDrillState.correctCount}</b> of <b>${total}</b> lines right on the first try.</p>
         ${lineDrillState.missedLines.length ? `<p style="font-size:12.5px;color:var(--amber);">Lines to review: ${lineDrillState.missedLines.map(t=>`"${escapeHtml(t.length>40?t.slice(0,40)+'...':t)}"`).join(', ')}</p>` : `<p style="font-size:12.5px;color:var(--sage);">Clean run — nice work!</p>`}
         <div style="display:flex; gap:8px; margin-top:10px;">
-          <button class="btn small" id="drillAgainBtn">Drill Again</button>
+          <button class="btn small" id="drillAgainBtn">${modeLabel} Again</button>
           <button class="btn ghost small" id="backToScenesBtn2">← Back to Scenes</button>
         </div>
       </div>
     `;
-    document.getElementById('drillAgainBtn').addEventListener('click', ()=>startLineDrill(lineDrillState.sceneId, lineDrillState.character));
+    document.getElementById('drillAgainBtn').addEventListener('click', ()=>startLineDrill(lineDrillState.sceneId, lineDrillState.character, lineDrillState.useTypedCheck));
     document.getElementById('backToScenesBtn2').addEventListener('click', ()=>{ lineDrillActive=false; lineDrillState=null; renderDepartments(); });
     return;
   }
   const line = scene.lines[lineDrillState.index];
   const isMyLine = line.character === lineDrillState.character;
   const checked = lineDrillState.checkResult;
+  const myTurnUnresolved = isMyLine && !lineDrillState.revealed && !checked;
   content.innerHTML = `
     <div class="card">
-      <div style="font-size:11px;color:var(--paper-dim); margin-bottom:10px;">${escapeHtml(scene.title)} — line ${lineDrillState.index+1} of ${scene.lines.length} — drilling <b>${escapeHtml(lineDrillState.character)}</b></div>
+      <div style="font-size:11px;color:var(--paper-dim); margin-bottom:10px;">${escapeHtml(scene.title)} — line ${lineDrillState.index+1} of ${scene.lines.length} — ${modeLabel.toLowerCase()} for <b>${escapeHtml(lineDrillState.character)}</b></div>
       <div style="font-size:13px; color:var(--paper-dim); margin-bottom:4px;">${escapeHtml(line.character)}</div>
-      ${isMyLine && !lineDrillState.revealed
-        ? (checked
+      ${myTurnUnresolved
+        ? (lineDrillState.useTypedCheck
+          ? `<textarea id="typedGuessInput" placeholder="Type the line from memory..." style="width:100%; min-height:70px; background:var(--ink); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:8px 10px; font-size:15px; font-family:'Inter',sans-serif; resize:vertical;"></textarea>
+             <button class="btn small" id="checkGuessBtn" style="margin-top:10px;">Check</button>`
+          : `<div style="font-size:16px; padding:20px; text-align:center; border:1px dashed var(--line); border-radius:6px; color:var(--paper-dim);">Your line — try to recall it, then reveal</div>
+             <button class="btn small" id="revealBtn" style="margin-top:10px;">Reveal Line</button>`)
+        : (isMyLine && checked
           ? `<div style="font-size:16px; padding:12px 0; line-height:1.7;">${checked.aWords.map((w,idx)=>`<span style="${checked.matched[idx]?'color:var(--sage);':'color:var(--red); text-decoration:underline;'}">${escapeHtml(w)}</span>`).join(' ')}</div>
              <div style="font-size:12px; color:var(--paper-dim); margin-bottom:10px;">${checked.matchCount} of ${checked.total} words matched — green means right, red means off.</div>
              <div style="display:flex; gap:8px;"><button class="btn small" id="gotItBtn">✓ Close enough — got it</button><button class="btn ghost small" id="missedItBtn">✗ Need more work</button></div>`
-          : `<textarea id="typedGuessInput" placeholder="Type the line from memory..." style="width:100%; min-height:70px; background:var(--ink); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:8px 10px; font-size:15px; font-family:'Inter',sans-serif; resize:vertical;"></textarea>
-             <div style="display:flex; gap:8px; margin-top:10px;">
-               <button class="btn small" id="checkGuessBtn">Check</button>
-               <button class="btn ghost small" id="revealBtn">Just Reveal It</button>
-             </div>`)
-        : `<div style="font-size:16px; padding:12px 0;">${escapeHtml(line.text)}</div>
-           ${isMyLine ? `<div style="display:flex; gap:8px; margin-top:10px;"><button class="btn small" id="gotItBtn">✓ Got it</button><button class="btn ghost small" id="missedItBtn">✗ Missed it</button></div>`
-                      : `<button class="btn small" id="nextLineBtn" style="margin-top:10px;">Next →</button>`}`}
-      <button class="btn ghost small" id="exitDrillBtn" style="margin-top:14px; display:block;">Exit Drill</button>
+          : `<div style="font-size:16px; padding:12px 0;">${escapeHtml(line.text)}</div>
+             ${isMyLine ? `<div style="display:flex; gap:8px; margin-top:10px;"><button class="btn small" id="gotItBtn">✓ Got it</button><button class="btn ghost small" id="missedItBtn">✗ Missed it</button></div>`
+                        : `<button class="btn small" id="nextLineBtn" style="margin-top:10px;">Next →</button>`}`)}
+      <button class="btn ghost small" id="exitDrillBtn" style="margin-top:14px; display:block;">Exit</button>
     </div>
   `;
-  if(isMyLine && !lineDrillState.revealed && !checked){
-    document.getElementById('checkGuessBtn').addEventListener('click', ()=>{
-      const typed = document.getElementById('typedGuessInput').value;
-      lineDrillState.checkResult = wordDiff(line.text, typed);
-      renderLineDrillStep();
-    });
-    document.getElementById('revealBtn').addEventListener('click', ()=>{ lineDrillState.revealed=true; renderLineDrillStep(); });
+  if(myTurnUnresolved){
+    if(lineDrillState.useTypedCheck){
+      document.getElementById('checkGuessBtn').addEventListener('click', ()=>{
+        const typed = document.getElementById('typedGuessInput').value;
+        lineDrillState.checkResult = wordDiff(line.text, typed);
+        renderLineDrillStep();
+      });
+    } else {
+      document.getElementById('revealBtn').addEventListener('click', ()=>{ lineDrillState.revealed=true; renderLineDrillStep(); });
+    }
   } else if(isMyLine){
     document.getElementById('gotItBtn').addEventListener('click', ()=>{ lineDrillState.correctCount++; lineDrillState.index++; lineDrillState.revealed=false; lineDrillState.checkResult=null; renderLineDrillStep(); });
     document.getElementById('missedItBtn').addEventListener('click', ()=>{ lineDrillState.missedLines.push(line.text); lineDrillState.index++; lineDrillState.revealed=false; lineDrillState.checkResult=null; renderLineDrillStep(); });
