@@ -4052,18 +4052,21 @@ function parseSceneScript(text){
 }
 let lineDrillActive = false;
 let lineDrillState = null; // { sceneId, character, index, revealed, correctCount, missedLines:[] }
+let fadeAwayActive = false;
+let fadeAwayState = null; // { sceneId, character, level } — level 0-4, higher = more hidden
 function renderLinesSub(content, dep, depState){
   if(!canViewDept(dep.key) && !isDirectorOrStageMgmt()){
     content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>Line Memorization is only visible to Cast and the Director.</div>`;
     return;
   }
   if(lineDrillActive && lineDrillState){ renderLineDrillStep(); return; }
+  if(fadeAwayActive && fadeAwayState){ renderFadeAwayStep(); return; }
   const scenes = state.scriptScenes || [];
   const canManage = isDirectorOrStageMgmt();
   content.innerHTML = `
     <div class="card">
       <h2>Line Memorization</h2>
-      <p style="font-size:12.5px;color:var(--paper-dim);">Pick a scene below, choose which character you're drilling, and the tool walks through it — showing everyone else's lines normally, but hiding yours until you try to recall it and reveal.</p>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Pick a scene below and a practice mode — <b>Drill</b> quizzes you line by line, <b>Fade-Away</b> gradually blacks out your lines to wean off the page.</p>
       ${canManage ? `<button class="btn ghost small" id="toggleAddSceneForm">+ Add Scene</button>
       <div class="add-form" id="addSceneForm">
         <input type="text" id="newSceneTitle" placeholder="Scene title (e.g. &quot;Act I Scene 3 — Cabin&quot;)">
@@ -4080,23 +4083,43 @@ function renderLinesSub(content, dep, depState){
       </div>` : ''}
     </div>
     <div id="sceneListWrap"></div>
+    ${canManage && scenes.length ? `<div class="card" id="offBookProgressCard"><h2 style="margin-top:0;">Off-Book Progress</h2><div id="offBookProgressWrap"></div></div>` : ''}
   `;
   const list = document.getElementById('sceneListWrap');
   if(!scenes.length){
     list.innerHTML = `<div class="empty-state"><div class="lamp">📖</div>No scenes added yet.</div>`;
   } else {
-    list.innerHTML = scenes.map(sc=>`
+    list.innerHTML = scenes.map(sc=>{
+      const chars = [...new Set(sc.lines.map(l=>l.character))];
+      const offBook = sc.offBookCharacters || [];
+      return `
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div><b>${escapeHtml(sc.title)}</b> <span class="mono" style="color:var(--paper-dim); font-size:11px;">${sc.lines.length} lines</span></div>
-          <div>
-            <button class="btn small" data-drill="${sc.id}">Practice</button>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn small" data-drill="${sc.id}">Drill</button>
+            <button class="btn small" data-fade="${sc.id}">Fade-Away</button>
             ${canManage?`<button class="btn danger small" data-delscene="${sc.id}">✕</button>`:''}
           </div>
         </div>
+        <div style="margin-top:10px; font-size:11.5px; color:var(--paper-dim);">Off book?
+          <span style="display:inline-flex; flex-wrap:wrap; gap:6px; margin-left:4px;">
+          ${chars.map(c=>`<label style="display:inline-flex; align-items:center; gap:3px;"><input type="checkbox" data-offbook="${sc.id}|${escapeHtml(c)}" ${offBook.includes(c)?'checked':''}> ${escapeHtml(c)}</label>`).join('')}
+          </span>
+        </div>
       </div>
-    `).join('');
-    list.querySelectorAll('[data-drill]').forEach(btn=>btn.addEventListener('click', ()=>openDrillCharacterPicker(btn.dataset.drill)));
+    `;}).join('');
+    list.querySelectorAll('[data-drill]').forEach(btn=>btn.addEventListener('click', ()=>openPracticeModePicker(btn.dataset.drill,'drill')));
+    list.querySelectorAll('[data-fade]').forEach(btn=>btn.addEventListener('click', ()=>openPracticeModePicker(btn.dataset.fade,'fadeaway')));
+    list.querySelectorAll('[data-offbook]').forEach(inp=>inp.addEventListener('change', async ()=>{
+      const [sceneId, character] = inp.dataset.offbook.split('|');
+      const sc = state.scriptScenes.find(s=>s.id===sceneId); if(!sc) return;
+      if(!sc.offBookCharacters) sc.offBookCharacters = [];
+      if(inp.checked){ if(!sc.offBookCharacters.includes(character)) sc.offBookCharacters.push(character); }
+      else { sc.offBookCharacters = sc.offBookCharacters.filter(c=>c!==character); }
+      await saveState();
+      renderOffBookProgress();
+    }));
     list.querySelectorAll('[data-delscene]').forEach(btn=>btn.addEventListener('click', async ()=>{
       if(!isDirector()){ toast('Only the Director can delete a scene'); return; }
       if(!confirm(`Delete "${(state.scriptScenes.find(s=>s.id===btn.dataset.delscene)||{}).title||'this scene'}"? This cannot be undone.`)) return;
@@ -4136,8 +4159,23 @@ function renderLinesSub(content, dep, depState){
       toast(`Scene saved`);
     });
   }
+  renderOffBookProgress();
 }
-function openDrillCharacterPicker(sceneId){
+function renderOffBookProgress(){
+  const wrap = document.getElementById('offBookProgressWrap');
+  if(!wrap) return;
+  const scenes = state.scriptScenes || [];
+  wrap.innerHTML = scenes.map(sc=>{
+    const chars = [...new Set(sc.lines.map(l=>l.character))];
+    const offBook = sc.offBookCharacters || [];
+    const notYet = chars.filter(c=>!offBook.includes(c));
+    return `<div style="padding:6px 0; border-bottom:1px dashed var(--line); font-size:12.5px;">
+      <b>${escapeHtml(sc.title)}</b> — ${offBook.length}/${chars.length} off book
+      ${notYet.length ? `<div style="color:var(--paper-dim); margin-top:2px;">Still on book: ${notYet.map(escapeHtml).join(', ')}</div>` : `<div style="color:var(--sage); margin-top:2px;">Everyone's off book on this one.</div>`}
+    </div>`;
+  }).join('') || `<div class="empty-state">No scenes yet.</div>`;
+}
+function openPracticeModePicker(sceneId, mode){
   const scene = (state.scriptScenes||[]).find(s=>s.id===sceneId);
   if(!scene) return;
   const chars = [...new Set(scene.lines.map(l=>l.character))];
@@ -4145,14 +4183,17 @@ function openDrillCharacterPicker(sceneId){
   content.innerHTML = `
     <div class="card">
       <h2>${escapeHtml(scene.title)}</h2>
-      <p style="font-size:12.5px;color:var(--paper-dim);">Which character are you drilling?</p>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Which character are you ${mode==='drill'?'drilling':'fading'}?</p>
       <div style="display:flex; flex-wrap:wrap; gap:8px;">
         ${chars.map(c=>`<button class="btn ghost small" data-char="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}
       </div>
       <button class="btn ghost small" id="backToScenesBtn" style="margin-top:14px;">← Back to Scenes</button>
     </div>
   `;
-  content.querySelectorAll('[data-char]').forEach(btn=>btn.addEventListener('click', ()=>startLineDrill(sceneId, btn.dataset.char)));
+  content.querySelectorAll('[data-char]').forEach(btn=>btn.addEventListener('click', ()=>{
+    if(mode==='drill') startLineDrill(sceneId, btn.dataset.char);
+    else startFadeAway(sceneId, btn.dataset.char);
+  }));
   document.getElementById('backToScenesBtn').addEventListener('click', renderDepartments);
 }
 function startLineDrill(sceneId, character){
@@ -4205,6 +4246,46 @@ function renderLineDrillStep(){
     document.getElementById('nextLineBtn').addEventListener('click', ()=>{ lineDrillState.index++; renderLineDrillStep(); });
   }
   document.getElementById('exitDrillBtn').addEventListener('click', ()=>{ lineDrillActive=false; lineDrillState=null; renderDepartments(); });
+}
+function startFadeAway(sceneId, character){
+  fadeAwayState = { sceneId, character, level: 1 };
+  fadeAwayActive = true;
+  renderFadeAwayStep();
+}
+function fadeWord(word, level, idx){
+  if(level<=0) return escapeHtml(word);
+  if((idx%4) < level) return `<span style="color:var(--paper-dim); letter-spacing:1px;">${'_'.repeat(Math.max(3,word.length))}</span>`;
+  return escapeHtml(word);
+}
+function renderFadeAwayStep(){
+  const content = document.getElementById('deptContent');
+  const scene = (state.scriptScenes||[]).find(s=>s.id===fadeAwayState.sceneId);
+  if(!scene){ fadeAwayActive=false; fadeAwayState=null; renderDepartments(); return; }
+  const levelLabels = ['Preview — nothing hidden','Level 1 — a few words hidden','Level 2 — half hidden','Level 3 — mostly hidden','Level 4 — fully hidden'];
+  const body = scene.lines.map(line=>{
+    const isMine = line.character===fadeAwayState.character;
+    const displayText = isMine
+      ? line.text.split(' ').map((w,i)=>fadeWord(w, fadeAwayState.level, i)).join(' ')
+      : escapeHtml(line.text);
+    return `<div style="padding:6px 0; border-bottom:1px dashed var(--line);"><div style="font-size:11px; color:var(--paper-dim);">${escapeHtml(line.character)}</div><div style="font-size:15px; ${isMine?'font-weight:600;':''}">${displayText}</div></div>`;
+  }).join('');
+  content.innerHTML = `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+        <div><b>${escapeHtml(scene.title)}</b> — fading <b>${escapeHtml(fadeAwayState.character)}</b></div>
+        <div style="font-size:12px; color:var(--paper-dim);">${levelLabels[fadeAwayState.level]}</div>
+      </div>
+      <div style="max-height:420px; overflow-y:auto;">${body}</div>
+      <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+        <button class="btn ghost small" id="fadeLevelDownBtn" ${fadeAwayState.level<=0?'disabled':''}>← Easier</button>
+        <button class="btn small" id="fadeLevelUpBtn" ${fadeAwayState.level>=4?'disabled':''}>Harder →</button>
+        <button class="btn ghost small" id="exitFadeBtn">Exit</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('fadeLevelDownBtn').addEventListener('click', ()=>{ fadeAwayState.level=Math.max(0,fadeAwayState.level-1); renderFadeAwayStep(); });
+  document.getElementById('fadeLevelUpBtn').addEventListener('click', ()=>{ fadeAwayState.level=Math.min(4,fadeAwayState.level+1); renderFadeAwayStep(); });
+  document.getElementById('exitFadeBtn').addEventListener('click', ()=>{ fadeAwayActive=false; fadeAwayState=null; renderDepartments(); });
 }
 function renderWorkspaceSub(content, dep, depState){
   if(!canViewDept(dep.key)){
