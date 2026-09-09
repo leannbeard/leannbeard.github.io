@@ -727,6 +727,7 @@
       <button data-sub="reports">Reports & Grading</button>
       <button data-sub="participation">Participation</button>
       <button data-sub="workspace">Team Workspace</button>
+      <button data-sub="lines" id="linesSubtabBtn" style="display:none;">Line Memorization</button>
     </div>
     <div id="deptContent"></div>
   </section>
@@ -1316,6 +1317,7 @@ function defaultProductionState(name, seeded){
     autoDeleteRecordsAfterDays:0,
     showCharacterList:[],
     uilInventoryLimits:{},
+    scriptScenes:[],
     departments: freshDepartments(seeded)
   };
 }
@@ -1549,6 +1551,7 @@ async function finishLoadingChosenProduction(){
   if(!state.blockingNotes) state.blockingNotes = [];
   DEPARTMENTS.forEach(d=>{ if(!state.departments[d.key]) state.departments[d.key] = defaultDeptState([]); });
   if(!state.uilInventoryLimits) state.uilInventoryLimits = {};
+  if(!state.scriptScenes) state.scriptScenes = [];
   if(!isApprovedUser()){
     await registerPendingApproval();
     showPendingApprovalShell();
@@ -3300,12 +3303,16 @@ function renderDepartments(){
 
   if(ui.activeSub !== 'workspace') stopWorkspaceListener();
 
+  document.getElementById('linesSubtabBtn').style.display = (ui.activeDept==='cast') ? 'inline-block' : 'none';
+  if(ui.activeDept!=='cast' && ui.activeSub==='lines') ui.activeSub = 'tasks';
+
   if(ui.activeSub === 'tasks') renderTasksSub(content, dep, depState);
   if(ui.activeSub === 'templates') renderTemplatesSub(content, dep, depState);
   if(ui.activeSub === 'report') renderReportFormSub(content, dep, depState);
   if(ui.activeSub === 'reports') renderReportsHistorySub(content, dep, depState);
   if(ui.activeSub === 'participation') renderParticipationSub(content, dep, depState);
   if(ui.activeSub === 'workspace') renderWorkspaceSub(content, dep, depState);
+  if(ui.activeSub === 'lines') renderLinesSub(content, dep, depState);
 }
 
 function renderTasksSub(content, dep, depState){
@@ -3993,6 +4000,212 @@ async function saveWorkspaceData(){
   }catch(e){ console.warn('Workspace save failed — a pasted image may be too large. Try a smaller image or a URL instead.', e); }
 }
 
+// ---------------- LINE MEMORIZATION: shared scene library + Line Drill ----------------
+// Handles two formats at once, since a real script pasted straight from a PDF almost never
+// uses "Character: line" — the industry-standard format puts the character's name in ALL
+// CAPS on its own short line, with their dialogue below until the next name appears.
+function looksLikeCharacterCue(line){
+  const t = line.trim().replace(/:$/, '');
+  if(!t || t.length > 35) return false;
+  if(!/^[A-Za-z][A-Za-z\s.'\-\/&]*$/.test(t)) return false; // letters/spaces/basic punctuation only
+  const isAllCaps = t === t.toUpperCase() && /[A-Z]/.test(t);
+  const endsLikeSentence = /[.!?,]$/.test(t);
+  return isAllCaps || !endsLikeSentence; // ALL CAPS names, or short Title-Case names with no sentence-ending punctuation
+}
+function parseSceneScript(text){
+  const rawLines = text.split('\n');
+  const parsed = [];
+  let currentChar = null, buffer = [];
+  function flush(){
+    if(currentChar && buffer.length){
+      const t = buffer.join(' ').replace(/\s+/g,' ').trim();
+      if(t) parsed.push({ id:cryptoId(), character:currentChar, text:t });
+    }
+    buffer = [];
+  }
+  rawLines.forEach(raw=>{
+    const line = raw.trim();
+    if(!line) return; // blank line — just a separator
+    if(/^\(.*\)$/.test(line)) return; // a whole line in parentheses — stage direction, skip
+    if(/^\d+\.?$/.test(line)) return; // a bare number on its own line — almost always a stray page number from a PDF copy-paste, not dialogue
+    const colonIdx = line.indexOf(':');
+    // "Character: line text" on one line — most common in a manually-typed simple paste
+    if(colonIdx!==-1 && colonIdx<35 && looksLikeCharacterCue(line.slice(0,colonIdx))){
+      flush();
+      const character = line.slice(0, colonIdx).trim();
+      const lineText = line.slice(colonIdx+1).trim();
+      if(lineText){ parsed.push({ id:cryptoId(), character, text:lineText }); currentChar=null; }
+      else { currentChar = character; } // name with nothing after the colon — dialogue follows on next line(s)
+      return;
+    }
+    // A short ALL-CAPS (or name-like) line on its own — real-script character cue
+    if(looksLikeCharacterCue(line)){
+      flush();
+      currentChar = line.replace(/:$/, '').trim();
+      return;
+    }
+    // Otherwise: dialogue continuing the current character's speech
+    if(currentChar) buffer.push(line);
+  });
+  flush();
+  return parsed;
+}
+let lineDrillActive = false;
+let lineDrillState = null; // { sceneId, character, index, revealed, correctCount, missedLines:[] }
+function renderLinesSub(content, dep, depState){
+  if(!canViewDept(dep.key) && !isDirectorOrStageMgmt()){
+    content.innerHTML = `<div class="empty-state"><div class="lamp">🔒</div>Line Memorization is only visible to Cast and the Director.</div>`;
+    return;
+  }
+  if(lineDrillActive && lineDrillState){ renderLineDrillStep(); return; }
+  const scenes = state.scriptScenes || [];
+  const canManage = isDirectorOrStageMgmt();
+  content.innerHTML = `
+    <div class="card">
+      <h2>Line Memorization</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Pick a scene below, choose which character you're drilling, and the tool walks through it — showing everyone else's lines normally, but hiding yours until you try to recall it and reveal.</p>
+      ${canManage ? `<button class="btn ghost small" id="toggleAddSceneForm">+ Add Scene</button>
+      <div class="add-form" id="addSceneForm">
+        <input type="text" id="newSceneTitle" placeholder="Scene title (e.g. &quot;Act I Scene 3 — Cabin&quot;)">
+        <textarea id="newSceneText" style="width:100%; min-height:180px; background:var(--ink); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:8px 10px; font-size:13px; font-family:monospace; resize:vertical;" placeholder="Paste straight from the script — either format works:&#10;&#10;MOLLY&#10;I'm not a proper young lady, and I don't want to be one.&#10;&#10;BOY&#10;What is it you want to be, then?&#10;&#10;—or—&#10;Molly: A starcatcher, like my father."></textarea>
+        <div style="font-size:11.5px;color:var(--paper-dim);">Paste it in as-is from the script — character name on its own line (ALL CAPS or not) works, or type "Character: line" manually. Stage directions in parentheses on their own line are skipped automatically.</div>
+        <button class="btn small" id="previewSceneBtn">Preview</button>
+      </div>
+      <div id="scenePreviewWrap" style="display:none; margin-top:10px;">
+        <div id="scenePreviewSummary" style="font-size:12.5px; max-height:260px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:10px;"></div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn small" id="saveSceneBtn">Looks Right — Save Scene</button>
+          <button class="btn ghost small" id="editSceneBtn">Edit Text</button>
+        </div>
+      </div>` : ''}
+    </div>
+    <div id="sceneListWrap"></div>
+  `;
+  const list = document.getElementById('sceneListWrap');
+  if(!scenes.length){
+    list.innerHTML = `<div class="empty-state"><div class="lamp">📖</div>No scenes added yet.</div>`;
+  } else {
+    list.innerHTML = scenes.map(sc=>`
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div><b>${escapeHtml(sc.title)}</b> <span class="mono" style="color:var(--paper-dim); font-size:11px;">${sc.lines.length} lines</span></div>
+          <div>
+            <button class="btn small" data-drill="${sc.id}">Practice</button>
+            ${canManage?`<button class="btn danger small" data-delscene="${sc.id}">✕</button>`:''}
+          </div>
+        </div>
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-drill]').forEach(btn=>btn.addEventListener('click', ()=>openDrillCharacterPicker(btn.dataset.drill)));
+    list.querySelectorAll('[data-delscene]').forEach(btn=>btn.addEventListener('click', async ()=>{
+      if(!isDirector()){ toast('Only the Director can delete a scene'); return; }
+      if(!confirm(`Delete "${(state.scriptScenes.find(s=>s.id===btn.dataset.delscene)||{}).title||'this scene'}"? This cannot be undone.`)) return;
+      state.scriptScenes = state.scriptScenes.filter(s=>s.id!==btn.dataset.delscene);
+      await saveState(); renderDepartments();
+    }));
+  }
+  let pendingSceneLines = null;
+  if(canManage){
+    document.getElementById('toggleAddSceneForm').addEventListener('click', ()=>document.getElementById('addSceneForm').classList.toggle('open'));
+    document.getElementById('previewSceneBtn').addEventListener('click', ()=>{
+      const title = document.getElementById('newSceneTitle').value.trim();
+      const text = document.getElementById('newSceneText').value;
+      if(!title){ toast('Give the scene a title'); return; }
+      const parsedLines = parseSceneScript(text);
+      if(!parsedLines.length){ toast('No lines recognized — check the format and try again'); return; }
+      pendingSceneLines = parsedLines;
+      const chars = [...new Set(parsedLines.map(l=>l.character))];
+      document.getElementById('scenePreviewSummary').innerHTML =
+        `<div style="margin-bottom:8px;"><b>${parsedLines.length}</b> line(s) across <b>${chars.length}</b> character(s): ${chars.map(escapeHtml).join(', ')}</div>` +
+        parsedLines.map(l=>`<div style="padding:4px 0; border-bottom:1px dashed var(--line);"><b>${escapeHtml(l.character)}</b>: ${escapeHtml(l.text)}</div>`).join('');
+      document.getElementById('scenePreviewWrap').style.display = 'block';
+    });
+    document.getElementById('editSceneBtn').addEventListener('click', ()=>{
+      document.getElementById('scenePreviewWrap').style.display = 'none';
+      pendingSceneLines = null;
+    });
+    document.getElementById('saveSceneBtn').addEventListener('click', async ()=>{
+      const title = document.getElementById('newSceneTitle').value.trim();
+      if(!title || !pendingSceneLines){ toast('Preview the scene first'); return; }
+      if(!state.scriptScenes) state.scriptScenes = [];
+      state.scriptScenes.push({ id:cryptoId(), title, lines:pendingSceneLines, createdAt:new Date().toISOString(), createdBy: currentUser()?.name || authUser?.displayName || 'Someone' });
+      await saveState();
+      document.getElementById('newSceneTitle').value=''; document.getElementById('newSceneText').value='';
+      pendingSceneLines = null;
+      renderDepartments();
+      toast(`Scene saved`);
+    });
+  }
+}
+function openDrillCharacterPicker(sceneId){
+  const scene = (state.scriptScenes||[]).find(s=>s.id===sceneId);
+  if(!scene) return;
+  const chars = [...new Set(scene.lines.map(l=>l.character))];
+  const content = document.getElementById('deptContent');
+  content.innerHTML = `
+    <div class="card">
+      <h2>${escapeHtml(scene.title)}</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">Which character are you drilling?</p>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        ${chars.map(c=>`<button class="btn ghost small" data-char="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}
+      </div>
+      <button class="btn ghost small" id="backToScenesBtn" style="margin-top:14px;">← Back to Scenes</button>
+    </div>
+  `;
+  content.querySelectorAll('[data-char]').forEach(btn=>btn.addEventListener('click', ()=>startLineDrill(sceneId, btn.dataset.char)));
+  document.getElementById('backToScenesBtn').addEventListener('click', renderDepartments);
+}
+function startLineDrill(sceneId, character){
+  lineDrillState = { sceneId, character, index:0, revealed:false, correctCount:0, missedLines:[] };
+  lineDrillActive = true;
+  renderLineDrillStep();
+}
+function renderLineDrillStep(){
+  const content = document.getElementById('deptContent');
+  const scene = (state.scriptScenes||[]).find(s=>s.id===lineDrillState.sceneId);
+  if(!scene){ lineDrillActive=false; lineDrillState=null; renderDepartments(); return; }
+  if(lineDrillState.index >= scene.lines.length){
+    const total = scene.lines.filter(l=>l.character===lineDrillState.character).length;
+    content.innerHTML = `
+      <div class="card">
+        <h2>Drill Complete — ${escapeHtml(scene.title)}</h2>
+        <p style="font-size:14px;">You got <b>${lineDrillState.correctCount}</b> of <b>${total}</b> lines right on the first try.</p>
+        ${lineDrillState.missedLines.length ? `<p style="font-size:12.5px;color:var(--amber);">Lines to review: ${lineDrillState.missedLines.map(t=>`"${escapeHtml(t.length>40?t.slice(0,40)+'...':t)}"`).join(', ')}</p>` : `<p style="font-size:12.5px;color:var(--sage);">Clean run — nice work!</p>`}
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn small" id="drillAgainBtn">Drill Again</button>
+          <button class="btn ghost small" id="backToScenesBtn2">← Back to Scenes</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('drillAgainBtn').addEventListener('click', ()=>startLineDrill(lineDrillState.sceneId, lineDrillState.character));
+    document.getElementById('backToScenesBtn2').addEventListener('click', ()=>{ lineDrillActive=false; lineDrillState=null; renderDepartments(); });
+    return;
+  }
+  const line = scene.lines[lineDrillState.index];
+  const isMyLine = line.character === lineDrillState.character;
+  content.innerHTML = `
+    <div class="card">
+      <div style="font-size:11px;color:var(--paper-dim); margin-bottom:10px;">${escapeHtml(scene.title)} — line ${lineDrillState.index+1} of ${scene.lines.length} — drilling <b>${escapeHtml(lineDrillState.character)}</b></div>
+      <div style="font-size:13px; color:var(--paper-dim); margin-bottom:4px;">${escapeHtml(line.character)}</div>
+      ${isMyLine && !lineDrillState.revealed
+        ? `<div style="font-size:16px; padding:20px; text-align:center; border:1px dashed var(--line); border-radius:6px; color:var(--paper-dim);">Your line — try to recall it, then reveal</div>
+           <button class="btn small" id="revealBtn" style="margin-top:10px;">Reveal Line</button>`
+        : `<div style="font-size:16px; padding:12px 0;">${escapeHtml(line.text)}</div>
+           ${isMyLine ? `<div style="display:flex; gap:8px; margin-top:10px;"><button class="btn small" id="gotItBtn">✓ Got it</button><button class="btn ghost small" id="missedItBtn">✗ Missed it</button></div>`
+                      : `<button class="btn small" id="nextLineBtn" style="margin-top:10px;">Next →</button>`}`}
+      <button class="btn ghost small" id="exitDrillBtn" style="margin-top:14px; display:block;">Exit Drill</button>
+    </div>
+  `;
+  if(isMyLine && !lineDrillState.revealed){
+    document.getElementById('revealBtn').addEventListener('click', ()=>{ lineDrillState.revealed=true; renderLineDrillStep(); });
+  } else if(isMyLine){
+    document.getElementById('gotItBtn').addEventListener('click', ()=>{ lineDrillState.correctCount++; lineDrillState.index++; lineDrillState.revealed=false; renderLineDrillStep(); });
+    document.getElementById('missedItBtn').addEventListener('click', ()=>{ lineDrillState.missedLines.push(line.text); lineDrillState.index++; lineDrillState.revealed=false; renderLineDrillStep(); });
+  } else {
+    document.getElementById('nextLineBtn').addEventListener('click', ()=>{ lineDrillState.index++; renderLineDrillStep(); });
+  }
+  document.getElementById('exitDrillBtn').addEventListener('click', ()=>{ lineDrillActive=false; lineDrillState=null; renderDepartments(); });
+}
 function renderWorkspaceSub(content, dep, depState){
   if(!canViewDept(dep.key)){
     stopWorkspaceListener();
@@ -6716,6 +6929,7 @@ async function loadEverythingAndRender(){
   if(!state.showCharacterList) state.showCharacterList = [];
   DEPARTMENTS.forEach(d=>{ if(!state.departments[d.key]) state.departments[d.key] = defaultDeptState([]); });
   if(!state.uilInventoryLimits) state.uilInventoryLimits = {};
+  if(!state.scriptScenes) state.scriptScenes = [];
 
   if(!isApprovedUser()){
     await registerPendingApproval();
