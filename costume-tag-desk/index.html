@@ -320,6 +320,18 @@
 
   <!-- PRINT PANEL -->
   <section class="panel" id="panel-print">
+
+    <div class="field-row">
+      <label class="f">Reprint an existing tag</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="reprintBarcode" placeholder="Type or scan an existing barcode, e.g. CST-0009">
+        <button class="action secondary" id="reprintBtn" style="white-space:nowrap;">Find &amp; add</button>
+      </div>
+    </div>
+    <div class="flash err" id="rFlashErr"></div>
+
+    <div style="border-top:1px solid var(--panel-line); margin:22px 0 20px;"></div>
+
     <div class="mode-stubs" id="typeStubs">
       <div class="mode-stub active" data-type="Costume">Costume</div>
       <div class="mode-stub" data-type="Prop">Prop</div>
@@ -537,6 +549,28 @@ $('scanInput').addEventListener('keydown', (e)=>{
 
 // PRINT TAB
 let pendingTags = [];
+
+$('reprintBtn').addEventListener('click', async ()=>{
+  const barcode = $('reprintBarcode').value.trim();
+  if(!barcode){ showFlash('rFlashErr','rFlashErr',false,'Type or scan a barcode first.'); return; }
+  if(!webhookUrl){ showFlash('rFlashErr','rFlashErr',false,'Connect a sheet in Setup first.'); return; }
+  try{
+    const res = await fetch(webhookUrl + '?action=lookup&barcode=' + encodeURIComponent(barcode));
+    const data = await res.json();
+    if(!data.found){
+      $('rFlashErr').style.display='block';
+      $('rFlashErr').textContent = 'No item found with that barcode. Double-check it and try again.';
+      return;
+    }
+    $('rFlashErr').style.display='none';
+    pendingTags.push({barcode: data.item.barcode, name: data.item.name, type: data.item.type, category: data.item.category, size: data.item.size});
+    renderPrintArea();
+    $('reprintBarcode').value = '';
+  }catch(e){
+    $('rFlashErr').style.display='block';
+    $('rFlashErr').textContent = 'Could not reach the sheet. Check your connection.';
+  }
+});
 
 $('registerBtn').addEventListener('click', async ()=>{
   const name = $('pName').value.trim();
