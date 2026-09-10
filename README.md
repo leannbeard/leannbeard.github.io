@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2894,18 +2895,19 @@ function fmtWeekLabel(weekStart){
   return `Week of ${fmtDate(weekStart)} – ${new Date(end+'T00:00').toLocaleDateString(undefined,{month:'short', day:'numeric'})}`;
 }
 // Weekly score for one student: full marks minus, for each day that had at least
-// one approved Production Note, that day's deductions (capped so one bad day can't cost
-// more than its own share of the week). Pending (not-yet-reviewed) notes don't count yet —
-// only after a Director approves them. Notes saved before this feature existed have no
-// status field at all; those count as already-approved so past grades never retroactively change.
+// one approved Production Note, that day's deductions — multiple notes on the same day
+// stack, so a genuinely bad day (say, two separate infractions) can cost more than one
+// day's worth of points, same as it should. Pending (not-yet-reviewed) notes don't count
+// yet — only after a Director approves them. Notes saved before this feature existed have
+// no status field at all; those count as already-approved so past grades never retroactively
+// change. The week itself still never goes below zero.
 function behaviorScoreForStudent(crewId, weekStart){
   const cfg = state.behaviorConfig || { pointsPerDay:20, daysPerWeek:5 };
   const weekEnd = weekEndISO(weekStart);
   const incidents = state.behaviorIncidents.filter(i=>i.crewId===crewId && i.date>=weekStart && i.date<=weekEnd && (i.status==='approved' || i.status===undefined));
   const byDate = {};
   incidents.forEach(i=>{ byDate[i.date] = (byDate[i.date]||0) + (i.deduction||cfg.pointsPerDay); });
-  let totalDeduction = 0;
-  Object.values(byDate).forEach(dayTotal=>{ totalDeduction += Math.min(dayTotal, cfg.pointsPerDay); });
+  const totalDeduction = Object.values(byDate).reduce((sum,dayTotal)=>sum+dayTotal, 0);
   const maxScore = cfg.pointsPerDay * cfg.daysPerWeek;
   return { score: Math.max(0, maxScore - totalDeduction), maxScore, incidentCount: incidents.length, incidents };
 }
