@@ -4203,7 +4203,7 @@ function openPracticeModePicker(sceneId, mode){
   document.getElementById('backToScenesBtn').addEventListener('click', renderDepartments);
 }
 function startLineDrill(sceneId, character, useTypedCheck){
-  lineDrillState = { sceneId, character, index:0, revealed:false, correctCount:0, missedLines:[], checkResult:null, useTypedCheck: !!useTypedCheck };
+  lineDrillState = { sceneId, character, index:0, revealed:false, correctCount:0, missedLines:[], checkResult:null, useTypedCheck: !!useTypedCheck, peeking:false };
   lineDrillActive = true;
   renderLineDrillStep();
 }
@@ -4235,6 +4235,22 @@ function renderLineDrillStep(){
   const scene = (state.scriptScenes||[]).find(s=>s.id===lineDrillState.sceneId);
   if(!scene){ lineDrillActive=false; lineDrillState=null; renderDepartments(); return; }
   const modeLabel = lineDrillState.useTypedCheck ? 'Type to Reveal' : 'Drill';
+  // Peeking at the previous line is purely a look-back — it never touches index, score, or
+  // any in-progress answer, so a student can safely check the cue and return to exactly
+  // where they were, with no risk of accidentally re-answering (and double-counting) a line.
+  if(lineDrillState.peeking && lineDrillState.index > 0){
+    const prevLine = scene.lines[lineDrillState.index - 1];
+    content.innerHTML = `
+      <div class="card">
+        <div style="font-size:11px;color:var(--paper-dim); margin-bottom:10px;">${escapeHtml(scene.title)} — checking the previous line</div>
+        <div style="font-size:13px; color:var(--paper-dim); margin-bottom:4px;">${escapeHtml(prevLine.character)}</div>
+        <div style="font-size:16px; padding:12px 0;">${escapeHtml(prevLine.text)}</div>
+        <button class="btn small" id="backToMyLineBtn" style="margin-top:10px;">→ Back to My Line</button>
+      </div>
+    `;
+    document.getElementById('backToMyLineBtn').addEventListener('click', ()=>{ lineDrillState.peeking=false; renderLineDrillStep(); });
+    return;
+  }
   if(lineDrillState.index >= scene.lines.length){
     const total = scene.lines.filter(l=>l.character===lineDrillState.character).length;
     content.innerHTML = `
@@ -4263,9 +4279,9 @@ function renderLineDrillStep(){
       ${myTurnUnresolved
         ? (lineDrillState.useTypedCheck
           ? `<textarea id="typedGuessInput" placeholder="Type the line from memory..." style="width:100%; min-height:70px; background:var(--ink); border:1px solid var(--line); color:var(--paper); border-radius:3px; padding:8px 10px; font-size:15px; font-family:'Inter',sans-serif; resize:vertical;"></textarea>
-             <button class="btn small" id="checkGuessBtn" style="margin-top:10px;">Check</button>`
+             <div style="display:flex; gap:8px; margin-top:10px;"><button class="btn small" id="checkGuessBtn">Check</button>${lineDrillState.index>0?`<button class="btn ghost small" id="peekBackBtn">← See Previous Line</button>`:''}</div>`
           : `<div style="font-size:16px; padding:20px; text-align:center; border:1px dashed var(--line); border-radius:6px; color:var(--paper-dim);">Your line — try to recall it, then reveal</div>
-             <button class="btn small" id="revealBtn" style="margin-top:10px;">Reveal Line</button>`)
+             <div style="display:flex; gap:8px; margin-top:10px;"><button class="btn small" id="revealBtn">Reveal Line</button>${lineDrillState.index>0?`<button class="btn ghost small" id="peekBackBtn">← See Previous Line</button>`:''}</div>`)
         : (isMyLine && checked
           ? `<div style="font-size:16px; padding:12px 0; line-height:1.7;">${checked.aWords.map((w,idx)=>`<span style="${checked.matched[idx]?'color:var(--sage);':'color:var(--red); text-decoration:underline;'}">${escapeHtml(w)}</span>`).join(' ')}</div>
              <div style="font-size:12px; color:var(--paper-dim); margin-bottom:10px;">${checked.matchCount} of ${checked.total} words matched — green means right, red means off.</div>
@@ -4286,6 +4302,8 @@ function renderLineDrillStep(){
     } else {
       document.getElementById('revealBtn').addEventListener('click', ()=>{ lineDrillState.revealed=true; renderLineDrillStep(); });
     }
+    const peekBtn = document.getElementById('peekBackBtn');
+    if(peekBtn) peekBtn.addEventListener('click', ()=>{ lineDrillState.peeking=true; renderLineDrillStep(); });
   } else if(isMyLine){
     document.getElementById('gotItBtn').addEventListener('click', ()=>{ lineDrillState.correctCount++; lineDrillState.index++; lineDrillState.revealed=false; lineDrillState.checkResult=null; renderLineDrillStep(); });
     document.getElementById('missedItBtn').addEventListener('click', ()=>{ lineDrillState.missedLines.push(line.text); lineDrillState.index++; lineDrillState.revealed=false; lineDrillState.checkResult=null; renderLineDrillStep(); });
