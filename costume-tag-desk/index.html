@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Costume Tag Desk</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#1B1917;
+    --panel:#232120;
+    --panel-line:#3A3631;
+    --kraft:#D9C39D;
+    --kraft-dark:#C3AB80;
+    --ink:#2E2419;
+    --ink-soft:#5C4E3C;
+    --text:#EEE7D8;
+    --text-dim:#A89A83;
+    --red:#A8402F;
+    --red-soft:#4A2B24;
+    --green:#5C7A4F;
+    --green-soft:#2B3826;
+    --twine:#8C7350;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:760px;margin:0 auto;padding:28px 20px 60px;}
+
+  header.desk{margin-bottom:22px;}
+  header.desk h1{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    font-size:30px;
+    letter-spacing:0.02em;
+    margin:0 0 4px;
+    color:var(--text);
+  }
+  header.desk p{
+    margin:0;
+    color:var(--text-dim);
+    font-size:13px;
+    letter-spacing:0.03em;
+  }
+
+  nav.tabs{
+    display:flex;
+    gap:2px;
+    border-bottom:1px solid var(--panel-line);
+    margin-bottom:24px;
+  }
+  nav.tabs button{
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    padding:10px 4px;
+    margin-right:22px;
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+  }
+  nav.tabs button.active{
+    color:var(--text);
+    border-bottom-color:var(--red);
+  }
+
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .field-row{margin-bottom:16px;}
+  label.f{
+    display:block;
+    font-size:11px;
+    letter-spacing:0.08em;
+    color:var(--text-dim);
+    margin-bottom:6px;
+  }
+  input[type=text], select, textarea{
+    width:100%;
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    color:var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:15px;
+    padding:10px 12px;
+    border-radius:2px;
+  }
+  input[type=text]:focus, select:focus, textarea:focus{
+    outline:none;
+    border-color:var(--red);
+  }
+
+  /* mode stubs */
+  .mode-stubs{display:flex;gap:8px;margin-bottom:20px;}
+  .mode-stub{
+    flex:1;
+    text-align:center;
+    padding:10px 6px;
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    border-radius:2px;
+    cursor:pointer;
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:12px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+  .mode-stub.active{
+    color:var(--text);
+    border-color:var(--red);
+    background:var(--red-soft);
+  }
+
+  .scan-input-wrap{position:relative;margin-bottom:22px;}
+  .scan-input-wrap input{
+    font-size:20px;
+    padding:16px 14px;
+    letter-spacing:0.04em;
+  }
+  .scan-status{
+    font-size:11px;
+    color:var(--text-dim);
+    margin-top:6px;
+    letter-spacing:0.04em;
+  }
+
+  /* kraft tag result card */
+  .tag-card{
+    display:none;
+    position:relative;
+    background:var(--kraft);
+    color:var(--ink);
+    border-radius:3px;
+    padding:20px 22px 18px 34px;
+    margin-bottom:20px;
+    clip-path: polygon(24px 0, 100% 0, 100% 100%, 0 100%, 0 24px);
+    animation:tagIn 0.28s ease-out;
+  }
+  .tag-card::before{
+    content:'';
+    position:absolute;
+    top:12px;left:12px;
+    width:10px;height:10px;
+    border-radius:50%;
+    background:var(--bg);
+    box-shadow: inset 0 0 0 1.5px var(--twine);
+  }
+  @keyframes tagIn{
+    from{opacity:0; transform:translateY(-6px) rotate(-1deg);}
+    to{opacity:1; transform:translateY(0) rotate(0);}
+  }
+  .tag-card .tname{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    font-size:20px;
+    margin:0 0 2px;
+  }
+  .tag-card .tmeta{font-size:12px;color:var(--ink-soft);margin-bottom:12px;}
+  .tag-card .tstatus{
+    display:inline-block;
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:11px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    padding:4px 10px;
+    border-radius:2px;
+  }
+  .tstatus.in{background:var(--green);color:#EAF0E4;}
+  .tstatus.out{background:var(--red);color:#F5E4E0;}
+  .tag-card .trow{font-size:13px;margin-top:6px;color:var(--ink);}
+  .tag-card .trow span{color:var(--ink-soft);}
+
+  .flash{
+    display:none;
+    padding:12px 14px;
+    border-radius:2px;
+    font-size:13px;
+    margin-bottom:20px;
+  }
+  .flash.err{background:var(--red-soft);color:#F0C9C2;border:1px solid var(--red);}
+  .flash.ok{background:var(--green-soft);color:#D8E7CE;border:1px solid var(--green);}
+
+  .log{border-top:1px solid var(--panel-line);padding-top:14px;}
+  .log h3{
+    font-family:'Oswald',sans-serif;
+    font-size:12px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:0 0 10px;
+    font-weight:600;
+  }
+  .log-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:12px;
+    padding:6px 0;
+    border-bottom:1px solid var(--panel-line);
+    color:var(--text-dim);
+  }
+  .log-row span.lname{color:var(--text);}
+
+  button.action{
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    background:var(--red);
+    color:#F5E4E0;
+    border:none;
+    padding:12px 18px;
+    border-radius:2px;
+    cursor:pointer;
+  }
+  button.action.secondary{
+    background:none;
+    border:1px solid var(--panel-line);
+    color:var(--text-dim);
+  }
+  button.action:active{transform:scale(0.98);}
+
+  /* print tab */
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .tag-preview-list{margin-top:22px;}
+  .print-tag{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:var(--kraft);
+    color:var(--ink);
+    border-radius:3px;
+    padding:12px 16px;
+    margin-bottom:10px;
+    clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px);
+  }
+  .print-tag .pt-info{flex:1;}
+  .print-tag .pt-name{font-family:'Oswald',sans-serif;font-weight:700;font-size:15px;}
+  .print-tag .pt-meta{font-size:11px;color:var(--ink-soft);}
+  .print-tag .pt-code{font-size:10px;letter-spacing:0.06em;color:var(--ink-soft);margin-top:2px;}
+  .print-tag svg{background:#fff;padding:4px;border-radius:2px;}
+
+  .setup-note{font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:18px;}
+  .setup-note code{color:var(--text);background:var(--panel);padding:1px 5px;border-radius:2px;}
+
+  @media print{
+    body *{visibility:hidden;}
+    #printArea, #printArea *{visibility:visible;}
+    #printArea{position:absolute;top:0;left:0;width:100%;}
+    .print-tag{break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="desk">
+    <h1>Costume &amp; Prop Desk</h1>
+    <p>scan &middot; check out &middot; check in</p>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="scan">Scan</button>
+    <button class="tab-btn" data-tab="print">Print tags</button>
+    <button class="tab-btn" data-tab="setup">Setup</button>
+  </nav>
+
+  <!-- SCAN PANEL -->
+  <section class="panel active" id="panel-scan">
+
+    <div class="mode-stubs" id="scanModeStubs">
+      <div class="mode-stub active" data-mode="lookup">Look up</div>
+      <div class="mode-stub" data-mode="checkout">Check out</div>
+      <div class="mode-stub" data-mode="checkin">Check in</div>
+    </div>
+
+    <div class="field-row" id="checkoutToField" style="display:none;">
+      <label class="f">Checked out to</label>
+      <input type="text" id="checkoutTo" placeholder="Student or cast member name">
+    </div>
+
+    <div class="scan-input-wrap">
+      <label class="f">Scan tag</label>
+      <input type="text" id="scanInput" placeholder="Scan or type barcode, then press Enter" autocomplete="off">
+      <div class="scan-status" id="scanStatus">Ready &mdash; console is listening for a scan.</div>
+    </div>
+
+    <div class="flash err" id="flashErr"></div>
+    <div class="flash ok" id="flashOk"></div>
+
+    <div class="tag-card" id="tagCard">
+      <div class="tname" id="tcName"></div>
+      <div class="tmeta" id="tcMeta"></div>
+      <span class="tstatus" id="tcStatus"></span>
+      <div class="trow"><span>Checked out to:</span> <span id="tcTo">&mdash;</span></div>
+      <div class="trow"><span>Location:</span> <span id="tcLocation">&mdash;</span></div>
+      <div class="trow"><span>Show / scene:</span> <span id="tcShowScene">&mdash;</span></div>
+      <div class="trow"><span>Condition:</span> <span id="tcCondition">&mdash;</span></div>
+      <div class="trow"><span>Last scan:</span> <span id="tcTime">&mdash;</span></div>
+    </div>
+
+    <div class="log">
+      <h3>This session</h3>
+      <div id="logList"></div>
+    </div>
+  </section>
+
+  <!-- PRINT PANEL -->
+  <section class="panel" id="panel-print">
+    <div class="mode-stubs" id="typeStubs">
+      <div class="mode-stub active" data-type="Costume">Costume</div>
+      <div class="mode-stub" data-type="Prop">Prop</div>
+    </div>
+
+    <div class="field-row">
+      <label class="f">Item name</label>
+      <input type="text" id="pName" placeholder="e.g. Blue velvet waistcoat">
+    </div>
+    <div class="grid-2">
+      <div class="field-row">
+        <label class="f">Category</label>
+        <input type="text" id="pCategory" placeholder="e.g. Jacket, Hand prop, Set dressing">
+      </div>
+      <div class="field-row" id="pSizeRow">
+        <label class="f">Size</label>
+        <input type="text" id="pSize" placeholder="e.g. Adult M, Youth L">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field-row">
+        <label class="f">Storage location</label>
+        <input type="text" id="pLocation" placeholder="e.g. Prop cage, Shelf 3, Costume rack B">
+      </div>
+      <div class="field-row">
+        <label class="f">Show / scene</label>
+        <input type="text" id="pShowScene" placeholder="e.g. Starcatcher, Act 2 Scene 3">
+      </div>
+    </div>
+    <div class="field-row">
+      <label class="f">Condition</label>
+      <input type="text" id="pCondition" placeholder="e.g. Good, Fragile, Needs repair">
+    </div>
+    <div class="field-row">
+      <label class="f">Notes (optional)</label>
+      <input type="text" id="pNotes" placeholder="Fit notes, damage, character assigned">
+    </div>
+    <button class="action" id="registerBtn">Generate tag and register</button>
+    <button class="action secondary" id="printBtn" style="margin-left:8px;">Print all tags below</button>
+
+    <div class="flash err" id="pFlashErr"></div>
+    <div class="flash ok" id="pFlashOk"></div>
+
+    <div class="tag-preview-list" id="printArea"></div>
+  </section>
+
+  <!-- SETUP PANEL -->
+  <section class="panel" id="panel-setup">
+    <p class="setup-note">
+      Paste the web app URL from your Google Apps Script deployment (ends in <code>/exec</code>).
+      This is shared across every device that opens this console, so anyone at your scanning
+      stations sees the same connection once it's set.
+    </p>
+    <div class="field-row">
+      <label class="f">Google Sheet webhook URL</label>
+      <input type="text" id="webhookUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    </div>
+    <button class="action" id="saveWebhook">Save connection</button>
+    <button class="action secondary" id="testWebhook" style="margin-left:8px;">Test connection</button>
+    <div class="flash err" id="sFlashErr"></div>
+    <div class="flash ok" id="sFlashOk"></div>
+  </section>
+
+</div>
+
+<script>
+let webhookUrl = '';
+let mode = 'lookup';
+let sessionLog = [];
+
+const $ = id => document.getElementById(id);
+
+// tab switching
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    $('panel-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='scan') $('scanInput').focus();
+  });
+});
+
+// mode stubs
+document.querySelectorAll('#scanModeStubs .mode-stub').forEach(stub=>{
+  stub.addEventListener('click', ()=>{
+    document.querySelectorAll('.mode-stub').forEach(s=>s.classList.remove('active'));
+    stub.classList.add('active');
+    mode = stub.dataset.mode;
+    $('checkoutToField').style.display = (mode==='checkout') ? 'block' : 'none';
+    $('scanInput').focus();
+  });
+});
+
+// item type stubs (print tab)
+let itemType = 'Costume';
+document.querySelectorAll('#typeStubs .mode-stub').forEach(stub=>{
+  stub.addEventListener('click', ()=>{
+    document.querySelectorAll('#typeStubs .mode-stub').forEach(s=>s.classList.remove('active'));
+    stub.classList.add('active');
+    itemType = stub.dataset.type;
+    $('pSizeRow').style.display = (itemType === 'Prop') ? 'none' : 'block';
+  });
+});
+
+function showFlash(errId, okId, isOk, msg){
+  $(errId).style.display='none';
+  $(okId).style.display='none';
+  if(isOk){ $(okId).textContent = msg; $(okId).style.display='block'; }
+  else { $(errId).textContent = msg; $(errId).style.display='block'; }
+}
+
+function loadConfig(){
+  try{
+    const saved = localStorage.getItem('costume-desk-webhook-url');
+    if(saved){ webhookUrl = saved; $('webhookUrl').value = webhookUrl; }
+  }catch(e){}
+}
+
+$('saveWebhook').addEventListener('click', ()=>{
+  const val = $('webhookUrl').value.trim();
+  if(!val){ showFlash('sFlashErr','sFlashOk',false,'Enter a URL before saving.'); return; }
+  webhookUrl = val;
+  try{
+    localStorage.setItem('costume-desk-webhook-url', val);
+    showFlash('sFlashErr','sFlashOk',true,'Connection saved on this device. Repeat this step on every laptop you use for scanning.');
+  }catch(e){
+    showFlash('sFlashErr','sFlashOk',false,'Could not save the connection on this device. Try again.');
+  }
+});
+
+$('testWebhook').addEventListener('click', async ()=>{
+  if(!webhookUrl){ showFlash('sFlashErr','sFlashOk',false,'No connection saved yet.'); return; }
+  try{
+    const res = await fetch(webhookUrl + '?action=lookup&barcode=__test__');
+    const data = await res.json();
+    if(data.found === false || data.found === true){
+      showFlash('sFlashErr','sFlashOk',true,'Connected. The sheet responded correctly.');
+    } else {
+      showFlash('sFlashErr','sFlashOk',false,'Connected, but the response looked unexpected. Check the script code.');
+    }
+  }catch(e){
+    showFlash('sFlashErr','sFlashOk',false,'Could not reach the sheet. Check the URL and that it is deployed with Anyone access.');
+  }
+});
+
+function addLog(barcode, name, action){
+  sessionLog.unshift({barcode,name,action,time:new Date()});
+  sessionLog = sessionLog.slice(0,12);
+  renderLog();
+}
+function renderLog(){
+  $('logList').innerHTML = sessionLog.map(l=>
+    `<div class="log-row"><span class="lname">${l.name||l.barcode}</span><span>${l.action} &middot; ${l.time.toLocaleTimeString()}</span></div>`
+  ).join('') || '<div class="log-row"><span>No scans yet this session.</span></div>';
+}
+renderLog();
+
+function fillTagCard(item){
+  $('tagCard').style.display='block';
+  $('tcName').textContent = item.name || '(unregistered barcode)';
+  const metaBits = [item.type, item.category, item.size].filter(Boolean);
+  $('tcMeta').textContent = metaBits.join(' \u00b7 ');
+  const isOut = item.status === 'Checked Out';
+  $('tcStatus').textContent = item.status || 'Unknown';
+  $('tcStatus').className = 'tstatus ' + (isOut ? 'out' : 'in');
+  $('tcTo').textContent = item.checkedOutTo || '\u2014';
+  $('tcLocation').textContent = item.location || '\u2014';
+  $('tcShowScene').textContent = item.showScene || '\u2014';
+  $('tcCondition').textContent = item.condition || '\u2014';
+  $('tcTime').textContent = item.lastScan ? new Date(item.lastScan).toLocaleString() : '\u2014';
+}
+
+async function handleScan(barcode){
+  if(!webhookUrl){
+    showFlash('flashErr','flashOk',false,'No sheet connected yet. Go to Setup and save your webhook URL first.');
+    return;
+  }
+  $('scanStatus').textContent = 'Looking up ' + barcode + '\u2026';
+  try{
+    if(mode === 'lookup'){
+      const res = await fetch(webhookUrl + '?action=lookup&barcode=' + encodeURIComponent(barcode));
+      const data = await res.json();
+      if(!data.found){ showFlash('flashErr','flashOk',false,'This barcode is not registered yet. Print and register it from the Print tags tab.'); $('tagCard').style.display='none'; }
+      else { fillTagCard(data.item); addLog(barcode, data.item.name, 'looked up'); showFlash('flashErr','flashOk',true,'Found it.'); }
+    } else {
+      const to = $('checkoutTo').value.trim();
+      if(mode === 'checkout' && !to){
+        showFlash('flashErr','flashOk',false,'Enter who it is checked out to before scanning.');
+        $('scanStatus').textContent = 'Ready \u2014 console is listening for a scan.';
+        return;
+      }
+      const res = await fetch(webhookUrl + '?' + new URLSearchParams({action:mode, barcode, to}).toString());
+      const data = await res.json();
+      if(!data.success){ showFlash('flashErr','flashOk',false, data.error || 'That did not go through. Try scanning again.'); }
+      else {
+        fillTagCard(data.item);
+        addLog(barcode, data.item.name, mode === 'checkout' ? 'checked out' : 'checked in');
+        showFlash('flashErr','flashOk',true, mode === 'checkout' ? 'Checked out.' : 'Checked in.');
+      }
+    }
+  }catch(e){
+    showFlash('flashErr','flashOk',false,'Could not reach the sheet. Check your connection.');
+  }
+  $('scanStatus').textContent = 'Ready \u2014 console is listening for a scan.';
+}
+
+$('scanInput').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    const val = e.target.value.trim();
+    if(val){ handleScan(val); }
+    e.target.value = '';
+  }
+});
+
+// PRINT TAB
+let pendingTags = [];
+
+$('registerBtn').addEventListener('click', async ()=>{
+  const name = $('pName').value.trim();
+  if(!name){ showFlash('pFlashErr','pFlashOk',false,'Enter an item name first.'); return; }
+  if(!webhookUrl){ showFlash('pFlashErr','pFlashOk',false,'Connect a sheet in Setup before registering tags.'); return; }
+
+  const category = $('pCategory').value.trim();
+  const size = $('pSize').value.trim();
+  const location = $('pLocation').value.trim();
+  const showScene = $('pShowScene').value.trim();
+  const condition = $('pCondition').value.trim();
+  const notes = $('pNotes').value.trim();
+
+  try{
+    const params = new URLSearchParams({action:'register', name, type:itemType, category, size, location, showScene, condition, notes});
+    const res = await fetch(webhookUrl + '?' + params.toString());
+    const data = await res.json();
+    if(!data.success){ showFlash('pFlashErr','pFlashOk',false, data.error || 'Could not register that item.'); return; }
+
+    const barcode = data.barcode;
+    pendingTags.push({barcode, name, type:itemType, category, size});
+    showFlash('pFlashErr','pFlashOk',true, 'Registered ' + barcode + '. Tag added below \u2014 fill in the next item or print when ready.');
+    $('pName').value=''; $('pCategory').value=''; $('pSize').value=''; $('pLocation').value=''; $('pShowScene').value=''; $('pCondition').value=''; $('pNotes').value='';
+    renderPrintArea();
+  }catch(e){
+    showFlash('pFlashErr','pFlashOk',false,'Could not reach the sheet. Check your connection.');
+  }
+});
+
+function renderPrintArea(){
+  const area = $('printArea');
+  area.innerHTML = '';
+  pendingTags.forEach(t=>{
+    const row = document.createElement('div');
+    row.className = 'print-tag';
+    const svgId = 'svg-' + t.barcode;
+    row.innerHTML = `
+      <svg id="${svgId}"></svg>
+      <div class="pt-info">
+        <div class="pt-name">${t.name}</div>
+        <div class="pt-meta">${[t.type,t.category,t.size].filter(Boolean).join(' \u00b7 ')}</div>
+        <div class="pt-code">${t.barcode}</div>
+      </div>`;
+    area.appendChild(row);
+    try{
+      JsBarcode('#'+svgId, t.barcode, {format:'CODE128', width:1.6, height:40, fontSize:11, margin:4});
+    }catch(err){
+      const svgEl = document.getElementById(svgId);
+      if(svgEl) svgEl.outerHTML = '<div style="font-size:10px;color:var(--ink-soft);padding:4px;max-width:120px;">Barcode image blocked on this network \u2014 the code ' + t.barcode + ' is still saved and can be typed manually.</div>';
+    }
+  });
+}
+
+$('printBtn').addEventListener('click', ()=>{
+  if(pendingTags.length === 0){ showFlash('pFlashErr','pFlashOk',false,'No tags to print yet \u2014 register at least one item first.'); return; }
+  window.print();
+});
+
+loadConfig();
+$('scanInput').focus();
+</script>
+</body>
+</html>
