@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1076,6 +1075,17 @@
       <p style="font-size:12.5px;color:var(--paper-dim);">Cap how many of each standard UIL piece students can place on the <b>Production Set</b> (your actual plan), matching what you physically own — leave blank or 0 for no limit. This only applies to the real Production Set, not Practice Sandboxes, so students can still freely explore designs there without being boxed in by real inventory.</p>
       <div id="uilInventoryGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:8px;"></div>
       <button class="btn small" id="uilInventorySaveBtn" style="margin-top:10px;">Save Limits</button>
+    </div>
+    <div class="card" id="calEventUpdateCard">
+      <h2>Bulk Update Calendar Event Details</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">For reworking what an existing rehearsal actually covers — its title and work description — without creating a new event. One line per date: <code>YYYY-MM-DD: New Title || New work description</code>. If more than one event shares that date, add part of the current title after a <code>|</code> before the colon to say which one, same as the call-list tool: <code>2026-11-21 | Performance 3: New Title || New description</code>. This only touches title and description — who's called is separate, use the call-list tool for that.</p>
+      <textarea id="calEventUpdateText" class="full-width" style="min-height:120px; font-family:monospace; font-size:12px;" placeholder="2026-09-23: Peter Rehearsal — Wasp Cabin || Act I Scenes 5: Wasp cabin, pirate reveal, comedy business. — Act I pp. 24-36"></textarea>
+      <button class="btn small" id="calEventPreviewBtn" style="margin-top:8px;">Preview Update</button>
+      <div id="calEventPreviewWrap" style="display:none; margin-top:14px;">
+        <div id="calEventPreviewSummary"></div>
+        <button class="btn" id="calEventConfirmBtn" style="margin-top:10px;">Confirm — Update These Events</button>
+        <button class="btn ghost" id="calEventCancelBtn" style="margin-top:10px;">Cancel</button>
+      </div>
     </div>
     <div class="card" id="callListUpdateCard">
       <h2>Update Rehearsal Call Lists by Character</h2>
@@ -2657,6 +2667,71 @@ async function confirmCallListUpdate(){
   callListUpdateParsed = null;
   renderCalMonth(); renderCalendar();
   toast(`Updated ${count} call list(s)`);
+}
+// ---------------- BULK UPDATE CALENDAR EVENT DETAILS (rework what an existing rehearsal covers) ----------------
+function parseCalEventUpdate(text){
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const updates = [];
+  const noSeparator = [], dateNotFound = [], ambiguousDates = [];
+  lines.forEach(line=>{
+    const colonIdx = line.indexOf(':');
+    if(colonIdx===-1){ noSeparator.push(line); return; }
+    let datePart = line.slice(0, colonIdx).trim();
+    const rest = line.slice(colonIdx+1).trim();
+    let titleHint = '';
+    const pipeIdx = datePart.indexOf('|');
+    if(pipeIdx!==-1){ titleHint = datePart.slice(pipeIdx+1).trim().toLowerCase(); datePart = datePart.slice(0, pipeIdx).trim(); }
+    const dblPipeIdx = rest.indexOf('||');
+    if(dblPipeIdx===-1){ noSeparator.push(line); return; }
+    const newTitle = rest.slice(0, dblPipeIdx).trim();
+    const newNotes = rest.slice(dblPipeIdx+2).trim();
+    let matches = state.calendar.filter(e=>e.date===datePart);
+    if(matches.length>1 && titleHint){ matches = matches.filter(e=>e.title.toLowerCase().includes(titleHint)); }
+    if(matches.length===0){ dateNotFound.push(line.slice(0, colonIdx).trim()); return; }
+    if(matches.length>1){ ambiguousDates.push(line.slice(0, colonIdx).trim()); return; }
+    const ev = matches[0];
+    updates.push({ date:datePart, eventId:ev.id, oldTitle:ev.title, newTitle: newTitle||ev.title, newNotes });
+  });
+  return { updates, noSeparator, dateNotFound, ambiguousDates };
+}
+let calEventUpdateParsed = null;
+function renderCalEventPreview(){
+  const text = document.getElementById('calEventUpdateText').value;
+  if(!text.trim()){ toast('Paste a list first'); return; }
+  const { updates, noSeparator, dateNotFound, ambiguousDates } = parseCalEventUpdate(text);
+  calEventUpdateParsed = updates;
+  const wrap = document.getElementById('calEventPreviewWrap');
+  const summary = document.getElementById('calEventPreviewSummary');
+  document.getElementById('calEventConfirmBtn').style.display = updates.length ? 'inline-block' : 'none';
+  let html = '';
+  if(updates.length){
+    html += `<div style="margin-bottom:8px;">Will update <b>${updates.length}</b> event(s):</div><ul style="margin:0 0 0 18px; font-size:12.5px;">` +
+      updates.map(u=>`<li><b>${fmtDate(u.date)}</b> — "${escapeHtml(u.oldTitle)}" → <b>"${escapeHtml(u.newTitle)}"</b><br><span style="color:var(--paper-dim);">${escapeHtml(u.newNotes)}</span></li>`).join('') + `</ul>`;
+  } else {
+    html += `<div class="empty-state">Nothing recognized — check the "Date: Title || Description" format below.</div>`;
+  }
+  if(dateNotFound.length) html += `<div style="margin-top:10px; color:var(--amber); font-size:12px;">⚠️ No calendar event on this date, skipped: ${dateNotFound.map(escapeHtml).join(', ')}</div>`;
+  if(ambiguousDates.length) html += `<div style="margin-top:6px; color:var(--red); font-size:12px;">⚠️ More than one event on this date — too ambiguous to guess, skipped: ${ambiguousDates.map(escapeHtml).join(', ')}</div>`;
+  if(noSeparator.length) html += `<div style="margin-top:6px; color:var(--red); font-size:12px;">⚠️ Couldn't read (missing ":" or "||"), skipped: ${noSeparator.map(escapeHtml).join(', ')}</div>`;
+  summary.innerHTML = html;
+  wrap.style.display = 'block';
+}
+async function confirmCalEventUpdate(){
+  if(!isDirector()){ toast('Only the Director can update calendar events'); return; }
+  if(!calEventUpdateParsed || !calEventUpdateParsed.length){ toast('Preview the update first'); return; }
+  let count = 0;
+  calEventUpdateParsed.forEach(u=>{
+    const ev = state.calendar.find(e=>e.id===u.eventId); if(!ev) return;
+    ev.title = u.newTitle;
+    ev.notes = u.newNotes;
+    count++;
+  });
+  await saveState();
+  document.getElementById('calEventUpdateText').value = '';
+  document.getElementById('calEventPreviewWrap').style.display = 'none';
+  calEventUpdateParsed = null;
+  renderCalMonth(); renderCalendar();
+  toast(`Updated ${count} event(s)`);
 }
 async function bulkImportCalendar(){
   if(!isDirectorOrStageMgmt()){ toast('Only the Director or Stage Management can import calendar entries'); return; }
@@ -7232,6 +7307,12 @@ async function init(){
   document.getElementById('toggleCalBulkImport').addEventListener('click', ()=>{
     const wrap = document.getElementById('calBulkImportWrap');
     wrap.style.display = wrap.style.display==='none' ? 'block' : 'none';
+  });
+  document.getElementById('calEventPreviewBtn').addEventListener('click', renderCalEventPreview);
+  document.getElementById('calEventConfirmBtn').addEventListener('click', confirmCalEventUpdate);
+  document.getElementById('calEventCancelBtn').addEventListener('click', ()=>{
+    document.getElementById('calEventPreviewWrap').style.display = 'none';
+    calEventUpdateParsed = null;
   });
   document.getElementById('callListPreviewBtn').addEventListener('click', renderCallListPreview);
   document.getElementById('callListConfirmBtn').addEventListener('click', confirmCallListUpdate);
