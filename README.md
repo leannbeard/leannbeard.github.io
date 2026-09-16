@@ -956,6 +956,14 @@
       <p style="font-size:12.5px;color:var(--paper-dim);">Nobody has Director access on this production yet. If that's you, claim it now — after that, only existing Directors can add or remove Director access for others.</p>
       <button class="btn" id="claimDirectorBtn">Make me the Director</button>
     </div>
+    <div class="card" id="recoverProductionCard" style="display:none;">
+      <h2>Recover a Missing Production</h2>
+      <p style="font-size:12.5px;color:var(--paper-dim);">If a show's real data is still sitting in Firestore but isn't showing up here — this reconnects it, without touching or overwriting anything in the actual production document. In Firebase Console → Firestore Database → the <code>productions</code> collection, click on your show's document and copy its Document ID (shown at the top of that document), then paste it below.</p>
+      <div class="form-grid" style="max-width:400px;">
+        <input type="text" id="recoverProdIdInput" placeholder="Paste the Document ID here">
+        <button class="btn small" id="recoverProdBtn">Look Up &amp; Recover</button>
+      </div>
+    </div>
     <div class="card" id="pendingApprovalsCard" style="display:none;">
       <h2>Pending Approvals <span id="pendingApprovalsBadge" style="display:none; background:var(--red); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; vertical-align:middle;">0</span></h2>
       <p style="font-size:12.5px;color:var(--paper-dim);">People who signed in but aren't on your roster yet — they can't see anything until you approve or deny them. Approve pre-fills the roster form below with their name and email; finish it out and add them like normal to grant access.</p>
@@ -1450,6 +1458,30 @@ async function loadOrMigrateGlobalState(){
 async function saveProductionStateFor(id, data){
   memoryProductions.set(id, data);
   await fsSet(PROD_COLLECTION, id, data);
+}
+// Reconnects a production whose real data still exists in Firestore but is missing from
+// the global config document (e.g. after that config document was somehow reset/emptied).
+// Only ever reads the production document to learn its name — never writes to it, never
+// touches its crew/calendar/tasks/anything else. The only thing this changes is the
+// global list of known productions and the roster index used for sign-in routing.
+async function recoverOrphanedProduction(){
+  const input = document.getElementById('recoverProdIdInput');
+  const prodId = input.value.trim();
+  if(!prodId){ toast('Paste the Document ID first'); return; }
+  const data = await fsGet(PROD_COLLECTION, prodId);
+  if(!data){ toast('No production found with that ID — double-check you copied it exactly from Firebase Console'); return; }
+  if(!globalState.productions) globalState.productions = [];
+  if(globalState.productions.some(p=>p.id===prodId)){ toast('This production is already connected'); return; }
+  const name = data.productionName || 'Recovered Production';
+  globalState.productions.push({ id:prodId, name, createdAt:new Date().toISOString() });
+  if(!globalState.activeProductionId) globalState.activeProductionId = prodId;
+  if(Array.isArray(data.crew)){
+    data.crew.forEach(c=>{ if(c.email) rosterIndexAdd(c.email, prodId, name, c.id); });
+  }
+  await saveGlobalState();
+  input.value = '';
+  toast(`Recovered "${name}" — reloading...`);
+  setTimeout(()=>location.reload(), 1200);
 }
 async function createProduction(name, copyFromId){
   const prodId = cryptoId();
@@ -6589,6 +6621,7 @@ function renderNotifications(){
 function renderSetup(){
   const noDirectorsYet = !(globalState.directorEmails||[]).length;
   document.getElementById('claimDirectorCard').style.display = (noDirectorsYet && authUser) ? 'block' : 'none';
+  document.getElementById('recoverProductionCard').style.display = (!(globalState.productions||[]).length && authUser) ? 'block' : 'none';
   document.getElementById('dirAccessCard').style.display = isDirector() ? 'block' : 'none';
   document.getElementById('dirRecoveryWarning').style.display = (globalState.directorEmails||[]).length < 2 ? 'block' : 'none';
   renderPendingApprovals();
@@ -7264,6 +7297,7 @@ async function init(){
     renderHeader(); renderSetup(); renderDashboard();
     toast('You are now the Director');
   });
+  document.getElementById('recoverProdBtn').addEventListener('click', recoverOrphanedProduction);
   document.getElementById('addDirectorEmailBtn').addEventListener('click', async ()=>{
     if(!isDirector()){ toast('Only an existing Director can add another'); return; }
     const email = document.getElementById('newDirectorEmail').value.trim().toLowerCase();
