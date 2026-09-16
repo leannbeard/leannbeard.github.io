@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1206,6 +1207,20 @@
 
 <script>
 (function(){
+
+// TEMPORARY DIAGNOSTIC — shows any JavaScript error directly on the page, since dev tools
+// are blocked and console errors would otherwise be invisible. Safe to leave in; if nothing
+// ever goes wrong, this banner simply never appears.
+window.addEventListener('error', function(e){
+  var banner = document.getElementById('__errBanner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = '__errBanner';
+    banner.style.cssText = 'position:fixed; top:0; left:0; right:0; z-index:99999; background:#8B2020; color:#fff; padding:14px 18px; font-family:monospace; font-size:13px; white-space:pre-wrap;';
+    document.body.appendChild(banner);
+  }
+  banner.textContent = 'A JavaScript error occurred:\n' + (e.message||'') + '\nFile: ' + (e.filename||'') + ' Line: ' + (e.lineno||'') + '\n\nPlease copy this exact text and send it back.';
+});
 
 const DEPARTMENTS = [
   { key:'set_design',  label:'Set Design',       color:'#E8A33D' },
