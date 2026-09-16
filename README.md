@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -6636,7 +6635,7 @@ function renderNotifications(){
 function renderSetup(){
   const noDirectorsYet = !(globalState.directorEmails||[]).length;
   document.getElementById('claimDirectorCard').style.display = (noDirectorsYet && authUser) ? 'block' : 'none';
-  document.getElementById('recoverProductionCard').style.display = (!(globalState.productions||[]).length && authUser) ? 'block' : 'none';
+  document.getElementById('recoverProductionCard').style.display = (isDirector() || (!(globalState.productions||[]).length && authUser)) ? 'block' : 'none';
   document.getElementById('dirAccessCard').style.display = isDirector() ? 'block' : 'none';
   document.getElementById('dirRecoveryWarning').style.display = (globalState.directorEmails||[]).length < 2 ? 'block' : 'none';
   renderPendingApprovals();
