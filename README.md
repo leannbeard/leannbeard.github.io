@@ -1210,7 +1210,11 @@
 // TEMPORARY DIAGNOSTIC — shows any JavaScript error directly on the page, since dev tools
 // are blocked and console errors would otherwise be invisible. Safe to leave in; if nothing
 // ever goes wrong, this banner simply never appears.
-window.addEventListener('error', function(e){
+// TEMPORARY DIAGNOSTIC — shows any JavaScript error directly on the page, since dev tools
+// are blocked and console errors would otherwise be invisible. Safe to leave in; if nothing
+// ever goes wrong, this banner simply never appears. Covers both plain script errors and
+// rejected promises (async functions that throw surface as the latter, not the former).
+function showErrorBanner(message){
   var banner = document.getElementById('__errBanner');
   if(!banner){
     banner = document.createElement('div');
@@ -1218,7 +1222,14 @@ window.addEventListener('error', function(e){
     banner.style.cssText = 'position:fixed; top:0; left:0; right:0; z-index:99999; background:#8B2020; color:#fff; padding:14px 18px; font-family:monospace; font-size:13px; white-space:pre-wrap;';
     document.body.appendChild(banner);
   }
-  banner.textContent = 'A JavaScript error occurred:\n' + (e.message||'') + '\nFile: ' + (e.filename||'') + ' Line: ' + (e.lineno||'') + '\n\nPlease copy this exact text and send it back.';
+  banner.textContent = message + '\n\nPlease copy this exact text and send it back.';
+}
+window.addEventListener('error', function(e){
+  showErrorBanner('A JavaScript error occurred:\n' + (e.message||'') + '\nFile: ' + (e.filename||'') + ' Line: ' + (e.lineno||''));
+});
+window.addEventListener('unhandledrejection', function(e){
+  var reason = e.reason;
+  showErrorBanner('Something failed:\n' + (reason && reason.message ? reason.message : String(reason)));
 });
 
 const DEPARTMENTS = [
@@ -1411,6 +1422,26 @@ async function saveState(){
     await fsSet(PROD_COLLECTION, currentProductionId, state);
   }
 }
+// Distinguishes "this document genuinely doesn't exist" from "the read itself failed" (a
+// network hiccup, a dropped connection, anything) — a distinction plain fsGet can't make,
+// since it returns the same null either way. This matters a great deal for the one-time
+// bootstrap check below: treating a failed read as "nothing has ever been set up" would
+// silently create a brand new blank configuration and orphan the real one behind it,
+// which is exactly what happened once already.
+async function fsGetWithExistence(collectionName, docId){
+  await waitForFirebase();
+  try{
+    if(window.__fb){
+      const ref = window.__fb.doc(window.__fb.db, collectionName, docId);
+      const snap = await window.__fb.getDoc(ref);
+      return { ok:true, exists: snap.exists(), data: snap.exists() ? snap.data() : null };
+    }
+    return { ok:false };
+  }catch(e){
+    console.warn('Firestore read failed', e);
+    return { ok:false };
+  }
+}
 async function loadGlobalStateRaw(){
   const data = await fsGet(GLOBAL_DOC[0], GLOBAL_DOC[1]);
   return data || memoryFallbackGlobal;
@@ -1434,9 +1465,17 @@ async function loadLegacyStateRaw(){
 // One-time upgrade path: if this app was used before multi-production support existed,
 // its single flat state gets wrapped into "Production 1" so nothing is lost.
 async function loadOrMigrateGlobalState(){
-  let g = await loadGlobalStateRaw();
-  if(g) return g;
-
+  const result = await fsGetWithExistence(GLOBAL_DOC[0], GLOBAL_DOC[1]);
+  if(result.ok && result.exists) return result.data;
+  if(!result.ok){
+    // The read genuinely failed — this is not a safe signal that nothing has ever been set
+    // up. Never silently create a fresh blank configuration here; that's the exact mistake
+    // that orphaned real data before. Use whatever this session already has in memory if
+    // anything, otherwise stop clearly rather than guessing.
+    if(memoryFallbackGlobal) return memoryFallbackGlobal;
+    throw new Error('Could not reach the database to load your settings — check your internet connection and reload the page. Nothing has been created or changed.');
+  }
+  // result.ok && !result.exists confirmed here — genuinely no config exists yet, safe to bootstrap
   const legacy = await loadLegacyStateRaw();
   const newGlobal = structuredClone(DEFAULT_GLOBAL);
 
